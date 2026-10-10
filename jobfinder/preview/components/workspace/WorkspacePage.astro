@@ -20,7 +20,6 @@ const desk = [
 <DefaultLayout title={title} description={description}>
   <div data-workspace-view={view}>
     <div class="alert alert-danger d-none workspace-error" role="alert" data-workspace-error></div>
-    <div class="alert alert-info d-none" data-signin-notice>Sign in to save your applications and desk items. <a href="/sign-in" class="alert-link">Sign in</a></div>
     {
       desk.some(([tool]) => tool === view) && (
         <div class="workspace-tabs">
@@ -138,7 +137,7 @@ const desk = [
             <div class="card-body">
               <form class="row g-3" data-job-search>
                 <>
-                  <div class="col-md-5">
+                  <div class="col-md-6">
                     <>
                       <label class="form-label" for="job-query">
                         Role or keyword
@@ -179,11 +178,6 @@ const desk = [
                         ))}
                       </select>
                     </>
-                  </div>
-                  <div class="col-md-1 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" type="submit" aria-label="Search jobs">
-                      <Icon name="search" />
-                    </button>
                   </div>
                 </>
               </form>

@@ -1,5 +1,9 @@
 ---
 import WorkspacePage from '../../components/workspace/WorkspacePage.astro'
+import { redirectToLogin } from '../../server/page-auth.mjs'
+export const prerender = false
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+if (loginRedirect) return loginRedirect
 ---
 
 <WorkspacePage view="applications" title="Job application tracker" description="Every application in one place, so nothing slips through." />

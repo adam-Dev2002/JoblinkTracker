@@ -35,9 +35,6 @@ const themeAttributes = themeDataAttributes(themeSettings)
 const environment = process.env.NODE_ENV || 'production'
 const isDevelopment = environment === 'development'
 const min = isDevelopment ? '' : '.min'
-// The promo top banner loads on Vercel production deploys only, never on branch
-// previews, local builds or the packaged demo (VERCEL_ENV is "preview" or unset there).
-const isProduction = process.env.VERCEL_ENV === 'production'
 // RTL swaps tabler/plugin stylesheets for their .rtl.css variants (demo stays LTR)
 const rtlSuffix = rtl ? '.rtl' : ''
 
@@ -280,7 +277,6 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     </script>
     <!-- END PAGE SCRIPTS -->
 
-    {isProduction && <script is:inline src="https://scripts.tabler.io/banner.js" defer data-tblr-ref="tabler-preview-top-banner" />}
   </body>
 </html>
 

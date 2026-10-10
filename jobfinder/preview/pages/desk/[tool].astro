@@ -1,15 +1,18 @@
 ---
 import WorkspacePage from '../../components/workspace/WorkspacePage.astro'
-export const prerender = true
-export function getStaticPaths() {
-  return [
-    { params: { tool: 'taskboard' }, props: { title: 'Task board', description: 'Turn your plans into manageable next steps.' } },
-    { params: { tool: 'calendar' }, props: { title: 'Calendar', description: 'Interviews, deadlines, and events in your own calendar.' } },
-    { params: { tool: 'links' }, props: { title: 'Links', description: 'Keep the resources you reach for close at hand.' } },
-    { params: { tool: 'sheet' }, props: { title: 'Sheet', description: 'A flexible home for your research and notes.' } },
-  ]
+import { redirectToLogin } from '../../server/page-auth.mjs'
+export const prerender = false
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+if (loginRedirect) return loginRedirect
+const toolPages = {
+  taskboard: { title: 'Task board', description: 'Turn your plans into manageable next steps.' },
+  calendar: { title: 'Calendar', description: 'Interviews, deadlines, and events in your own calendar.' },
+  links: { title: 'Links', description: 'Keep the resources you reach for close at hand.' },
+  sheet: { title: 'Sheet', description: 'A flexible home for your research and notes.' },
 }
-const { title, description } = Astro.props
+const page = toolPages[Astro.params.tool as keyof typeof toolPages]
+if (!page) return new Response('Page not found', { status: 404 })
+const { title, description } = page
 ---
 
 <WorkspacePage view={Astro.params.tool!} title={title} description={description} />

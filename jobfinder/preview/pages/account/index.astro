@@ -1,7 +1,10 @@
 ---
 import SingleLayout from '@shared/layouts/SingleLayout.astro'
+import { redirectToLogin } from '../../server/page-auth.mjs'
+export const prerender = false
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+if (loginRedirect) return loginRedirect
 ---
-
 <SingleLayout title="Account settings"><a href="/settings">Open account settings</a></SingleLayout>
 <script>
   location.replace('/settings')

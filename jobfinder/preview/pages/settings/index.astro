@@ -1,6 +1,10 @@
 ---
 import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
 import UserAvatar from '@shared/components/UserAvatar.astro'
+import { redirectToLogin } from '../../server/page-auth.mjs'
+export const prerender = false
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+if (loginRedirect) return loginRedirect
 ---
 
 <DefaultLayout title="Account settings">
@@ -56,7 +60,7 @@ import UserAvatar from '@shared/components/UserAvatar.astro'
     }
   }
 </style>
-<script>
+<script lang="ts">
   import { getSession, clearProfile } from '@shared/lib/client-session'
   const root = document.querySelector<HTMLElement>('[data-settings]')!
   const error = root.querySelector<HTMLElement>('[data-error]')!
@@ -81,7 +85,7 @@ import UserAvatar from '@shared/components/UserAvatar.astro'
       const session = await getSession()
       csrf = session.csrf
       if (!session.user) {
-        location.replace('/sign-in')
+        location.replace('/sign-in?returnTo=%2Fsettings')
         return
       }
       root.querySelector<HTMLInputElement>('#settings-name')!.value = session.user.name

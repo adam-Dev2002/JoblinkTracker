@@ -10,6 +10,7 @@ type Job = { id: string; title: string; company: string; location: string; role:
 const root = document.querySelector<HTMLElement>('[data-workspace-view]')!
 const view = root.dataset.workspaceView!
 const select = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!
+const loginUrl = () => `/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`
 const htmlEscape = (value: string | number | null | undefined) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const safeUrl = (value: string | undefined) => {
@@ -215,7 +216,7 @@ const fields: Record<Kind, string[]> = { application: ['title', 'company', 'url'
 function openModal(kind: Kind, item: Entry | null = null, prefill: Record<string, string> = {}) {
   if (!loaded) return
   if (!signedIn) {
-    location.assign('/sign-in')
+    location.assign(loginUrl())
     return
   }
   editing = item
@@ -431,7 +432,7 @@ async function handleClick(event: Event) {
       if (!job || !safeUrl(job.url)) return
       if (!signedIn) {
         sessionStorage.setItem('jobify-pending-application', JSON.stringify(job))
-        location.assign('/sign-in')
+        location.assign(loginUrl())
         return
       }
       const popup = window.open('about:blank', '_blank')
@@ -677,8 +678,8 @@ async function loadJobs() {
   select('[data-job-results]').innerHTML = empty('Searching this source...')
   renderSources()
   select('[data-feed-message]').textContent = 'Loading the job feed '
-  const button = select<HTMLButtonElement>('[data-job-search] button')
-  button.disabled = true
+  const form = select<HTMLFormElement>('[data-job-search]')
+  form.setAttribute('aria-busy', 'true')
   try {
     const q = select<HTMLInputElement>('#job-query').value,
       source = select<HTMLSelectElement>('#job-source').value
@@ -697,15 +698,14 @@ async function loadJobs() {
     select('[data-feed-message]').textContent = 'The feed is currently unavailable.'
     error(e instanceof Error ? e.message : 'Unable to search.')
   } finally {
-    if (request === jobRequest) button.disabled = false
+    if (request === jobRequest) form.setAttribute('aria-busy', 'false')
   }
 }
 window.addEventListener('jobify-session', (event) => {
   if (!(event as CustomEvent<{ id: number } | null>).detail && loaded) {
     signedIn = false
     items = []
-    select('[data-signin-notice]').classList.remove('d-none')
-    render()
+    location.replace(loginUrl())
   }
 })
 async function init() {
@@ -714,9 +714,11 @@ async function init() {
     const session = await getSession()
     signedIn = Boolean(session.user)
     csrf = session.csrf
-    if (signedIn) {
-      items = (await api('workspace/items')).items
-    } else select('[data-signin-notice]').classList.remove('d-none')
+    if (!signedIn) {
+      location.replace(loginUrl())
+      return
+    }
+    items = (await api('workspace/items')).items
     loaded = true
     root.dataset.ready = 'true'
     root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
@@ -727,24 +729,29 @@ async function init() {
     error(e instanceof Error ? e.message : 'Unable to load workspace.')
   }
   if (view === 'jobs') {
+    let searchTimer: ReturnType<typeof setTimeout> | undefined
+    const searchNow = () => {
+      clearTimeout(searchTimer)
+      void loadJobs()
+    }
     select<HTMLFormElement>('[data-job-search]').addEventListener('submit', (event) => {
       event.preventDefault()
-      void loadJobs()
+      searchNow()
     })
-    select('#job-source').addEventListener('change', () => {
-      void loadJobs()
-    })
+    select('#job-source').addEventListener('change', searchNow)
     select('#job-role').addEventListener('change', renderJobs)
     select('#job-location').addEventListener('input', () => { renderJobs(); renderSources() })
-    select('#job-query').addEventListener('input', renderSources)
+    select('#job-query').addEventListener('input', () => {
+      renderSources()
+      clearTimeout(searchTimer)
+      searchTimer = setTimeout(searchNow, 350)
+    })
     select('#job-employment').addEventListener('change', renderJobs)
     attachSuggestions(
       select<HTMLInputElement>('#job-query'),
       select('#job-query-suggestions'),
       () => [...jobs.map((job) => job.title), 'Virtual assistant', 'Executive assistant', 'Customer support', 'Software developer', 'Web developer', 'Graphic designer', 'Social media manager', 'Bookkeeper', 'Data entry'],
-      () => {
-        void loadJobs()
-      },
+      searchNow,
     )
     attachSuggestions(select<HTMLInputElement>('#job-location'), select('#job-location-suggestions'), () => [...jobs.flatMap((job) => job.location.split(/[,;]/).map((location) => location.trim())), 'Philippines', 'Manila', 'Cebu', 'Davao', 'Worldwide', 'USA', 'United Kingdom', 'Canada', 'Australia'], renderJobs)
     await loadJobs()

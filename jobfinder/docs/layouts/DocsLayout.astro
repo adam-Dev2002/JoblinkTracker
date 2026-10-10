@@ -94,9 +94,6 @@ const pagePlugins = [...basePlugins, ...cssPlugins.filter((plugin) => !basePlugi
 const environment = process.env.NODE_ENV || 'production';
 // Vercel preview/branch deployments must not be indexed (VERCEL_ENV is unset locally).
 const isVercelPreview = !!process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'production';
-// The promo top banner loads on Vercel production deploys only, never on branch previews or local builds.
-const isProduction = process.env.VERCEL_ENV === 'production';
-
 // Strip /docs prefix (and optional .html) for the docs namespace URL.
 // Canonical form has no trailing slash (matching vercel.json trailingSlash: false);
 // the root stays "/".
@@ -525,6 +522,5 @@ const relatedPages = await Promise.all(
 
 		<PageScripts />
 
-		{isProduction && <script is:inline src="https://scripts.tabler.io/banner.js" defer data-tblr-ref="tabler-docs" />}
 	</body>
 </html>

@@ -1,6 +1,9 @@
 ﻿---
 import WorkspacePage from '../../components/workspace/WorkspacePage.astro'
+import { redirectToLogin } from '../../server/page-auth.mjs'
+export const prerender = false
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+if (loginRedirect) return loginRedirect
 ---
 
 <WorkspacePage view="jobs" title="Find work" description="Discover jobs by role and apply on the original website." />
-

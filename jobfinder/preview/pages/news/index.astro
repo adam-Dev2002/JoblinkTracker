@@ -1,5 +1,9 @@
 ﻿---
 import WorkspacePage from '../../components/workspace/WorkspacePage.astro'
+import { redirectToLogin } from '../../server/page-auth.mjs'
+export const prerender = false
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+if (loginRedirect) return loginRedirect
 ---
 
 <WorkspacePage view="news" title="News & events" description="Fresh perspectives on careers, remote work, and making your next move." />

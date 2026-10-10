@@ -94,19 +94,30 @@ const register = mode === 'register'
       <a href="/job-listing">Back to jobs</a>
     ) : register ? (
       <>
-        Already have an account? <a href="/sign-in">Sign in</a>
+        Already have an account? <a href="/sign-in" data-auth-switch="/sign-in">Sign in</a>
       </>
     ) : (
       <>
-        New to Joblink? <a href="/sign-up">Create an account</a>
+        New to Joblink? <a href="/sign-up" data-auth-switch="/sign-up">Create an account</a>
       </>
     )
   }
 </div>
-<script>
+<script lang="ts">
   import { getSession, clearProfile } from '@shared/lib/client-session'
   const root = document.querySelector<HTMLElement>('[data-jobify-auth]')!
   const mode = root.dataset.jobifyAuth
+  function safeReturnTo(value: string | null) {
+    if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/job-listing'
+    try {
+      const target = new URL(value, location.origin)
+      if (target.origin !== location.origin || /^\/(?:sign-in|sign-up|api)(?:\/|$)/.test(target.pathname)) return '/job-listing'
+      return `${target.pathname}${target.search}${target.hash}`
+    } catch {
+      return '/job-listing'
+    }
+  }
+  const returnTo = safeReturnTo(new URLSearchParams(location.search).get('returnTo'))
   const errorBox = root.querySelector<HTMLElement>('[data-auth-error]')!
   let csrf = ''
   function showError(message: string) {
@@ -125,7 +136,7 @@ const register = mode === 'register'
       csrf = session.csrf
       if (mode === 'account') {
         if (!session.user) {
-          location.replace('/sign-in')
+          location.replace(`/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`)
           return
         }
         root.querySelector<HTMLElement>('[data-user-name]')!.textContent = session.user.name
@@ -134,10 +145,13 @@ const register = mode === 'register'
         root.querySelector('[data-account]')!.classList.remove('d-none')
       } else {
         if (session.user) {
-          location.replace('/job-listing')
+          location.replace(returnTo)
           return
         }
         root.querySelector('[data-auth-content]')!.classList.remove('d-none')
+        root.querySelector<HTMLAnchorElement>('[data-google]')!.href = `/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`
+        const switchLink = document.querySelector<HTMLAnchorElement>('[data-auth-switch]')
+        if (switchLink) switchLink.href = `${switchLink.dataset.authSwitch}?returnTo=${encodeURIComponent(returnTo)}`
         if (!session.googleEnabled) {
           const button = root.querySelector<HTMLAnchorElement>('[data-google]')!
           button.removeAttribute('href')
@@ -158,7 +172,9 @@ const register = mode === 'register'
         const code = new URLSearchParams(location.search).get('auth_error')
         if (code) {
           showError(errors[code] || 'Unable to sign in.')
-          history.replaceState({}, '', location.pathname)
+          const url = new URL(location.href)
+          url.searchParams.delete('auth_error')
+          history.replaceState({}, '', url.pathname + url.search + url.hash)
         }
       }
     } catch (error) {
@@ -180,7 +196,7 @@ const register = mode === 'register'
     button.disabled = true
     try {
       await request(mode === 'register' ? 'register' : 'login', { name: fields.get('name'), email: fields.get('email'), password: fields.get('password') })
-      location.assign('/job-listing')
+      location.assign(returnTo)
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Unable to sign in.')
       try {
