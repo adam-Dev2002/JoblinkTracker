@@ -281,6 +281,10 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
 </html>
 
 <style is:global>
+  /* Joblink never displays the UI template promotional banner. */
+  .tblr-banner {
+    display: none !important;
+  }
   /* joblink-global-interactions */
   .card {
     transition:
