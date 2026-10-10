@@ -41,7 +41,7 @@ See [job source setup and API mapping](auth/JOB-SOURCES.md) for live feed detail
 
 Start the app with `start-preview.ps1`. Deploy the folder `jobfinder/preview` to Vercel. The private cloud environment lives at `jobfinder/preview/.env`.
 
-The UI kit's docs and demo sources remain inside `jobfinder` because the app uses its shared assets and workspace build tools.
+Main pages are grouped inside `jobfinder/preview/pages/`. UI components are grouped by feature, and unused demo pages are in `jobfinder/preview/template-examples/`. See [the application folder guide](jobfinder/preview/README.md) for the page-to-folder map.
 
 Google profile photos are refreshed when the user signs in with Google. Older Google accounts need one fresh Google sign-in to obtain a photo. Email accounts use initials; failed or missing photos fall back to the same default avatar. The API accepts Google-hosted HTTPS photo URLs only.
 
