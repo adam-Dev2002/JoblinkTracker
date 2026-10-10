@@ -120,6 +120,8 @@ export default defineConfig({
       alias: {
         // Demo data in shared/data (single source of truth).
         '@data': fileURLToPath(new URL('../shared/data', import.meta.url)),
+        // Resolve workspace source even when the installer omits package links.
+        '@tabler/core': fileURLToPath(new URL('../core', import.meta.url)),
         // Components/lib shared with docs.
         '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
         '@ui': fileURLToPath(new URL('../shared/ui', import.meta.url)),
