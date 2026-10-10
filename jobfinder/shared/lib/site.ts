@@ -7,6 +7,7 @@ const version = corePackage.version
 export const site = {
   title: 'Joblink',
   copyrightOwner: 'Adam',
+  copyrightOwnerUrl: 'https://adam-portfolio-jade.vercel.app/',
   version,
   docsUrl: 'https://docs.tabler.io',
   cdnUrl: `https://cdn.jsdelivr.net/npm/@tabler/core@${version}`,

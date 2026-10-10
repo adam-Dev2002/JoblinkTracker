@@ -2,4 +2,4 @@
 import { site } from '@shared/lib/site'
 const year = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'numeric' }).format(new Date())
 ---
-<footer class="text-secondary small text-center px-3 py-3">? {year} {site.copyrightOwner}. All rights reserved.</footer>
+<footer class="text-secondary small text-center px-3 py-3">&copy; {year} <a href={site.copyrightOwnerUrl} target="_blank" rel="noopener noreferrer" class="text-reset">{site.copyrightOwner}</a>. All rights reserved.</footer>
