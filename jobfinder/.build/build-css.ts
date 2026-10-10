@@ -58,7 +58,7 @@ function queueWrite(file: string, content: string) {
 // sass + autoprefixer for one entry: scss/x.scss → outDir/x.css (+ .map)
 async function compile(entry: string): Promise<{ outFile: string; result: Result }> {
   const outFile = join(outDir, `${basename(entry, '.scss')}.css`)
-  const compiled = compileSass(join(scssDir, entry), { loadPaths: ['node_modules'], style: 'expanded' })
+  const compiled = compileSass(join(scssDir, entry), { loadPaths: ['node_modules', '../node_modules'], style: 'expanded' })
   // The sass CLI ends its output files with a newline; the JS API's css string
   // does not. Keep the byte-identical CLI behavior (the annotation comment then
   // lands after a blank line, exactly like `postcss --replace` produced).

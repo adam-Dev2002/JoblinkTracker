@@ -142,7 +142,7 @@ export default defineConfig({
         {
           // @tabler/core dist (css/js/fonts/img/libs).
           // Fallback keeps current assets if core rebuilds dist mid-copy in turbo dev.
-          from: path('./node_modules/@tabler/core/dist'),
+          from: path('../core/dist'),
           to: path('./public/dist'),
           label: '@tabler/core',
           allowDestinationFallback: true,

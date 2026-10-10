@@ -20,7 +20,7 @@ const keptUntilV2 = ['flags/kn-sk.svg']
 
 const used = new Set<string>(keptUntilV2)
 for (const entry of readdirSync(scssDir).filter((file) => file.endsWith('.scss') && !file.startsWith('_'))) {
-  const { css } = compile(join(scssDir, entry), { loadPaths: [join(coreDir, 'node_modules')], quietDeps: true, silenceDeprecations: ['import'] })
+  const { css } = compile(join(scssDir, entry), { loadPaths: [join(coreDir, 'node_modules'), join(coreDir, '..', 'node_modules')], quietDeps: true, silenceDeprecations: ['import'] })
   for (const [, path] of css.matchAll(/url\(\s*['"]?[^'")]*?\/img\/([^'")?#]+)/g)) used.add(path)
 }
 

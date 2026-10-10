@@ -4,9 +4,11 @@ import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { globSync } from 'glob'
 import libs from '../libs.json' with { type: 'json' }
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { join, dirname } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
 
 interface LibConfig {
   npm?: string
@@ -29,7 +31,9 @@ for (const name in libsData) {
   const { npm, js, css, extra } = libsData[name]
 
   if (npm) {
-    const pkgDir = join(__dirname, '..', `node_modules/${npm}`)
+    // Resolve installed libraries in both package-local and hoisted workspaces.
+    const pkgDir = (require.resolve.paths(npm) || []).map((directory) => join(directory, npm)).find((directory) => existsSync(join(directory, 'package.json')))
+    if (!pkgDir) throw new Error(`copy-libs: missing installed dependency ${npm}`)
     const to = join(__dirname, '..', `dist/libs/${npm}`)
 
     // create dir in dist/libs
