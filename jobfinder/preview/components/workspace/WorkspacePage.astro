@@ -157,14 +157,9 @@ const desk = [
                       </label>
                       <select class="form-select" id="job-source" name="source">
                         <>
-                          <option value="remotive">Remotive Remote jobs</option>
-                          <>
-                            <option value="jsearch">Philippines JSearch</option>
-                            <option value="indeed">Indeed Philippines</option>
-                            <option value="jobstreet">JobStreet Philippines</option>
-                            <option value="onlinejobs">OnlineJobs.ph</option>
-                            <option value="linkedin">LinkedIn Jobs</option>
-                          </>
+                          <option value="remotive">Remotive - free remote jobs</option>
+                          <option value="arbeitnow">Arbeitnow - free Europe jobs</option>
+                          {process.env.JSEARCH_API_KEY && <option value="jsearch">JSearch - connected feed</option>}
                         </>
                       </select>
                     </>
@@ -244,8 +239,8 @@ const desk = [
             <div class="row g-3 mb-4" data-job-results />
           </>
           <>
-            <h2 class="mb-2">Search the official job sites</h2>
-            <p class="text-secondary">Browse Philippine job boards and VA agencies directly. These links do not import listings into Jobify.</p>
+            <h2 class="mb-2">Search more job sites</h2>
+            <p class="text-secondary">These searches open Google, job boards, or agency websites in a new tab. Listings from these searches are not imported into Joblink.</p>
             <div class="row g-3" data-job-sources />
           </>
         </>

@@ -651,8 +651,10 @@ function renderJobs() {
 }
 function renderSources() {
   const q = select<HTMLInputElement>('#job-query').value || 'virtual assistant',
-    encoded = encodeURIComponent(q)
+    encoded = encodeURIComponent(q),
+    location = select<HTMLInputElement>('#job-location').value.trim() || 'Philippines'
   const sources: [string, string, string][] = [
+    ['Google job search', 'Search jobs and company career pages across the web', `https://www.google.com/search?q=${encodeURIComponent(q + ' jobs ' + location)}`],
     ['Indeed PH', 'Philippine jobs across industries', `https://ph.indeed.com/jobs?q=${encoded}&l=Philippines`],
     ['JobStreet PH', 'Company opportunities in the Philippines', `https://ph.jobstreet.com/jobs?keywords=${encoded}`],
     ['OnlineJobs.ph', 'Remote roles for Filipino professionals', `https://www.onlinejobs.ph/jobseekers/jobsearch?jobkeyword=${encoded}`],
@@ -661,7 +663,7 @@ function renderSources() {
     ['Cyberbacker', 'Virtual assistance opportunities', 'https://cyberbacker.ph/careers/'],
   ]
   select('[data-job-sources]').innerHTML = sources
-    .map(([name, description, url]) => `<div class="col-md-6 col-xl-4"><div class="card"><div class="card-body"><h3>${name}</h3><p class="text-secondary small">${description}</p><a href="${htmlEscape(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm">Search official site &nearr;</a></div></div></div>`)
+    .map(([name, description, url]) => `<div class="col-md-6 col-xl-4"><div class="card"><div class="card-body"><span class="badge bg-blue-lt mb-2">External search</span><h3>${name}</h3><p class="text-secondary small">${description}</p><a href="${htmlEscape(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm">Open search &nearr;</a></div></div></div>`)
     .join('')
 }
 async function loadJobs() {
@@ -728,7 +730,8 @@ async function init() {
       void loadJobs()
     })
     select('#job-role').addEventListener('change', renderJobs)
-    select('#job-location').addEventListener('input', renderJobs)
+    select('#job-location').addEventListener('input', () => { renderJobs(); renderSources() })
+    select('#job-query').addEventListener('input', renderSources)
     select('#job-employment').addEventListener('change', renderJobs)
     attachSuggestions(
       select<HTMLInputElement>('#job-query'),

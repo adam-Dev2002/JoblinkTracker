@@ -2,11 +2,14 @@
 
 ## Live feeds
 
+The feed selector shows free imported sources and JSearch only when its server key is configured. External site searches appear separately.
+
 - **Remotive**: enabled without credentials at `/api/jobs/search`. Feed cached for six hours; source listings are delayed by 24 hours. Listing cards link back to Remotive with attribution. Users can browse listings without signing up. Location eligibility is supplied by the feed and should be checked on the original listing. [Provider documentation](https://github.com/remotive-com/remote-jobs-api)
+- **Arbeitnow**: free, no API key, at `/api/jobs/search?source=arbeitnow`. The first provider page is cached for six hours; Joblink displays up to 100 matches. Includes full descriptions, company names, location and remote flags, with links back to Arbeitnow. Coverage is mostly Europe; remote roles may still have country and language restrictions. [Provider documentation](https://www.arbeitnow.com/blog/job-board-api)
 - **JSearch**: optional Philippine search connector at `/api/jobs/search?source=jsearch&q=virtual+assistant`. It searches Google for Jobs data with `country=ph`; publisher coverage varies. Results are cached for one hour and require a signed-in Joblink user. [Provider documentation](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch)
 - **Career reading**: `/api/jobs/news` uses DEV Community public career/remote-work/productivity articles. `/api/jobs/article?id=...` retrieves provider-supplied article text for the in-page reader. Covers, author attribution, source links, one-hour list caching and one-day article caching are retained. Reader HTML is rendered through a tag and URL allowlist. [API documentation](https://developers.forem.com/api/v1)
 
-Joblink classifies roles with title keyword rules in `auth/jobs.php`. These are editable heuristic labels, not an AI assessment of a candidate or a guarantee of job suitability.
+Joblink classifies roles with title keyword rules in `jobfinder/preview/server/jobs.mjs` and the legacy `auth/jobs.php`. These are editable heuristic labels, not an AI assessment of a candidate or a guarantee of job suitability.
 
 ## Configure Philippine searches
 
@@ -20,7 +23,9 @@ Keep Google credentials and database settings as they are. Save, then select **P
 
 Indeed, JobStreet PH, OnlineJobs.ph, LinkedIn and the VA-agency cards are **official-site links**, not connected scanners. Indeed's documented APIs are partner-oriented, and SEEK's documented integrations focus on hiring workflows. Their presence in the directory does not imply import access. JSearch may return their public indexed listings, but coverage is not guaranteed. [Indeed documentation](https://docs.indeed.com/), [SEEK documentation](https://developer.seek.com/).
 
-Joblink opens source listings or provider-supplied application links. It does not submit applications on a user's behalf. A job is counted in the tracker only when the user saves it; opening a listing does not mark it applied.
+Google job search is a plain browser link using the entered role and location. It needs no API key and does not import Google results into Joblink. The Google Custom Search JSON API is closed to new customers, so it is not used. [Google documentation](https://developers.google.com/custom-search/v1/overview)
+
+Joblink opens source listings or provider-supplied application links. Clicking Apply creates or updates an **Application opened** record. The user confirms submission to mark it **Applied**; Joblink does not automatically know whether an external application was submitted. External search cards open websites and do not create individual job records.
 
 ## Saved workspace
 
@@ -35,7 +40,7 @@ Data lives in `workspace_items`: applications, tasks, events, links and sheet ro
 | `auth/jobs.php`                          | Cached feeds, source normalization and role classification |
 | `auth/workspace.php`                     | Authenticated workspace CRUD and validation                |
 | `auth/init-db.php`                       | Additive database schema setup                             |
-| `preview/components/WorkspacePage.astro` | Dashboard, Find work, tracker and desk views               |
+| `preview/components/workspace/WorkspacePage.astro` | Dashboard, Find work, tracker and desk views               |
 | `preview/scripts/workspace.ts`           | Forms, filters, calendar, persistence and CSV              |
 | `shared/layouts/DefaultLayout.astro`     | Consistent sidebar and app header                          |
 | `auth/test-workspace.mjs`                | Browser checks, including ownership and mobile behavior    |

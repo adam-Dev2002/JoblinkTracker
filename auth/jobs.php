@@ -83,8 +83,17 @@ function jobsRequest(string $path): never {
                 $url = safeJobUrl($row['url'] ?? ''); if (!$url) continue;
                 $jobs[] = ['id' => (string)$row['id'], 'title' => $title, 'description' => jobDescription($row['description'] ?? ''), 'company' => $company, 'location' => $row['candidate_required_location'] ?: 'Check listing', 'role' => roleFor($title), 'url' => $url, 'source' => 'Remotive', 'salary' => $row['salary'] ?? '', 'date' => $row['publication_date'] ?? '', 'logo' => companyLogo($company, safeJobUrl($row['company_logo'] ?? '')), 'employmentType' => employmentType($row['job_type'] ?? ''), 'workMode' => 'Remote / WFH', 'direct' => false];
             }
+        } elseif ($source === 'arbeitnow') {
+            $feed = cachedFeed('arbeitnow-v1', 'https://www.arbeitnow.com/api/job-board-api');
+            foreach ($feed['data'] ?? [] as $row) {
+                $title = $row['title'] ?? ''; $company = $row['company_name'] ?? '';
+                if ($query && !str_contains(mb_strtolower($title . ' ' . $company . ' ' . implode(' ', $row['tags'] ?? [])), mb_strtolower($query))) continue;
+                $url = safeJobUrl($row['url'] ?? ''); if (!$url) continue;
+                $type = 'Not specified'; foreach ($row['job_types'] ?? [] as $value) { $mapped = employmentType($value); if ($mapped !== 'Not specified') { $type = $mapped; break; } }
+                $jobs[] = ['id' => 'arbeitnow:' . ($row['slug'] ?? ''), 'title' => $title, 'description' => jobDescription($row['description'] ?? ''), 'company' => $company, 'location' => $row['location'] ?? 'Check listing', 'role' => roleFor($title), 'url' => $url, 'source' => 'Arbeitnow', 'salary' => '', 'date' => isset($row['created_at']) ? gmdate('c', (int)$row['created_at']) : '', 'logo' => companyLogo($company, ''), 'employmentType' => $type, 'workMode' => !empty($row['remote']) ? 'Remote / WFH' : 'Check listing', 'direct' => false];
+            }
         } else respond(['error' => 'Unknown job source'], 422);
-        respond(['jobs' => array_slice($jobs, 0, 100), 'configured' => true, 'source' => $source === 'remotive' ? 'Remotive' : 'JSearch', 'message' => $source === 'remotive' ? 'Remote listings from Remotive, delayed by 24 hours. Check each listing’s location requirements before applying.' : 'Philippine results via JSearch. Availability varies by publisher.']);
+        respond(['jobs' => array_slice($jobs, 0, 100), 'configured' => true, 'source' => $source === 'remotive' ? 'Remotive' : ($source === 'arbeitnow' ? 'Arbeitnow' : 'JSearch'), 'message' => $source === 'arbeitnow' ? 'Free listings from Arbeitnow, mostly Europe. Check country, language and remote-work requirements before applying.' : ($source === 'remotive' ? 'Remote listings from Remotive, delayed by 24 hours. Check each listing’s location requirements before applying.' : 'Philippine results via JSearch. Availability varies by publisher.')]);
     } catch (Throwable $e) { respond(['error' => 'The job feed is temporarily unavailable. Use the official source links or try again later.'], 502); }
 }
 
