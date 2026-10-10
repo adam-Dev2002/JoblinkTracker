@@ -1,5 +1,6 @@
 ---
-const configuredId = process.env.GOOGLE_SEARCH_ENGINE_ID || ''
+import { site } from '@shared/lib/site'
+const configuredId = process.env.GOOGLE_SEARCH_ENGINE_ID || site.googleSearchEngineId
 const engineId = /^[a-zA-Z0-9:_-]{1,100}$/.test(configuredId) ? configuredId : ''
 ---
 <div class="card mb-4" data-google-search data-engine-id={engineId}>

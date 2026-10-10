@@ -1,5 +1,7 @@
 # Google job-site search inside Joblink
 
+The current engine `a0303a067c89c4c3d` is configured in `jobfinder/shared/lib/site.ts`. Its public ID ships with the app, so no additional Vercel variable is required to activate this engine. `GOOGLE_SEARCH_ENGINE_ID` can override it when switching engines.
+
 1. Open https://programmablesearchengine.google.com/ and create a search engine called Joblink Jobs.
 2. Add job sites, one per entry: ph.indeed.com, ph.jobstreet.com, www.onlinejobs.ph, and www.linkedin.com/jobs/. Add employer career sites as needed.
 3. Choose web search results and create the engine. New engines search selected sites; they do not provide unrestricted whole-web search.

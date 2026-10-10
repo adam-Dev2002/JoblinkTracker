@@ -6,6 +6,7 @@ const version = corePackage.version
 
 export const site = {
   title: 'Joblink',
+  googleSearchEngineId: 'a0303a067c89c4c3d',
   copyrightOwner: 'Adam',
   copyrightOwnerUrl: 'https://adam-portfolio-jade.vercel.app/',
   version,
