@@ -13,7 +13,8 @@ const register = mode === 'register'
     <div class="text-center text-primary fw-bold mb-2">Joblink</div>
     <h1 class="h2 text-center mb-4">{mode === 'account' ? 'Your account' : register ? 'Create your account' : 'Welcome back'}</h1>
     <div class="alert alert-danger d-none" role="alert" data-auth-error></div>
-    <p class="text-secondary text-center" data-auth-loading>Connecting to your account…</p>
+    <p class="text-secondary small text-center" role="status" data-auth-loading>Checking your session...</p>
+    <button class="btn btn-sm d-none mb-3" type="button" data-auth-retry>Retry connection</button>
     {
       mode === 'account' ? (
         <div class="d-none" data-account>
@@ -38,7 +39,7 @@ const register = mode === 'register'
           </button>
         </div>
       ) : (
-        <div class="d-none" data-auth-content>
+        <div data-auth-content>
           <a href="/api/auth/google" class="btn w-100 mb-3" data-google>
             <Icon name="brand-google" />
             Continue with Google
@@ -103,7 +104,7 @@ const register = mode === 'register'
     )
   }
 </div>
-<script lang="ts">
+<script>
   import { getSession, clearProfile } from '@shared/lib/client-session'
   const root = document.querySelector<HTMLElement>('[data-jobify-auth]')!
   const mode = root.dataset.jobifyAuth
@@ -130,9 +131,12 @@ const register = mode === 'register'
     if (!response.ok) throw new Error(data.error || 'Unable to connect. Please try again.')
     return data
   }
-  async function init() {
+  async function init(force = false) {
+    root.querySelector('[data-auth-loading]')!.classList.remove('d-none')
+    root.querySelector('[data-auth-retry]')!.classList.add('d-none')
+    errorBox.classList.add('d-none')
     try {
-      const session = await getSession()
+      const session = await getSession(force)
       csrf = session.csrf
       if (mode === 'account') {
         if (!session.user) {
@@ -178,11 +182,13 @@ const register = mode === 'register'
         }
       }
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Unable to connect to the account service.')
+      showError('Unable to check your account right now. Use Retry connection to try again.')
+      root.querySelector('[data-auth-retry]')!.classList.remove('d-none')
     } finally {
       root.querySelector('[data-auth-loading]')!.classList.add('d-none')
     }
   }
+  root.querySelector<HTMLButtonElement>('[data-auth-retry]')!.addEventListener('click', () => { void init(true) })
   root.querySelector<HTMLFormElement>('[data-auth-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault()
     errorBox.classList.add('d-none')
@@ -195,6 +201,7 @@ const register = mode === 'register'
     const button = form.querySelector<HTMLButtonElement>('button[type=submit]')!
     button.disabled = true
     try {
+      if (!csrf) csrf = (await getSession()).csrf
       await request(mode === 'register' ? 'register' : 'login', { name: fields.get('name'), email: fields.get('email'), password: fields.get('password') })
       location.assign(returnTo)
     } catch (error) {
