@@ -40,7 +40,7 @@ Data lives in `workspace_items`: applications, tasks, events, links and sheet ro
 | `shared/layouts/DefaultLayout.astro`     | Consistent sidebar and app header                          |
 | `auth/test-workspace.mjs`                | Browser checks, including ownership and mobile behavior    |
 
-Frontend paths above are relative to `tabler-dev/tabler-dev/`.
+Frontend paths above are relative to `jobfinder/`.
 
 Run browser checks from the project root:
 

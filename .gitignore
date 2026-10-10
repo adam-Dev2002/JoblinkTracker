@@ -14,4 +14,4 @@ migration/.env
 migration/node_modules/
 
 
-tabler-dev/tabler-dev/preview/.env
+jobfinder/preview/.env

@@ -1,0 +1,5 @@
+{
+  "framework": "astro",
+  "installCommand": "cd .. && pnpm install --frozen-lockfile --config.symlink=true --config.store-dir=/tmp/joblink-pnpm-store",
+  "buildCommand": "pnpm --dir ../core build && pnpm build"
+}

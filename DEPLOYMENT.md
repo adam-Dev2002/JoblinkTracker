@@ -7,18 +7,20 @@ GitHub stores source code. Vercel runs the Astro site and Node API. Supabase sto
 Import `adam-Dev2002/JoblinkTracker` and choose these settings:
 
 - Framework: Astro
-- Root Directory: `tabler-dev/tabler-dev/preview`
+- Root Directory: `jobfinder/preview`
 - Enable access to source files outside the Root Directory.
 - Node.js: 24.x
 - Install Command: `cd .. && pnpm install --frozen-lockfile --config.symlink=true --config.store-dir=/tmp/joblink-pnpm-store`
 - Build Command: `pnpm --dir ../core build && pnpm build`
 - Output Directory: leave the Astro default; the Vercel adapter generates the server deployment.
 
+The install and build commands are also saved in `jobfinder/preview/vercel.json`, so Vercel can apply them automatically.
+
 The install override enables workspace links on Linux and avoids the local Windows cache path. The core build produces the Bootstrap/Tabler assets before the website build.
 
 ## Server environment variables
 
-Add values from the private `tabler-dev/tabler-dev/preview/.env` using Vercel's Environment Variables interface. Do not commit that file.
+Add values from the private `jobfinder/preview/.env` using Vercel's Environment Variables interface. Do not commit that file.
 
 Required: `JOBLINK_BACKEND=supabase`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SESSION_SECRET`, `APP_URL`.
 

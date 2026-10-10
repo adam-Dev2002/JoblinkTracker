@@ -50,7 +50,7 @@ Files go into the private `joblink-attachments` bucket. Database records are imp
 
 ## 5. Finish the Node API conversion
 
-The Node API is now implemented under `tabler-dev/tabler-dev/preview/server/`, with an Astro catch-all API route. Set `JOBLINK_BACKEND=supabase` to select it; the PHP proxies are bypassed in this mode. A private `preview/.env` has been prepared for local cloud testing. `start-preview.ps1` detects this mode and starts Node without starting PHP.
+The Node API is now implemented under `jobfinder/preview/server/`, with an Astro catch-all API route. Set `JOBLINK_BACKEND=supabase` to select it; the PHP proxies are bypassed in this mode. A private `preview/.env` has been prepared for local cloud testing. `start-preview.ps1` detects this mode and starts Node without starting PHP.
 
 Run `migration/cloud-runtime.sql` after the initial schema. It adds persistent feed caching, rate limiting and atomic workspace writes. It preserves imported records.
 

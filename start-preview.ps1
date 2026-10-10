@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $runtime = Join-Path $PSScriptRoot '.local-tools\node-v24.21.0-win-x64'
 $pnpm = Join-Path $PSScriptRoot '.local-tools\pnpm\node_modules\.bin\pnpm.cmd'
 $env:PATH = "$runtime;$(Split-Path $pnpm);$env:PATH"
-$cloudPreview = Join-Path $PSScriptRoot 'tabler-dev\tabler-dev\preview'
+$cloudPreview = Join-Path $PSScriptRoot 'jobfinder\preview'
 $cloudEnvironment = Join-Path $cloudPreview '.env'
 if ((Test-Path -LiteralPath $cloudEnvironment) -and ((Get-Content -LiteralPath $cloudEnvironment) -match '^JOBLINK_BACKEND=["'']?supabase')) {
     Set-Location $cloudPreview
@@ -22,6 +22,6 @@ $assistantListener = Get-NetTCPConnection -State Listen -LocalPort 8083 -ErrorAc
 if (-not $assistantListener) {
  Start-Process -FilePath 'C:\xampp\php\php.exe' -WorkingDirectory $auth -ArgumentList '-S 127.0.0.1:8083 router.php' -WindowStyle Hidden -RedirectStandardOutput (Join-Path $auth 'assistant-server.log') -RedirectStandardError (Join-Path $auth 'assistant-error.log')
 }
-Set-Location (Join-Path $PSScriptRoot 'tabler-dev\tabler-dev')
+Set-Location (Join-Path $PSScriptRoot 'jobfinder')
 & $pnpm --dir preview exec astro dev --host 127.0.0.1
 

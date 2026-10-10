@@ -28,28 +28,20 @@ See [job source setup and API mapping](auth/JOB-SOURCES.md) for live feed detail
 
 ## Folder map
 
-| Location                                                     | Purpose                                                                    |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `start-preview.ps1`                                          | Starts the PHP auth service and Astro preview                              |
-| `auth/config.local.php`                                      | Private database and Google credentials; ignored by Git                    |
-| `auth/config.example.php`                                    | Configuration template without credentials                                 |
-| `auth/bootstrap.php`                                         | Configuration validation, database connection, profile and session helpers |
-| `auth/router.php`                                            | Signup, login, logout, Google authorization and callback endpoints         |
-| `auth/init-db.php`                                           | Creates tables and applies additive schema changes                         |
-| `auth/test-auth.mjs`, `auth/test-account.php`                | Browser authentication checks and generated test account cleanup           |
-| `auth/runtime/`                                              | Generated sessions and test screenshots; ignored by Git                    |
-| `auth/README.md`                                             | Database and Google setup instructions                                     |
-| `tabler-dev/tabler-dev/preview/pages/`                       | Website routes, including jobs and account pages                           |
-| `tabler-dev/tabler-dev/preview/components/JoblinkAuth.astro` | Signup and login interface                                                 |
-| `tabler-dev/tabler-dev/preview/middleware.ts`                | Forwards local authentication requests to PHP                              |
-| `tabler-dev/tabler-dev/shared/components/UserAvatar.astro`   | Google photo and default initials/icon rendering                           |
-| `tabler-dev/tabler-dev/shared/components/navbar/`            | Joblink logo and account header                                            |
-| `tabler-dev/tabler-dev/shared/static/`                       | Images, icons and Joblink favicon                                          |
-| `tabler-dev/tabler-dev/shared/lib/site.ts`                   | Site name and descriptions                                                 |
-| `tabler-dev/tabler-dev/core/`                                | Template styles, JavaScript and bundled assets                             |
-| `.local-tools/`                                              | Portable Node.js, pnpm and dependency cache needed for local development   |
+| Folder | Purpose |
+| --- | --- |
+| `jobfinder/preview/` | Main app: pages, components, scripts and Vercel configuration |
+| `jobfinder/preview/server/` | Node API for login, workspace, jobs, news and assistant |
+| `jobfinder/shared/` | Shared layouts, UI components, logos and images |
+| `jobfinder/core/` | Bootstrap/Tabler styles and JavaScript |
+| `migration/` | Supabase schema, runtime SQL and data migration tools |
+| `auth/` | Original PHP/MySQL backend for local rollback |
+| `.local-tools/` | Local development tools; excluded from Git |
+| `.migration-data/` | Private database backups; excluded from Git |
 
-The remaining template demos, docs and source files belong to the original UI kit. Shared components reference its assets and data, so they are retained. Generated dependency folders, built assets and local credentials should not be edited as app source.
+Start the app with `start-preview.ps1`. Deploy the folder `jobfinder/preview` to Vercel. The private cloud environment lives at `jobfinder/preview/.env`.
+
+The UI kit's docs and demo sources remain inside `jobfinder` because the app uses its shared assets and workspace build tools.
 
 Google profile photos are refreshed when the user signs in with Google. Older Google accounts need one fresh Google sign-in to obtain a photo. Email accounts use initials; failed or missing photos fall back to the same default avatar. The API accepts Google-hosted HTTPS photo URLs only.
 

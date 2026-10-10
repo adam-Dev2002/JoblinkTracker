@@ -1,4 +1,4 @@
-import { chromium } from "../tabler-dev/tabler-dev/node_modules/playwright/index.mjs";
+import { chromium } from "../jobfinder/node_modules/playwright/index.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";

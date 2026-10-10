@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 const registry=JSON.parse(fs.readFileSync('auth/company-brands.json','utf8'));
-const folder='tabler-dev/tabler-dev/shared/static/company-logos';
+const folder='jobfinder/shared/static/company-logos';
 await Promise.allSettled(Object.entries(registry).map(async([name,entry])=>{
  try{
   const origin='https://'+entry.domain;
