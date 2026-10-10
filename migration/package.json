@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"import":"node --env-file=.env import-supabase.mjs"},"dependencies":{"@supabase/supabase-js":"^2"}}

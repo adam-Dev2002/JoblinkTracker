@@ -1,0 +1,426 @@
+---
+import Icon from '@ui/Icon.astro'
+---
+
+<div class="news-experience" data-news-experience>
+  <div class="news-banner mb-4"><div><span class="news-eyebrow">THE JOBLINK JOURNAL</span><h2>Ideas for your next chapter.</h2><p class="mb-0">Career stories, practical advice, and fresh perspectives. Take a moment to discover something useful.</p></div><span class="news-banner-icon"><Icon name="book" /></span></div>
+  <div class="news-bento-layout">
+    <div class="news-main-column">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="news-search flex-grow-1"><Icon name="search" /><input class="form-control" placeholder="Search stories, authors, or topics" aria-label="Search news" data-news-search /></div><button class="btn" data-news-refresh aria-label="Refresh news"><Icon name="refresh" /></button>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="News topics">
+        {
+          [
+            ['all', 'For you'],
+            ['career', 'Career'],
+            ['remotework', 'Remote work'],
+            ['productivity', 'Productivity'],
+          ].map(([value, label]) => (
+            <button class:list={['btn btn-sm', value === 'all' ? 'btn-primary' : 'btn-white']} data-news-topic={value} aria-pressed={value === 'all' ? 'true' : 'false'}>
+              {label}
+            </button>
+          ))
+        }
+      </div>
+      <div class="d-flex justify-content-between mb-3"><span class="text-secondary small">Stories from DEV Community, with author attribution</span><span class="small text-secondary" data-news-count></span></div>
+      <div data-news-list aria-live="polite"><div class="col-12"><div class="card"><div class="news-skeleton"></div><div class="card-body text-secondary">Finding something worth reading...</div></div></div></div>
+      <div class="text-center mt-4"><button class="btn d-none" data-news-more>Load more stories</button></div>
+    </div>
+    <aside class="news-side-column">
+      <div class="card news-events">
+        <div class="card-header d-flex justify-content-between"><h3 class="card-title"><Icon name="calendar-event" /> Your upcoming events</h3><button class="btn btn-sm btn-primary" data-add="event">Add</button></div><div data-event-list></div><div class="card-footer">
+          <a href="/desk/calendar" class="btn w-100">Open your calendar</a>
+        </div>
+      </div><div class="card news-resource-tile">
+        <div class="card-body">
+          <span class="news-eyebrow text-primary">KEEP EXPLORING</span><h3 class="mt-2">Philippine career resources</h3><p class="small text-secondary">Announcements and learning opportunities from the source.</p><div class="d-grid gap-2">
+            <a class="resource-link" href="https://www.dole.gov.ph/" target="_blank" rel="noopener noreferrer">DOLE announcements <Icon name="arrow-up-right" /></a><a class="resource-link" href="https://philjobnet.gov.ph/" target="_blank" rel="noopener noreferrer">PhilJobNet <Icon name="arrow-up-right" /></a><a
+              class="resource-link"
+              href="https://www.tesda.gov.ph/"
+              target="_blank"
+              rel="noopener noreferrer">TESDA training <Icon name="arrow-up-right" /></a
+            >
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <div class="news-reader d-none" data-news-reader role="dialog" aria-modal="true" aria-labelledby="reader-title">
+    <div class="news-reader-panel">
+      <div class="reader-toolbar">
+        <button class="btn btn-sm" data-reader-close><Icon name="arrow-left" />Back to stories</button><div class="d-flex gap-2">
+          <button class="btn btn-sm" data-reader-smaller aria-label="Smaller text">A-</button><button class="btn btn-sm" data-reader-larger aria-label="Larger text">A+</button><button class="btn btn-sm" data-reader-save><Icon name="bookmark" />Save link</button>
+        </div>
+      </div><div class="reader-progress"><div data-read-progress></div></div><div class="reader-scroll" data-reader-scroll>
+        <div data-reader-status class="p-4 text-secondary">Opening the story...</div><article class="d-none" data-reader-article>
+          <img class="reader-cover" data-reader-cover alt="" /><div class="reader-copy">
+            <div class="news-eyebrow text-primary" data-reader-tags></div><h2 id="reader-title" data-reader-title></h2><p class="text-secondary" data-reader-author></p><div class="reader-body" data-reader-body></div><div class="reader-attribution">
+              <strong>Published on DEV Community</strong><p class="small text-secondary mb-2">Article text and cover provided by the author through the DEV public API.</p><a data-reader-source target="_blank" rel="noopener noreferrer">View the original article &nearr;</a>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
+</div>
+<style is:global>
+  .news-bento-layout {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    align-items: stretch;
+  }
+  .news-main-column,
+  .news-side-column,
+  .news-bento-layout [data-news-list] {
+    display: contents;
+  }
+  .news-main-column > .d-flex,
+  .news-main-column > .text-center {
+    grid-column: 1 / -1;
+    margin-bottom: 0 !important;
+  }
+  .news-bento-story {
+    min-width: 0;
+  }
+  .news-bento-story.featured-tile {
+    grid-column: 1 / span 2;
+    grid-row: 4 / span 2;
+  }
+  .news-bento-layout .news-events {
+    grid-column: 3;
+    grid-row: 4;
+    margin: 0;
+  }
+  .news-bento-layout .news-resource-tile {
+    grid-column: 3;
+    grid-row: 5;
+    margin: 0;
+  }
+  .news-bento-layout .story-card {
+    height: 100%;
+  }
+  .news-bento-layout .story-card .card-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .news-bento-layout .story-card .card-body > .d-flex:last-child {
+    margin-top: auto;
+  }
+  .news-bento-layout .story-featured .story-cover {
+    height: 310px;
+  }
+  .news-bento-layout .story-excerpt {
+    margin-bottom: 18px;
+  }
+  @media (max-width: 1100px) {
+    .news-bento-layout {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .news-bento-story.featured-tile {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+    .news-bento-layout .news-events,
+    .news-bento-layout .news-resource-tile {
+      grid-column: auto;
+      grid-row: auto;
+    }
+  }
+  @media (max-width: 575px) {
+    .news-bento-layout {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 15px;
+    }
+    .news-bento-story.featured-tile {
+      grid-column: auto;
+    }
+    .news-bento-layout .story-featured .story-cover {
+      height: 220px;
+    }
+  }
+
+  .news-banner {
+    background: linear-gradient(115deg, #0b376a, #176dba);
+    border-radius: 16px;
+    padding: 30px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    gap: 30px;
+    align-items: center;
+  }
+  .news-banner h2 {
+    font-size: 28px;
+    letter-spacing: -0.6px;
+    margin: 10px 0;
+  }
+  .news-banner p {
+    color: #d8e8f8;
+    max-width: 570px;
+  }
+  .news-eyebrow {
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 1.5px;
+  }
+  .news-banner-icon {
+    width: 72px;
+    height: 72px;
+    display: grid;
+    place-items: center;
+    background: #ffffff16;
+    border: 1px solid #ffffff25;
+    border-radius: 20px;
+  }
+  .news-banner-icon .icon {
+    width: 36px;
+    height: 36px;
+  }
+  .news-search {
+    position: relative;
+  }
+  .news-search > .icon {
+    position: absolute;
+    left: 12px;
+    top: 10px;
+    color: #8190a4;
+  }
+  .news-search input {
+    padding-left: 42px;
+  }
+  .story-card {
+    height: 100%;
+    overflow: hidden;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
+  }
+  .story-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px #1d46651c;
+  }
+  .story-cover-button {
+    border: 0;
+    padding: 0;
+    background: #e8eef7;
+    width: 100%;
+    display: block;
+    text-align: left;
+    position: relative;
+  }
+  .story-cover {
+    width: 100%;
+    height: 185px;
+    object-fit: cover;
+  }
+  .story-featured .story-cover {
+    height: 280px;
+  }
+  .story-overlay {
+    position: absolute;
+    bottom: 12px;
+    left: 14px;
+    background: #fffefb;
+    color: #245383;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .story-title-button {
+    border: 0;
+    padding: 0;
+    background: none;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+  }
+  .story-card h3 {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+  .story-featured h3 {
+    font-size: 24px;
+  }
+  .story-excerpt {
+    font-size: 13px;
+    color: #6d7d93;
+    line-height: 1.6;
+  }
+  .story-read {
+    color: #066fd1;
+    font-weight: 600;
+    font-size: 13px;
+    background: none;
+    border: 0;
+    padding: 0;
+  }
+  .story-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #8190a4;
+  }
+  .resource-link {
+    display: flex;
+    justify-content: space-between;
+    text-decoration: none;
+    border-radius: 8px;
+    background: #f5f8fd;
+    padding: 11px;
+    font-size: 13px;
+  }
+  .news-events .card-title {
+    font-size: 15px;
+  }
+  .news-skeleton {
+    height: 230px;
+    background: linear-gradient(90deg, #edf1f7, #f8fafc, #edf1f7);
+    background-size: 200% 100%;
+    animation: news-shimmer 1.5s infinite;
+  }
+  @keyframes news-shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  .news-reader {
+    position: fixed;
+    inset: 0;
+    background: #10294488;
+    z-index: 1060;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .news-reader.d-none {
+    display: none !important;
+  }
+  .news-reader-panel {
+    width: 100%;
+    max-width: 940px;
+    height: min(92vh, 1100px);
+    border-radius: 18px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 30px 90px #0e233755;
+  }
+  .reader-toolbar {
+    padding: 12px 18px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid #e5eaf1;
+  }
+  .reader-progress {
+    height: 3px;
+    background: #eaf0f8;
+  }
+  .reader-progress > div {
+    height: 100%;
+    background: #066fd1;
+    width: 0;
+  }
+  .reader-scroll {
+    overflow: auto;
+    flex: 1;
+  }
+  .reader-cover {
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+  }
+  .reader-copy {
+    max-width: 740px;
+    margin: auto;
+    padding: 30px 32px;
+  }
+  .reader-copy h2 {
+    font-size: 30px;
+    line-height: 1.25;
+    letter-spacing: -0.7px;
+    margin: 12px 0;
+  }
+  .reader-body {
+    font-size: var(--reader-font, 16px);
+    line-height: 1.85;
+    color: #33465f;
+    overflow-wrap: anywhere;
+  }
+  .reader-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+  }
+  .reader-body pre {
+    overflow: auto;
+    background: #f2f5fa;
+    padding: 15px;
+    border-radius: 8px;
+  }
+  .reader-body h1,
+  .reader-body h2,
+  .reader-body h3 {
+    margin: 28px 0 12px;
+    line-height: 1.3;
+  }
+  .reader-body iframe {
+    display: none;
+  }
+  .reader-body table {
+    display: block;
+    overflow: auto;
+    max-width: 100%;
+  }
+  .reader-attribution {
+    margin-top: 35px;
+    padding-top: 20px;
+    border-top: 1px solid #e5eaf1;
+  }
+  .reading-open {
+    overflow: hidden;
+  }
+  @media (max-width: 767px) {
+    .news-banner {
+      padding: 22px;
+    }
+    .news-banner h2 {
+      font-size: 23px;
+    }
+    .news-banner-icon {
+      display: none;
+    }
+    .news-reader {
+      padding: 0;
+    }
+    .news-reader-panel {
+      border-radius: 0;
+      height: 100dvh;
+    }
+    .reader-copy {
+      padding: 22px;
+    }
+    .reader-copy h2 {
+      font-size: 25px;
+    }
+    .reader-toolbar {
+      padding: 10px 8px;
+    }
+    .reader-toolbar .btn {
+      font-size: 11px;
+      padding: 6px 8px;
+    }
+    .story-featured .story-cover {
+      height: 220px;
+    }
+  }
+</style>
+<script>
+  import '../scripts/news'
+</script>

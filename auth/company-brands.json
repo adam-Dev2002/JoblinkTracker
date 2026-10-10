@@ -1,0 +1,62 @@
+{
+  "unio digital": {
+    "domain": "unio.digital",
+    "website": "https://unio.digital/company",
+    "logo": "/static/company-logos/unio.digital.ico",
+    "logoSource": "https://unio.digital/favicon.ico"
+  },
+  "iapwe": {
+    "domain": "iapwe.org",
+    "website": "https://iapwe.org/",
+    "logo": "/static/company-logos/iapwe.org.png",
+    "logoSource": "https://iapwe.org/wp-content/uploads/2015/09/cropped-IAPWE-Logo-7-32x32.png"
+  },
+  "coalition technologies": {
+    "domain": "coalitiontechnologies.com",
+    "website": "https://coalitiontechnologies.com/who-we-are",
+    "logo": "/static/company-logos/coalitiontechnologies.com.png",
+    "logoSource": "https://coalitiontechnologies.com/apple-touch-icon.png"
+  },
+  "lemon.io": {
+    "domain": "lemon.io",
+    "website": "https://lemon.io/",
+    "logo": "/static/company-logos/lemon.io.png",
+    "logoSource": "https://lemon.io/wp-content/themes/lemonn/assets/favicon/favicon-32.png"
+  },
+  "telus digital": {
+    "domain": "telusdigital.com",
+    "website": "https://www.telusdigital.com/about",
+    "logo": "/static/company-logos/telusdigital.com.png",
+    "logoSource": "https://www.google.com/s2/favicons?domain=telusdigital.com&sz=128"
+  },
+  "kobotoolbox": {
+    "domain": "kobotoolbox.org",
+    "website": "https://www.kobotoolbox.org/",
+    "logo": "/static/company-logos/kobotoolbox.org.png",
+    "logoSource": "https://avatars.githubusercontent.com/kobotoolbox?s=128"
+  },
+  "sanctuary computer inc": {
+    "domain": "sanctuary.computer",
+    "website": "https://www.sanctuary.computer/info",
+    "logo": "/static/company-logos/sanctuary.computer.ico",
+    "logoSource": "https://sanctuary.computer/favicon.ico?favicon.06cc5b8akvvoq.ico?dpl=dpl_Eb3XJTgtb9LNeUU7LGUe9RWVBEpH"
+  },
+  "a.team": {
+    "domain": "a.team",
+    "website": "https://www.a.team/about",
+    "logo": "/static/company-logos/a.team.png",
+    "logoSource": "https://a.team/favicon-light.png"
+  },
+  "mitre media": {
+    "domain": "mitremedia.com",
+    "website": "https://mitremedia.com/",
+    "logo": "/static/company-logos/mitremedia.com.ico",
+    "logoSource": "https://mitremedia.com/favicon.a717e96d.ico"
+  },
+  "imerit technology": {
+    "domain": "imerit.ai",
+    "website": "https://imerit.ai/",
+    "logo": "/static/company-logos/imerit.ai.png",
+    "logoSource": "https://imerit.ai/wp-content/uploads/2025/09/cropped-android-chrome-192x192-1-32x32.png"
+  }
+}

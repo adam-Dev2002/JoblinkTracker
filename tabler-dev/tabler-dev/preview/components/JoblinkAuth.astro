@@ -1,0 +1,208 @@
+---
+import Icon from '@ui/Icon.astro'
+import UserAvatar from '@shared/components/UserAvatar.astro'
+interface Props {
+  mode: 'login' | 'register' | 'account'
+}
+const { mode } = Astro.props
+const register = mode === 'register'
+---
+
+<div class="card card-md" data-jobify-auth={mode}>
+  <div class="card-body">
+    <div class="text-center text-primary fw-bold mb-2">Joblink</div>
+    <h1 class="h2 text-center mb-4">{mode === 'account' ? 'Your account' : register ? 'Create your account' : 'Welcome back'}</h1>
+    <div class="alert alert-danger d-none" role="alert" data-auth-error></div>
+    <p class="text-secondary text-center" data-auth-loading>Connecting to your account…</p>
+    {
+      mode === 'account' ? (
+        <div class="d-none" data-account>
+          <div class="text-center mb-4">
+            <UserAvatar large />
+          </div>
+          <dl>
+            <>
+              <dt>Name</dt>
+              <dd data-user-name />
+              <dt>Email</dt>
+              <dd data-user-email />
+              <dt>Sign-in method</dt>
+              <dd data-user-provider />
+            </>
+          </dl>
+          <a href="/job-listing" class="btn btn-primary w-100 mb-3">
+            Browse jobs
+          </a>
+          <button type="button" class="btn w-100" data-logout>
+            Sign out
+          </button>
+        </div>
+      ) : (
+        <div class="d-none" data-auth-content>
+          <a href="/api/auth/google" class="btn w-100 mb-3" data-google>
+            <Icon name="brand-google" />
+            Continue with Google
+          </a>
+          <p class="text-secondary small text-center d-none" data-google-unavailable>
+            Google sign-in will be available once setup is complete.
+          </p>
+          <div class="hr-text mb-3">or use your email</div>
+          <form data-auth-form>
+            {register && (
+              <div class="mb-3">
+                <label for="auth-name" class="form-label">
+                  Name
+                </label>
+                <input id="auth-name" name="name" class="form-control" autocomplete="name" maxlength="100" required />
+              </div>
+            )}
+            <div class="mb-3">
+              <>
+                <label for="auth-email" class="form-label">
+                  Email address
+                </label>
+                <input id="auth-email" type="email" name="email" class="form-control" autocomplete="email" maxlength="254" required />
+              </>
+            </div>
+            <div class="mb-3">
+              <label for="auth-password" class="form-label">
+                Password
+              </label>
+              <input id="auth-password" type="password" name="password" class="form-control" autocomplete={register ? 'new-password' : 'current-password'} minlength={register ? 12 : undefined} maxlength="72" required />
+              {register && <div class="form-hint">Use at least 12 characters.</div>}
+            </div>
+            {register && (
+              <div class="mb-3">
+                <label for="auth-confirm" class="form-label">
+                  Confirm password
+                </label>
+                <input id="auth-confirm" type="password" name="confirm" class="form-control" autocomplete="new-password" required />
+              </div>
+            )}
+            <button type="submit" class="btn btn-primary w-100">
+              {register ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+        </div>
+      )
+    }
+  </div>
+</div>
+<div class="text-center text-secondary mt-3">
+  {
+    mode === 'account' ? (
+      <a href="/job-listing">Back to jobs</a>
+    ) : register ? (
+      <>
+        Already have an account? <a href="/sign-in">Sign in</a>
+      </>
+    ) : (
+      <>
+        New to Joblink? <a href="/sign-up">Create an account</a>
+      </>
+    )
+  }
+</div>
+<script>
+  import { getSession, clearProfile } from '@shared/lib/client-session'
+  const root = document.querySelector<HTMLElement>('[data-jobify-auth]')!
+  const mode = root.dataset.jobifyAuth
+  const errorBox = root.querySelector<HTMLElement>('[data-auth-error]')!
+  let csrf = ''
+  function showError(message: string) {
+    errorBox.textContent = message
+    errorBox.classList.remove('d-none')
+  }
+  async function request(path: string, body?: object) {
+    const response = await fetch(`/api/auth/${path}`, { credentials: 'same-origin', ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) } : {}) })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Unable to connect. Please try again.')
+    return data
+  }
+  async function init() {
+    try {
+      const session = await getSession()
+      csrf = session.csrf
+      if (mode === 'account') {
+        if (!session.user) {
+          location.replace('/sign-in')
+          return
+        }
+        root.querySelector<HTMLElement>('[data-user-name]')!.textContent = session.user.name
+        root.querySelector<HTMLElement>('[data-user-email]')!.textContent = session.user.email
+        root.querySelector<HTMLElement>('[data-user-provider]')!.textContent = session.user.provider === 'google' ? 'Google' : 'Email and password'
+        root.querySelector('[data-account]')!.classList.remove('d-none')
+      } else {
+        if (session.user) {
+          location.replace('/job-listing')
+          return
+        }
+        root.querySelector('[data-auth-content]')!.classList.remove('d-none')
+        if (!session.googleEnabled) {
+          const button = root.querySelector<HTMLAnchorElement>('[data-google]')!
+          button.removeAttribute('href')
+          button.setAttribute('aria-disabled', 'true')
+          button.classList.add('disabled')
+          root.querySelector('[data-google-unavailable]')!.classList.remove('d-none')
+        }
+        const errors: Record<string, string> = {
+          google_not_configured: 'Google sign-in is not set up yet. Please use email for now.',
+          google_invalid_config: 'Google sign-in settings need correcting. Please use email for now.',
+          invalid_google_state: 'Google sign-in expired. Please try again.',
+          google_cancelled: 'Google sign-in was cancelled.',
+          google_failed: 'Google sign-in could not be completed. Please try again.',
+          google_network_error: 'Unable to reach Google. Please try again shortly.',
+          google_rejected_credentials: 'Google sign-in configuration needs updating. Please use email for now.',
+          email_account_exists: 'This email already has an account. Sign in with your password.',
+        }
+        const code = new URLSearchParams(location.search).get('auth_error')
+        if (code) {
+          showError(errors[code] || 'Unable to sign in.')
+          history.replaceState({}, '', location.pathname)
+        }
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Unable to connect to the account service.')
+    } finally {
+      root.querySelector('[data-auth-loading]')!.classList.add('d-none')
+    }
+  }
+  root.querySelector<HTMLFormElement>('[data-auth-form]')?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    errorBox.classList.add('d-none')
+    const form = event.currentTarget as HTMLFormElement
+    const fields = new FormData(form)
+    if (mode === 'register' && fields.get('password') !== fields.get('confirm')) {
+      showError('Passwords must match.')
+      return
+    }
+    const button = form.querySelector<HTMLButtonElement>('button[type=submit]')!
+    button.disabled = true
+    try {
+      await request(mode === 'register' ? 'register' : 'login', { name: fields.get('name'), email: fields.get('email'), password: fields.get('password') })
+      location.assign('/job-listing')
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Unable to sign in.')
+      try {
+        csrf = (await request('session')).csrf
+      } catch {
+        // Keep the original error visible if the account service is unavailable.
+      }
+    } finally {
+      button.disabled = false
+    }
+  })
+  root.querySelector<HTMLButtonElement>('[data-logout]')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget as HTMLButtonElement
+    button.disabled = true
+    try {
+      await request('logout', {})
+      clearProfile()
+      location.assign('/sign-in')
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Unable to sign out.')
+      button.disabled = false
+    }
+  })
+  init()
+</script>

@@ -1,0 +1,27 @@
+---
+import UserAvatar from '@shared/components/UserAvatar.astro'
+interface Props {
+  personId?: number
+  hideUsername?: boolean
+  dark?: boolean
+}
+const { hideUsername = false } = Astro.props
+---
+
+<div class="nav-item">
+  <a href="/sign-in" class="nav-link d-flex lh-1 p-0 px-2" aria-label="Your Jobify account" data-jobify-account-link>
+    <UserAvatar />
+    {
+      !hideUsername && (
+        <div class="d-none d-xl-block ps-2">
+          <>
+            <div data-jobify-user-name>Sign in</div>
+            <div class="mt-1 small text-secondary" data-jobify-user-provider>
+              Your Jobify account
+            </div>
+          </>
+        </div>
+      )
+    }
+  </a>
+</div>

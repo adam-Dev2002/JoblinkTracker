@@ -1,0 +1,140 @@
+---
+import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
+import UserAvatar from '@shared/components/UserAvatar.astro'
+---
+
+<DefaultLayout title="Account settings">
+  <div class="card settings-card" data-settings>
+    <div class="card-body p-4">
+      <div class="alert alert-danger d-none" role="alert" data-error></div>
+      <div class="alert alert-success d-none" role="status" data-success></div>
+      <p data-loading>Loading your account...</p>
+      <div class="d-none" data-content>
+        <div class="settings-profile d-flex align-items-center gap-3 mb-4"><UserAvatar large /><div class="settings-profile-copy"><h2 class="mb-1">Your account</h2><span class="text-secondary" data-provider></span></div></div>
+        <form data-profile-form>
+          <div class="mb-3"><label class="form-label" for="settings-name">Display name</label><input class="form-control" id="settings-name" name="name" autocomplete="name" maxlength="100" required /></div>
+          <div class="mb-3"><label class="form-label" for="settings-email">Email address</label><input class="form-control" id="settings-email" type="email" readonly /><div class="form-hint">Your sign-in email stays linked to this account.</div></div>
+          <button class="btn btn-primary" type="submit">Save profile</button>
+        </form>
+        <hr class="my-4" />
+        <form data-password-form class="d-none">
+          <h3>Change password</h3>
+          <div class="mb-3"><label class="form-label" for="settings-current">Current password</label><input class="form-control" id="settings-current" name="currentPassword" type="password" autocomplete="current-password" required /></div>
+          <div class="mb-3"><label class="form-label" for="settings-new">New password</label><input class="form-control" id="settings-new" name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></div>
+          <div class="mb-3"><label class="form-label" for="settings-confirm">Confirm new password</label><input class="form-control" id="settings-confirm" name="confirm" type="password" autocomplete="new-password" required /></div>
+          <button class="btn" type="submit">Update password</button>
+        </form>
+        <p class="text-secondary d-none" data-google-note>Your photo and password are managed by your Google account. Your display name can be changed here.</p>
+        <div class="d-flex gap-3 mt-4"><a class="btn" href="/job-listing">Back to jobs</a><button class="btn" type="button" data-settings-logout>Sign out</button></div>
+      </div>
+    </div>
+  </div>
+</DefaultLayout>
+<style>
+  .settings-card {
+    max-width: 800px;
+  }
+  .settings-profile {
+    background: #f5f8fd;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #e7edf5;
+  }
+  .settings-profile-copy {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .settings-profile h2 {
+    font-size: 21px;
+  }
+  @media (max-width: 575px) {
+    .settings-profile {
+      padding: 14px;
+    }
+    .settings-card .card-body {
+      padding: 18px !important;
+    }
+  }
+</style>
+<script>
+  import { getSession, clearProfile } from '@shared/lib/client-session'
+  const root = document.querySelector<HTMLElement>('[data-settings]')!
+  const error = root.querySelector<HTMLElement>('[data-error]')!
+  const success = root.querySelector<HTMLElement>('[data-success]')!
+  let csrf = ''
+  function clear() {
+    error.classList.add('d-none')
+    success.classList.add('d-none')
+  }
+  function fail(e: unknown) {
+    error.textContent = e instanceof Error ? e.message : 'Unable to save changes.'
+    error.classList.remove('d-none')
+  }
+  async function request(path: string, body?: object) {
+    const response = await fetch('/api/auth/' + path, { credentials: 'same-origin', ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) } : {}) })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Account service is unavailable.')
+    return data
+  }
+  async function init() {
+    try {
+      const session = await getSession()
+      csrf = session.csrf
+      if (!session.user) {
+        location.replace('/sign-in')
+        return
+      }
+      root.querySelector<HTMLInputElement>('#settings-name')!.value = session.user.name
+      root.querySelector<HTMLInputElement>('#settings-email')!.value = session.user.email
+      root.querySelector<HTMLElement>('[data-provider]')!.textContent = session.user.provider === 'google' ? 'Signed in with Google' : 'Signed in with email'
+      root.querySelector(session.user.provider === 'google' ? '[data-google-note]' : '[data-password-form]')!.classList.remove('d-none')
+      root.querySelector('[data-content]')!.classList.remove('d-none')
+    } catch (e) {
+      fail(e)
+    } finally {
+      root.querySelector('[data-loading]')!.classList.add('d-none')
+    }
+  }
+  for (const kind of ['profile', 'password'])
+    root.querySelector<HTMLFormElement>(`[data-${kind}-form]`)!.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      clear()
+      const form = event.currentTarget as HTMLFormElement
+      const fields = new FormData(form)
+      if (kind === 'password' && fields.get('newPassword') !== fields.get('confirm')) {
+        fail(new Error('New passwords must match.'))
+        return
+      }
+      const button = form.querySelector<HTMLButtonElement>('button')!
+      button.disabled = true
+      try {
+        const data = await request(kind, kind === 'profile' ? { name: fields.get('name') } : { currentPassword: fields.get('currentPassword'), newPassword: fields.get('newPassword') })
+        if (data.csrf) csrf = data.csrf
+        void getSession(true).catch(() => {
+          /* The next page will revalidate the session. */
+        })
+        if (kind === 'password') form.reset()
+        if (kind === 'profile')
+          document.querySelectorAll<HTMLElement>('[data-jobify-user-name]').forEach((el) => {
+            el.textContent = data.user.name
+          })
+        success.textContent = kind === 'profile' ? 'Profile saved.' : 'Password updated.'
+        success.classList.remove('d-none')
+      } catch (e) {
+        fail(e)
+      } finally {
+        button.disabled = false
+      }
+    })
+  root.querySelector<HTMLButtonElement>('[data-settings-logout]')!.addEventListener('click', async () => {
+    clear()
+    try {
+      await request('logout', {})
+      clearProfile()
+      location.assign('/sign-in')
+    } catch (e) {
+      fail(e)
+    }
+  })
+  init()
+</script>

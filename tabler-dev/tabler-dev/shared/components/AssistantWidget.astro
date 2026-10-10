@@ -1,0 +1,284 @@
+---
+import Icon from '@ui/Icon.astro'
+---
+
+<div class="joblink-assistant" data-ai-widget>
+  <button class="assistant-launch" aria-label="Open Joblink assistant" aria-expanded="false" aria-controls="joblink-chat" data-ai-open><Icon name="sparkles" /><span>Ask Joblink</span></button>
+  <section class="assistant-panel d-none" id="joblink-chat" role="dialog" aria-label="Joblink career assistant" data-ai-panel>
+    <header><div><strong>Joblink assistant</strong><div class="small">Your account, careers & the economy</div></div><button class="assistant-close" aria-label="Close assistant" data-ai-close><Icon name="x" /></button></header>
+    <div class="assistant-messages" role="log" aria-live="polite" data-ai-messages><div class="assistant-bubble">Hi! Ask about your applications, interviews, tasks, calendar, or the job market.</div></div>
+    <div class="assistant-prompts"><button data-ai-prompt="Summarize my applications and interviews">My applications</button><button data-ai-prompt="How does inflation affect salaries and hiring in the Philippines?">Economy & jobs</button></div>
+    <p class="small text-secondary px-3 mb-2" data-ai-status>Connects to AI when configured. Questions are sent to the AI provider.</p>
+    <form data-ai-form>
+      <label class="visually-hidden" for="assistant-question">Your question</label><textarea id="assistant-question" placeholder="Ask a question... Enter sends, Shift+Enter adds a line" rows="2" maxlength="1500" required></textarea><button class="btn btn-primary btn-icon" type="submit" aria-label="Send question"
+        ><Icon name="send" /></button
+      >
+    </form>
+  </section>
+</div>
+<style is:global>
+  .assistant-close {
+    border: 0;
+    background: transparent;
+    color: white;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+  }
+  .assistant-close:hover {
+    background: #ffffff22;
+  }
+  .joblink-assistant {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    position: fixed;
+    right: 24px;
+    bottom: 22px;
+    z-index: 1045;
+  }
+  .assistant-launch {
+    border: 1px solid #ffffff66;
+    color: white;
+    background: linear-gradient(120deg, #086bc6, #175ca6);
+    padding: 13px 18px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-radius: 30px;
+    font-weight: 650;
+    box-shadow: 0 8px 28px #175ca635;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
+  }
+  .assistant-launch:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px #175ca650;
+  }
+  .assistant-panel {
+    order: -1;
+    width: 370px;
+    height: 470px;
+    max-height: calc(100dvh - 32px);
+    background: white;
+    border: 1px solid #dce6f3;
+    border-radius: 18px;
+    box-shadow: 0 18px 65px #18385430;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+  }
+  .assistant-panel header {
+    background: linear-gradient(120deg, #123958, #086bc6);
+    color: white;
+    padding: 17px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .assistant-panel header .small {
+    color: #d8e8f8;
+    margin-top: 4px;
+    font-size: 11px;
+  }
+  .assistant-messages {
+    flex: 1;
+    overflow: auto;
+    padding: 17px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .assistant-bubble {
+    background: #f0f5fb;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .assistant-bubble.user {
+    background: #e6f0ff;
+    align-self: flex-end;
+    max-width: 90%;
+    color: #174c83;
+  }
+  .assistant-bubble.error {
+    background: #fff1f1;
+    color: #a93838;
+  }
+  .assistant-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 10px;
+  }
+  .assistant-sources a {
+    font-size: 11px;
+    color: #066fd1;
+  }
+  .assistant-prompts {
+    padding: 0 15px 12px;
+    display: flex;
+    gap: 7px;
+  }
+  .assistant-prompts button {
+    border: 1px solid #dfe8f4;
+    background: white;
+    border-radius: 18px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #50677e;
+  }
+  .assistant-panel form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 15px;
+    border-top: 1px solid #e4ebf5;
+  }
+  .assistant-panel textarea {
+    resize: none;
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #dbe5f1;
+    border-radius: 9px;
+    padding: 9px;
+    font-size: 13px;
+  }
+  .assistant-panel textarea:focus {
+    outline: 2px solid #3185df44;
+  }
+  .assistant-panel.d-none {
+    display: none !important;
+  }
+  @media (max-width: 575px) {
+    .joblink-assistant {
+      right: 12px;
+      bottom: 12px;
+    }
+    .assistant-panel {
+      width: calc(100vw - 24px);
+      height: 500px;
+    }
+    .assistant-launch {
+      margin-left: auto;
+      padding: 11px 15px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .assistant-launch {
+      transition: none;
+      transform: none !important;
+    }
+  }
+</style>
+<script>
+  import { getSession } from '@shared/lib/client-session'
+  const root = document.querySelector<HTMLElement>('[data-ai-widget]')!,
+    panel = root.querySelector<HTMLElement>('[data-ai-panel]')!,
+    messages = root.querySelector<HTMLElement>('[data-ai-messages]')!,
+    input = root.querySelector<HTMLTextAreaElement>('textarea')!,
+    button = root.querySelector<HTMLButtonElement>('[type=submit]')!
+  let history: { role: 'user' | 'assistant'; content: string }[] = []
+  let loading = false
+  function bubble(text: string, kind = '') {
+    const node = document.createElement('div')
+    node.className = 'assistant-bubble ' + kind
+    node.textContent = text
+    messages.appendChild(node)
+    messages.scrollTop = messages.scrollHeight
+    return node
+  }
+  function toggle(open: boolean) {
+    panel.classList.toggle('d-none', !open)
+    root.querySelector('[data-ai-open]')!.classList.toggle('d-none', open)
+    root.querySelector('[data-ai-open]')!.setAttribute('aria-expanded', String(open))
+    if (open) input.focus()
+    else root.querySelector<HTMLButtonElement>('[data-ai-open]')!.focus()
+  }
+  root.querySelector('[data-ai-open]')!.addEventListener('click', () => {
+    toggle(panel.classList.contains('d-none'))
+    void fetch('/api/assistant/status')
+      .then((r) => r.json())
+      .then((data: { configured: boolean; provider: string; accountContext: boolean }) => {
+        root.querySelector('[data-ai-status]')!.textContent = data.configured
+          ? data.provider === 'gemini'
+            ? data.accountContext
+              ? 'Gemini can answer about your account. Relevant saved records and questions are sent to Google.'
+              : 'Gemini answers general questions. Account summaries stay local by default.'
+            : 'Relevant account records and questions are sent to OpenAI.'
+          : 'Account summaries work now. Add a Gemini API key for general AI answers.'
+      })
+      .catch(() => {
+        root.querySelector('[data-ai-status]')!.textContent = 'Assistant service is temporarily unavailable.'
+      })
+  })
+  root.querySelector('[data-ai-close]')!.addEventListener('click', () => toggle(false))
+  root.querySelectorAll<HTMLElement>('[data-ai-prompt]').forEach((el) =>
+    el.addEventListener('click', () => {
+      input.value = el.dataset.aiPrompt || ''
+      input.focus()
+    }),
+  )
+  async function send(event: Event) {
+    event.preventDefault()
+    if (loading || !input.value.trim()) return
+    const question = input.value.trim()
+    input.value = ''
+    bubble(question, 'user')
+    const pending = bubble('Thinking...')
+    loading = true
+    button.disabled = true
+    try {
+      const session = await getSession()
+      if (!session.user) throw new Error('Sign in to chat with the Joblink assistant.')
+      const conversation = [...history.slice(-8), { role: 'user' as const, content: question }]
+      const response = await fetch('/api/assistant/chat', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf }, body: JSON.stringify({ messages: conversation }), signal: AbortSignal.timeout(65000) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Unable to reach the assistant.')
+      pending.textContent = data.answer
+      history = [...conversation, { role: 'assistant', content: String(data.answer).slice(0, 3000) }]
+      const citations = document.createElement('div')
+      citations.className = 'assistant-sources'
+      for (const source of data.sources || []) {
+        try {
+          const url = new URL(source.url)
+          if (!['https:', 'http:'].includes(url.protocol)) continue
+          const link = document.createElement('a')
+          link.href = url.href
+          link.textContent = source.title || 'Source'
+          link.target = '_blank'
+          link.rel = 'noopener noreferrer'
+          citations.appendChild(link)
+        } catch {
+          /* Skip malformed citations. */
+        }
+      }
+      pending.appendChild(citations)
+    } catch (error) {
+      pending.textContent = error instanceof Error ? error.message : 'Unable to reach the assistant.'
+      pending.classList.add('error')
+    } finally {
+      loading = false
+      button.disabled = false
+      messages.scrollTop = messages.scrollHeight
+    }
+  }
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault()
+      if (!loading) root.querySelector<HTMLFormElement>('form')!.requestSubmit()
+    }
+  })
+  root.querySelector('form')!.addEventListener('submit', (event) => {
+    void send(event)
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.classList.contains('d-none')) toggle(false)
+  })
+</script>

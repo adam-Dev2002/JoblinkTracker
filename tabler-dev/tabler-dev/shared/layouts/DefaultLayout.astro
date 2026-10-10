@@ -1,0 +1,642 @@
+---
+import BaseLayout from './BaseLayout.astro'
+import Logo from '@shared/components/navbar/Logo.astro'
+import Icon from '@ui/Icon.astro'
+import AccountMenu from '@shared/components/navbar/AccountMenu.astro'
+interface Props {
+  title?: string | undefined
+  description?: string | undefined
+  [key: string]: unknown
+}
+const { title = 'Dashboard', description } = Astro.props
+const path = Astro.url.pathname
+const groups = [
+  {
+    label: 'WORKSPACE',
+    items: [
+      { label: 'Dashboard', href: '/', icon: 'layout-dashboard' },
+      { label: 'News & events', href: '/news', icon: 'news' },
+    ],
+  },
+  {
+    label: 'FIND WORK',
+    items: [
+      { label: 'Explore jobs', href: '/job-listing', icon: 'search' },
+      { label: 'Applications', href: '/applications', icon: 'briefcase' },
+    ],
+  },
+  {
+    label: 'YOUR DESK',
+    items: [
+      { label: 'Task board', href: '/desk/taskboard', icon: 'layout-kanban' },
+      { label: 'Calendar', href: '/desk/calendar', icon: 'calendar' },
+      { label: 'Links', href: '/desk/links', icon: 'link' },
+      { label: 'Sheet', href: '/desk/sheet', icon: 'table' },
+    ],
+  },
+]
+---
+
+<BaseLayout title={title} workspace base="">
+  <div class="jobify-shell">
+    <aside class="jobify-sidebar" id="jobify-sidebar">
+      <div class="sidebar-brand"><Logo href="/" /><button class="btn btn-icon sidebar-close" aria-label="Close navigation" data-menu-close><Icon name="x" /></button></div>
+      <div class="sidebar-clock"><span class="text-secondary small">Your workspace Manila</span><strong data-manila-clock></strong></div>
+      <nav aria-label="Main navigation">
+        {
+          groups.map((group) => (
+            <div class="nav-group">
+              <div class="nav-caption">{group.label}</div>
+              {group.items.map((item) => (
+                <a href={item.href} class:list={['sidebar-link', path === item.href && 'active']} aria-current={path === item.href ? 'page' : undefined}>
+                  <Icon name={item.icon} />
+                  <span>{item.label}</span>
+                </a>
+              ))}
+            </div>
+          ))
+        }
+      </nav>
+      <div class="sidebar-bottom"><a class:list={['sidebar-link', path === '/settings' && 'active']} href="/settings"><Icon name="settings" />Settings</a><div class="small text-secondary px-3 mt-3">Joblink Your next opportunity</div></div>
+    </aside>
+    <button class="sidebar-backdrop" aria-label="Close navigation" data-menu-close></button>
+    <div class="jobify-main">
+      <header class="jobify-topbar">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn btn-icon mobile-menu" aria-label="Open navigation" aria-expanded="false" aria-controls="jobify-sidebar" data-menu-open><Icon name="menu-2" /></button><span class="text-secondary">Workspace <span class="mx-2">/</span><strong class="text-body">{title}</strong></span>
+        </div><AccountMenu />
+      </header>
+      <main id="content" class="jobify-content">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-4"><div><div class="text-secondary small mb-1">MAKE ROOM FOR YOUR NEXT CHAPTER</div><h1 class="mb-1">{title}</h1>{description && <p class="text-secondary mb-0">{description}</p>}</div><div><slot name="page-header-actions" /></div></div><slot
+        />
+      </main>
+    </div>
+  </div>
+</BaseLayout>
+<style is:global>
+  .jobify-content .card {
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease,
+      transform 0.18s ease;
+  }
+  @media (hover: hover) {
+    .jobify-content .card:hover {
+      border-color: #bad0ec;
+      box-shadow: 0 8px 24px #214a7514;
+    }
+    .jobify-content a.card:hover,
+    .job-card:hover {
+      transform: translateY(-3px);
+    }
+  }
+  .btn,
+  .sidebar-link,
+  .workspace-tabs a {
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .jobify-content .form-control:focus,
+  .jobify-content .form-select:focus {
+    border-color: #3185df;
+    box-shadow: 0 0 0 3px #3185df20;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jobify-content .card,
+    .btn,
+    .sidebar-link,
+    .workspace-tabs a {
+      transition: none;
+      transform: none !important;
+    }
+  }
+  .jobify-shell {
+    min-height: 100vh;
+    background: #f3f6fb;
+    --jobify-sidebar-width: 232px;
+  }
+  .jobify-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--jobify-sidebar-width);
+    background: #fff;
+    border-right: 1px solid #e5eaf1;
+    display: flex;
+    flex-direction: column;
+    z-index: 1030;
+    overflow: auto;
+  }
+  .sidebar-brand {
+    padding: 25px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sidebar-clock {
+    margin: 0 18px 22px;
+    background: #f6f8fc;
+    border: 1px solid #e9edf5;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sidebar-clock strong {
+    font-size: 19px;
+  }
+  .nav-group {
+    padding: 0 12px 16px;
+  }
+  .nav-caption {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    color: #8794a8;
+    padding: 0 13px 9px;
+  }
+  .sidebar-link {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    border-radius: 8px;
+    padding: 11px 13px;
+    margin-bottom: 3px;
+    color: #53627a;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .sidebar-link:hover {
+    background: #f4f7fb;
+    color: #066fd1;
+  }
+  .sidebar-link.active {
+    background: #e8f0ff;
+    color: #066fd1;
+    font-weight: 650;
+  }
+  .sidebar-bottom {
+    margin-top: auto;
+    padding: 18px 12px 24px;
+  }
+  .jobify-main {
+    margin-left: var(--jobify-sidebar-width);
+  }
+  .jobify-topbar {
+    height: 76px;
+    padding: 0 32px;
+    background: #ffffffc9;
+    border-bottom: 1px solid #e5eaf1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+  }
+  .jobify-content {
+    padding: 30px 32px;
+    max-width: 1600px;
+    margin: auto;
+  }
+  .jobify-content h1 {
+    font-size: 27px;
+    letter-spacing: -0.8px;
+  }
+  .jobify-content .card {
+    border-radius: 14px;
+    border-color: #e5eaf1;
+    box-shadow: 0 3px 14px #223b6010;
+  }
+  .jobify-content .btn {
+    border-radius: 8px;
+  }
+  .mobile-menu,
+  .sidebar-close,
+  .sidebar-backdrop {
+    display: none;
+  }
+  .workspace-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+  .workspace-tabs a {
+    padding: 9px 15px;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid #e5eaf1;
+    color: #53627a;
+    text-decoration: none;
+  }
+  .workspace-tabs a.active {
+    background: #066fd1;
+    color: white;
+    border-color: #066fd1;
+  }
+  .workspace-empty {
+    padding: 45px 22px;
+    text-align: center;
+    color: #6b7c94;
+  }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .calendar-day {
+    min-height: 105px;
+    padding: 9px;
+    border-right: 1px solid #e5eaf1;
+    border-bottom: 1px solid #e5eaf1;
+  }
+  .calendar-day.today {
+    background: #eef4ff;
+  }
+  .calendar-event {
+    font-size: 11px;
+    padding: 3px 5px;
+    background: #e8f0ff;
+    color: #066fd1;
+    border-radius: 4px;
+    margin-top: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .jobify-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background: #172a4566;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+  }
+  .jobify-modal .card {
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow: auto;
+  }
+  .jobify-modal.d-none {
+    display: none !important;
+  }
+  .job-tag {
+    background: #f0f4fa;
+    color: #5e6f87;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .workspace-error {
+    margin-bottom: 18px;
+  }
+  .role-pill {
+    border-radius: 20px;
+  }
+  .job-title {
+    font-size: 17px;
+    font-weight: 650;
+  }
+  .job-card {
+    height: 100%;
+  }
+  .news-card {
+    height: 100%;
+  }
+  .search-suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1040;
+    border: 1px solid #dce5ef;
+    border-radius: 10px;
+    background: white;
+    box-shadow: 0 10px 30px #18385420;
+    padding: 5px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .suggestion-option {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #33465f;
+  }
+  .suggestion-option:hover,
+  .suggestion-option[aria-selected='true'] {
+    background: #edf4ff;
+    color: #066fd1;
+  }
+  /* Consistent interaction states for Desk tools. */
+  [data-workspace-view] .workspace-tabs a:hover {
+    border-color: #93bdf1;
+    background: #eaf3ff;
+    color: #066fd1;
+  }
+  [data-workspace-view] .workspace-tabs a.active:hover {
+    background: #075eaf;
+    color: white;
+  }
+  .calendar-day {
+    cursor: pointer;
+    transition:
+      background-color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .calendar-day [data-calendar-add] {
+    color: #066fd1;
+    font-weight: 700;
+    background: #edf5ff;
+    border: 1px solid #cee2fc !important;
+    border-radius: 9px;
+    min-width: 32px;
+    height: 32px;
+    box-shadow: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .calendar-day.today [data-calendar-add] {
+    color: white;
+    background: #066fd1;
+    border-color: #066fd1 !important;
+    box-shadow: 0 3px 8px #066fd125;
+  }
+  .calendar-day [data-calendar-add]:hover,
+  .calendar-day [data-calendar-add]:focus-visible {
+    color: white;
+    background: #066fd1;
+    border-color: #066fd1 !important;
+  }
+  .calendar-event {
+    transition:
+      background-color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .calendar-event:hover {
+    background: #d6e8ff;
+    box-shadow: 0 2px 6px #245e9a15;
+  }
+  @media (max-width: 1100px) {
+    .task-board {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 575px) {
+    .task-board {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .task-notes {
+    max-height: 130px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+    margin-bottom: 12px;
+    scrollbar-width: thin;
+  }
+  .task-card {
+    transition:
+      transform 0.16s ease,
+      border-color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  [data-link-list] .card {
+    transition:
+      transform 0.16s ease,
+      border-color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  [data-sheet-rows] td {
+    padding: 12px;
+    transition: background-color 0.16s ease;
+  }
+  [data-sheet-rows] .form-control {
+    border-color: transparent;
+    background: transparent;
+    border-radius: 7px;
+    min-width: 140px;
+  }
+  [data-sheet-rows] .form-control:hover {
+    border-color: #c6dcf6;
+    background: #fff;
+  }
+  [data-sheet-rows] .form-control:focus {
+    border-color: #3185df;
+    background: #fff;
+    box-shadow: 0 0 0 3px #3185df1c;
+  }
+  [data-sheet-rows] tr:focus-within td {
+    background: #eef5ff;
+  }
+  .task-card:focus-within,
+  [data-link-list] .card:focus-within {
+    border-color: #3185df;
+    box-shadow: 0 0 0 3px #3185df15;
+  }
+  [data-workspace-view] button:focus-visible,
+  [data-workspace-view] a:focus-visible {
+    outline: 2px solid #3185df;
+    outline-offset: 3px;
+  }
+  @media (hover: hover) {
+    .calendar-day:hover {
+      background: #f0f6ff;
+      box-shadow: inset 0 0 0 2px #93bdf1;
+    }
+    .task-lane:hover {
+      border-color: #b6cfed;
+    }
+    .task-lane .task-card:hover {
+      transform: translateY(-2px);
+      border-color: #93bdf1;
+      box-shadow: 0 7px 18px #1f52891a;
+    }
+    [data-link-list] .card:hover {
+      transform: translateY(-3px);
+      border-color: #93bdf1;
+      box-shadow: 0 8px 22px #1f52891a;
+    }
+    [data-sheet-rows] tr:hover td {
+      background: #f0f6ff;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .calendar-day,
+    .calendar-event,
+    .task-card,
+    [data-link-list] .card,
+    [data-sheet-rows] td {
+      transition: none;
+      transform: none !important;
+    }
+  }
+  .task-board {
+    display: grid;
+    grid-template-columns: repeat(var(--board-columns, 3), minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+  .task-lane {
+    --lane-accent: #3185df;
+    --lane-tint: #eaf3ff;
+    border: 1px solid #dce5ef;
+    border-radius: 14px;
+    background: #fff;
+    min-height: 300px;
+    height: 100%;
+    overflow: hidden;
+    box-shadow: 0 3px 12px #223b6008;
+  }
+  .task-lane[data-lane='In progress'] {
+    --lane-accent: #8070df;
+    --lane-tint: #f0edff;
+  }
+  .task-lane[data-lane='Done'] {
+    --lane-accent: #27a77f;
+    --lane-tint: #e8f8f1;
+  }
+  .task-lane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 17px;
+    background: var(--lane-tint);
+    border-bottom: 1px solid #dce5ef;
+  }
+  .task-lane-header h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .task-lane-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lane-accent);
+  }
+  .task-lane-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #71839b;
+  }
+  .task-lane-add {
+    border: 0;
+    background: transparent;
+    color: var(--lane-accent);
+  }
+  .task-lane-add:hover {
+    background: #ffffffaa;
+  }
+  .task-lane-body {
+    padding: 14px;
+    max-height: 460px;
+    overflow-y: auto;
+  }
+  .task-lane-body .workspace-empty {
+    padding: 55px 14px;
+    font-size: 13px;
+  }
+  .task-lane .task-card {
+    box-shadow: 0 3px 9px #243b5510;
+    border-left: 3px solid var(--lane-accent);
+    padding: 17px;
+  }
+  .task-lane .task-card h3 {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .task-lane .task-card .form-select {
+    background-color: #f8fafd;
+  }
+  @media (max-width: 991px) {
+    .task-lane {
+      min-height: 220px;
+    }
+    .task-lane-body {
+      max-height: 440px;
+    }
+  }
+  .task-card {
+    border: 1px solid #e5eaf1;
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 767px) {
+    .jobify-sidebar {
+      transform: translateX(-100%);
+      transition: transform 0.2s;
+    }
+    .jobify-main {
+      margin-left: 0;
+    }
+    .jobify-topbar {
+      padding: 0 16px;
+      height: 66px;
+    }
+    .jobify-content {
+      padding: 22px 16px;
+    }
+    .mobile-menu,
+    .sidebar-close {
+      display: inline-flex;
+    }
+    .menu-visible .jobify-sidebar {
+      transform: translateX(0);
+    }
+    .menu-visible .sidebar-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      background: #172a4566;
+      border: 0;
+      z-index: 1025;
+    }
+    .calendar-day {
+      min-height: 80px;
+      padding: 5px;
+    }
+    .calendar-event {
+      font-size: 10px;
+    }
+    .jobify-content h1 {
+      font-size: 24px;
+    }
+  }
+</style>
+<script>
+  const toggle = (open: boolean) => {
+    document.body.classList.toggle('menu-visible', open)
+    document.querySelector('[data-menu-open]')?.setAttribute('aria-expanded', String(open))
+  }
+  document.querySelector('[data-menu-open]')?.addEventListener('click', () => toggle(true))
+  document.querySelectorAll('[data-menu-close]').forEach((el) => el.addEventListener('click', () => toggle(false)))
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') toggle(false)
+  })
+  const clock = () => {
+    const el = document.querySelector('[data-manila-clock]')
+    if (el) el.textContent = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' }).format(new Date())
+  }
+  clock()
+  setInterval(clock, 60000)
+</script>

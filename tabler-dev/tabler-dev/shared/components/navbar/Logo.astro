@@ -1,0 +1,58 @@
+---
+import { site } from '@shared/lib/site'
+interface Props {
+  href?: string
+  class?: string
+  header?: boolean
+  smallLogo?: boolean
+  hideLogo?: boolean
+  showTitle?: boolean
+  gray?: boolean
+}
+const { href = '/', class: className, header = false, smallLogo = false, hideLogo = false, showTitle = false, gray = false } = Astro.props
+---
+
+<div class:list={['navbar-brand', header && 'joblink-header-brand', gray && 'brand-gray', className]}>
+  <a href={href} aria-label={site.title} class="joblink-brand"
+    >{!hideLogo && <img src="/static/joblink-mark.png" width="44" height="44" alt="" class="joblink-mark" />}{
+      (!smallLogo || showTitle || hideLogo) && (
+        <span class="joblink-wordmark">
+          Job<span>Link</span>
+        </span>
+      )
+    }</a
+  >
+  <slot />
+</div>
+<style>
+  .joblink-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .joblink-mark {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .joblink-wordmark {
+    font-size: 27px;
+    font-weight: 800;
+    letter-spacing: -1.1px;
+    line-height: 1;
+    color: #15334b;
+  }
+  .joblink-wordmark > span {
+    color: #007af0;
+  }
+  .brand-gray .joblink-mark {
+    filter: grayscale(1);
+  }
+  .brand-gray .joblink-wordmark,
+  .brand-gray .joblink-wordmark > span {
+    color: #6b7d8f;
+  }
+</style>

@@ -1,0 +1,772 @@
+---
+import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
+import Icon from '@ui/Icon.astro'
+import NewsExperience from './NewsExperience.astro'
+interface Props {
+  view: string
+  title: string
+  description: string
+}
+const { view, title, description } = Astro.props
+const desk = [
+  ['taskboard', 'Task board'],
+  ['calendar', 'Calendar'],
+  ['links', 'Links'],
+  ['sheet', 'Sheet'],
+]
+---
+
+<DefaultLayout title={title} description={description}>
+  <div data-workspace-view={view}>
+    <div class="alert alert-danger d-none workspace-error" role="alert" data-workspace-error></div>
+    <div class="alert alert-info d-none" data-signin-notice>Sign in to save your applications and desk items. <a href="/sign-in" class="alert-link">Sign in</a></div>
+    {
+      desk.some(([tool]) => tool === view) && (
+        <div class="workspace-tabs">
+          {desk.map(([tool, label]) => (
+            <a class:list={[view === tool && 'active']} href={'/desk/' + tool}>
+              {label}
+            </a>
+          ))}
+        </div>
+      )
+    }
+    {
+      view === 'dashboard' && (
+        <>
+          <div class="row g-3 mb-4">
+            {[
+              ['applications', 'Applications', 'briefcase'],
+              ['interviews', 'Interviews', 'messages'],
+              ['tasks', 'Open tasks', 'checkbox'],
+              ['events', 'Upcoming events', 'calendar'],
+            ].map(([key, label, icon]) => (
+              <div class="col-6 col-xl-3">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                      <span class="text-secondary">{label}</span>
+                      <span class="text-primary">
+                        <Icon name={icon!} />
+                      </span>
+                    </div>
+                    <div class="stat-value" data-stat={key}>
+                      0
+                    </div>
+                    <div class="text-secondary small mt-1">From your workspace</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div class="card mb-4" style="background:linear-gradient(120deg,#edf4ff,#ffffff)">
+            <div class="card-body p-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+              <>
+                <div>
+                  <>
+                    <div class="text-primary small fw-bold mb-2">YOUR NEXT OPPORTUNITY STARTS HERE</div>
+                    <h2 class="mb-2">A little progress, every day.</h2>
+                    <p class="text-secondary mb-0">Find a role, track your application, and plan what comes next.</p>
+                  </>
+                </div>
+                <a href="/job-listing" class="btn btn-primary">
+                  <Icon name="search" />
+                  Find work
+                </a>
+              </>
+            </div>
+          </div>
+          <div class="row g-4">
+            <>
+              <div class="col-lg-8">
+                <div class="card">
+                  <>
+                    <div class="card-header d-flex justify-content-between">
+                      <>
+                        <h3 class="card-title">Recent applications</h3>
+                        <a href="/applications">View tracker</a>
+                      </>
+                    </div>
+                    <div data-dashboard-applications />
+                  </>
+                </div>
+              </div>
+              <div class="col-lg-4">
+                <div class="card">
+                  <>
+                    <div class="card-header">
+                      <h3 class="card-title">Your next steps</h3>
+                    </div>
+                    <div class="card-body" data-dashboard-tasks />
+                  </>
+                </div>
+              </div>
+            </>
+          </div>
+          <div class="row g-3 mt-2">
+            {[
+              ['Task board', 'Organize your day', '/desk/taskboard', 'layout-kanban'],
+              ['Calendar', 'Make time for interviews', '/desk/calendar', 'calendar'],
+              ['News & events', 'Stay in the loop', '/news', 'news'],
+            ].map(([label, sub, url, icon]) => (
+              <div class="col-md-4">
+                <a href={url} class="card text-decoration-none text-body">
+                  <div class="card-body d-flex gap-3 align-items-center">
+                    <span class="avatar bg-primary-lt">
+                      <Icon name={icon!} />
+                    </span>
+                    <div class="fw-semibold">
+                      {label}
+                      <div class="text-secondary small fw-normal">{sub}</div>
+                    </div>
+                    <span class="ms-auto">
+                      <Icon name="arrow-right" />
+                    </span>
+                  </div>
+                </a>
+              </div>
+            ))}
+          </div>
+        </>
+      )
+    }
+    {
+      view === 'jobs' && (
+        <>
+          <div class="card mb-4">
+            <div class="card-body">
+              <form class="row g-3" data-job-search>
+                <>
+                  <div class="col-md-5">
+                    <>
+                      <label class="form-label" for="job-query">
+                        Role or keyword
+                      </label>
+                      <div class="position-relative">
+                        <>
+                          <input class="form-control" id="job-query" name="q" placeholder="Virtual assistant, developer, marketing " maxlength="120" />
+                          <div class="search-suggestions d-none" id="job-query-suggestions" role="listbox" aria-label="Job role suggestions" />
+                        </>
+                      </div>
+                    </>
+                  </div>
+                  <div class="col-md-3">
+                    <>
+                      <label class="form-label" for="job-source">
+                        Search feed
+                      </label>
+                      <select class="form-select" id="job-source" name="source">
+                        <>
+                          <option value="remotive">Remotive Remote jobs</option>
+                          <>
+                            <option value="jsearch">Philippines JSearch</option>
+                            <option value="indeed">Indeed Philippines</option>
+                            <option value="jobstreet">JobStreet Philippines</option>
+                            <option value="onlinejobs">OnlineJobs.ph</option>
+                            <option value="linkedin">LinkedIn Jobs</option>
+                          </>
+                        </>
+                      </select>
+                    </>
+                  </div>
+                  <div class="col-md-3">
+                    <>
+                      <label class="form-label" for="job-role">
+                        Classify by role
+                      </label>
+                      <select class="form-select" id="job-role">
+                        <option value="">All roles</option>
+                        {['Virtual assistance', 'Development & IT', 'Design & creative', 'Customer support', 'Sales & marketing', 'Finance & operations', 'Other roles'].map((role) => (
+                          <option>{role}</option>
+                        ))}
+                      </select>
+                    </>
+                  </div>
+                  <div class="col-md-1 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" type="submit" aria-label="Search jobs">
+                      <Icon name="search" />
+                    </button>
+                  </div>
+                </>
+              </form>
+            </div>
+          </div>
+          <>
+            <>
+              <div class="card mb-3">
+                <div class="card-body">
+                  <>
+                    <div class="row g-3">
+                      <>
+                        <div class="col-md-5">
+                          <>
+                            <label class="form-label" for="job-location">
+                              Place or location
+                            </label>
+                            <div class="position-relative">
+                              <>
+                                <input class="form-control" id="job-location" placeholder="Philippines, Manila, USA..." />
+                                <div class="search-suggestions d-none" id="job-location-suggestions" role="listbox" aria-label="Location suggestions" />
+                              </>
+                            </div>
+                          </>
+                        </div>
+                        <div class="col-md-4">
+                          <>
+                            <label class="form-label" for="job-employment">
+                              Employment type
+                            </label>
+                            <select class="form-select" id="job-employment">
+                              <option value="">Any employment type</option>
+                              {['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship', 'Temporary', 'Not specified'].map((type) => (
+                                <option>{type}</option>
+                              ))}
+                            </select>
+                          </>
+                        </div>
+                      </>
+                    </div>
+                    <p class="form-hint mt-2 mb-0">Filter the loaded results by location and employment type. Types not provided by the source are shown as Not specified.</p>
+                  </>
+                </div>
+              </div>
+              <div class="alert alert-info d-none" data-application-notice role="status" />
+            </>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <>
+                <h2 class="mb-0">Explore opportunities</h2>
+                <span class="text-secondary small" data-job-count />
+              </>
+            </div>
+            <p class="text-secondary small" data-feed-message>
+              Loading the live job feed
+            </p>
+            <div class="row g-3 mb-4" data-job-results />
+          </>
+          <>
+            <h2 class="mb-2">Search the official job sites</h2>
+            <p class="text-secondary">Browse Philippine job boards and VA agencies directly. These links do not import listings into Jobify.</p>
+            <div class="row g-3" data-job-sources />
+          </>
+        </>
+      )
+    }
+    {
+      view === 'applications' && (
+        <>
+          <div class="row g-3 mb-4">
+            {[
+              ['total', 'Tracked jobs'],
+              ['open', 'Still open'],
+              ['interview', 'Interviews'],
+              ['offer', 'Offers'],
+              ['reply', 'Reply rate'],
+            ].map(([key, label]) => (
+              <div class="col-6 col-lg">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="text-secondary small mb-2">{label}</div>
+                    <div class="stat-value" data-application-stat={key}>
+                      0
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
+            <>
+              <div class="d-flex gap-2 flex-grow-1">
+                <>
+                  <input class="form-control" placeholder="Search company, role or notes" aria-label="Search applications" data-item-search />
+                  <select class="form-select w-auto" aria-label="Filter application status" data-status-filter>
+                    <option value="">All statuses</option>
+                    {['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].map((status) => (
+                      <option>{status}</option>
+                    ))}
+                  </select>
+                </>
+              </div>
+              <button class="btn" data-export="application">
+                Export CSV
+              </button>
+              <button class="btn btn-primary" data-add="application">
+                <Icon name="plus" />
+                Add application
+              </button>
+            </>
+          </div>
+          <div class="card">
+            <>
+              <div class="table-responsive">
+                <table class="table table-vcenter mb-0">
+                  <>
+                    <thead>
+                      <tr>
+                        <>
+                          <th>Date</th>
+                          <th>Role</th>
+                          <th>Company</th>
+                          <th>Salary</th>
+                          <th>Status</th>
+                          <th>Notes</th>
+                          <th>Actions</th>
+                        </>
+                      </tr>
+                    </thead>
+                    <tbody data-application-rows />
+                  </>
+                </table>
+              </div>
+              <div data-application-empty />
+            </>
+          </div>
+        </>
+      )
+    }
+    {
+      view === 'taskboard' && (
+        <div class="trello-workspace">
+          <>
+            <div class="trello-board-heading">
+              <>
+                <div>
+                  <>
+                    <h2 class="mb-1">My task board</h2>
+                    <p class="mb-0 small">Drag cards between lists, or use their status menu.</p>
+                  </>
+                </div>
+                <span class="badge bg-primary-lt">Your personal workspace</span>
+              </>
+            </div>
+            <div class="task-board" data-task-board />
+          </>
+        </div>
+      )
+    }
+    {
+      view === 'calendar' && (
+        <>
+          <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between mb-3">
+            <>
+              <div class="d-flex gap-2 align-items-center">
+                <>
+                  <button class="btn btn-icon" data-month-prev aria-label="Previous month">
+                    <Icon name="chevron-left" />
+                  </button>
+                  <button class="btn" data-month-today>
+                    Today
+                  </button>
+                  <button class="btn btn-icon" data-month-next aria-label="Next month">
+                    <Icon name="chevron-right" />
+                  </button>
+                  <h2 class="mb-0 ms-2" data-month-title />
+                </>
+              </div>
+              <button class="btn btn-primary" data-add="event">
+                <Icon name="plus" />
+                Add event
+              </button>
+            </>
+          </div>
+          <>
+            <div class="card overflow-hidden">
+              <>
+                <div class="calendar-grid text-center text-secondary small py-2">
+                  {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
+                    <span>{day}</span>
+                  ))}
+                </div>
+                <div class="calendar-grid" data-calendar />
+              </>
+            </div>
+            <p class="text-secondary small mt-2">Event dates and times are shown in Manila time.</p>
+            <div class="card mt-4">
+              <>
+                <div class="card-header">
+                  <h3 class="card-title">Upcoming events</h3>
+                </div>
+                <div data-event-list />
+              </>
+            </div>
+          </>
+        </>
+      )
+    }
+    {
+      view === 'links' && (
+        <>
+          <>
+            <div class="d-flex justify-content-between gap-3 mb-3">
+              <>
+                <input class="form-control" placeholder="Search your saved links" aria-label="Search links" data-item-search />
+                <button class="btn btn-primary text-nowrap" data-add="link">
+                  <Icon name="plus" />
+                  Add link
+                </button>
+              </>
+            </div>
+            <div class="row g-3" data-link-list />
+          </>
+        </>
+      )
+    }
+
+    {
+      view === 'sheet' && (
+        <section aria-label="Sheet workspace">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <>
+              <div class="d-flex align-items-center gap-2">
+                <>
+                  <span class="badge bg-primary text-white rounded-pill px-3 py-2">My sheet</span>
+                  <span class="small text-secondary" data-sheet-count />
+                </>
+              </div>
+              <div class="d-flex gap-2">
+                <>
+                  <button class="btn btn-sm" data-export="sheet">
+                    Export CSV
+                  </button>
+                  <button class="btn btn-sm btn-primary" data-add="sheet">
+                    Add row
+                  </button>
+                </>
+              </div>
+            </>
+          </div>
+          <div class="card overflow-visible">
+            <div class="card-header d-flex flex-wrap gap-2 justify-content-between">
+              <>
+                <div class="d-flex align-items-center gap-2">
+                  <>
+                    <input class="form-check-input m-0" type="checkbox" aria-label="Select all visible sheet rows" data-sheet-all />
+                    <span class="small text-secondary">Select rows</span>
+                    <button class="btn btn-sm" data-sheet-select>
+                      Select all visible
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" data-sheet-bulk disabled>
+                      Delete selected (0)
+                    </button>
+                  </>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <input class="form-control form-control-sm" style="width:220px;max-width:100%" placeholder="Search rows..." aria-label="Search sheet" data-sheet-search />
+                  <div class="dropdown">
+                    <>
+                      <button class="btn btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                        Filter
+                      </button>
+                      <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:260px">
+                        <>
+                          <label class="form-label">Attachments</label>
+                          <select class="form-select form-select-sm mb-3" aria-label="Filter sheet rows" data-sheet-filter>
+                            <>
+                              <option value="all">All rows</option>
+                              <option value="files">With attachments</option>
+                              <option value="images">With pictures</option>
+                              <option value="none">Without attachments</option>
+                            </>
+                          </select>
+                          <label class="form-label">Company / category</label>
+                          <select class="form-select form-select-sm" aria-label="Filter sheet company" data-sheet-company>
+                            <option value="">All companies / categories</option>
+                          </select>
+                        </>
+                      </div>
+                    </>
+                  </div>
+                  <div class="dropdown">
+                    <>
+                      <button class="btn btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                        Sort
+                      </button>
+                      <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:230px">
+                        <>
+                          <label class="form-label">Order rows</label>
+                          <select class="form-select form-select-sm" aria-label="Sort sheet" data-sheet-sort>
+                            <>
+                              <option value="newest">Newest first</option>
+                              <option value="oldest">Oldest first</option>
+                              <option value="title">Title A-Z</option>
+                              <option value="company">Company A-Z</option>
+                            </>
+                          </select>
+                        </>
+                      </div>
+                    </>
+                  </div>
+                  <div class="dropdown">
+                    <>
+                      <button class="btn btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                        Columns
+                      </button>
+                      <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:220px">
+                        <div class="fw-semibold mb-2">Show columns</div>
+                        {[
+                          ['company', 'Company'],
+                          ['value', 'Value'],
+                          ['notes', 'Notes'],
+                          ['attachments', 'Attachments'],
+                        ].map(([value, label]) => (
+                          <label class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" checked value={value} data-sheet-column-toggle />
+                            <span class="form-check-label">{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  </div>
+                </div>
+              </>
+            </div>
+            <>
+              <div class="table-responsive">
+                <table class="table table-vcenter table-hover table-bordered mb-0">
+                  <>
+                    <thead>
+                      <tr>
+                        <>
+                          <th style="width:42px" />
+                          <th style="width:44px">#</th>
+                          <th>Title / role</th>
+                          <th data-sheet-column="company">Company / category</th>
+                          <th data-sheet-column="value">Value</th>
+                          <th data-sheet-column="notes">Notes</th>
+                          <th data-sheet-column="attachments">Attachments</th>
+                          <th>Actions</th>
+                        </>
+                      </tr>
+                    </thead>
+                    <tbody data-sheet-rows />
+                  </>
+                </table>
+              </div>
+              <div data-sheet-empty />
+              <div class="card-footer bg-transparent">
+                <>
+                  <button class="btn btn-sm btn-link p-0" data-add="sheet">
+                    + New row
+                  </button>
+                  <span class="small text-secondary ms-3">Changes save when you leave a cell.</span>
+                </>
+              </div>
+            </>
+          </div>
+        </section>
+      )
+    }
+    {view === 'news' && <NewsExperience />}
+    <div class="jobify-modal d-none job-details-overlay" role="dialog" aria-modal="true" aria-labelledby="job-details-title" data-job-details-modal>
+      <section class="card job-details-panel">
+        <div class="card-header d-flex justify-content-between"><span class="text-secondary small">JOB DETAILS</span><button class="btn btn-icon" aria-label="Close job details" data-job-close><Icon name="x" /></button></div><div class="card-body">
+          <div class="d-flex gap-3 align-items-center mb-3"><span class="avatar bg-primary-lt" data-details-logo></span><div><h2 id="job-details-title" class="mb-1" data-details-title></h2><div class="text-secondary" data-details-company></div></div></div><div class="d-flex flex-wrap gap-2 mb-4" data-details-tags>
+          </div><h3>Job description</h3><div class="job-description-copy" data-details-description></div><div class="small text-secondary border-top pt-3 mt-4" data-details-source></div>
+        </div><div class="card-footer d-flex flex-wrap gap-2 justify-content-between">
+          <button class="btn" data-job-close>Back to results</button><div class="d-flex gap-2"><button class="btn" data-details-save>Save job</button><a class="btn btn-primary" data-details-apply target="_blank" rel="noopener noreferrer">Apply</a></div>
+        </div>
+      </section>
+    </div>
+    <button type="button" class="d-none" data-confirm-trigger data-bs-toggle="modal" data-bs-target="#workspace-confirm"></button><div class="modal modal-blur fade" id="workspace-confirm" tabindex="-1" role="dialog" aria-labelledby="workspace-confirm-title" data-confirm-modal>
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+          <div class="modal-header"><h3 class="modal-title" id="workspace-confirm-title">Delete entries?</h3><button class="btn-close" aria-label="Close confirmation" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0" data-confirm-message></p></div><div class="modal-footer">
+            <button class="btn" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" data-confirm-accept data-bs-dismiss="modal">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="jobify-modal d-none" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title" data-entry-modal>
+      <div class="card">
+        <div class="card-header d-flex justify-content-between"><h2 class="card-title" id="entry-modal-title">Add entry</h2><button class="btn btn-icon" aria-label="Close form" data-modal-close><Icon name="x" /></button></div><form data-entry-form>
+          <div class="card-body" data-entry-fields></div><div class="card-footer d-flex justify-content-end gap-2"><button type="button" class="btn" data-modal-close>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</DefaultLayout>
+<script>
+  import '../scripts/workspace'
+</script>
+
+<style is:global>
+  .job-details-panel {
+    max-width: 860px !important;
+  }
+  .job-description-copy {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-size: 14px;
+    color: #40536d;
+    overflow-wrap: anywhere;
+  }
+  .job-details-overlay {
+    z-index: 1055;
+  }
+  .job-title-link {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+  }
+  .job-title-link:hover {
+    color: #066fd1;
+  }
+  .job-details-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: #066fd1;
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+  .job-details-open {
+    overflow: hidden;
+  }
+  .job-details-panel .card-footer {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+  }
+</style>
+
+<style is:global>
+  .trello-workspace {
+    background: #f3f6fb;
+    border: 1px solid #dce5ef;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .trello-board-heading {
+    padding: 18px 22px;
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    align-items: center;
+    background: #fff;
+    color: #33445b;
+    border-bottom: 1px solid #e5eaf1;
+  }
+  .trello-board-heading h2 {
+    font-size: 18px;
+  }
+  .trello-board-heading p {
+    color: #71839b;
+  }
+  .trello-workspace .task-board {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px;
+    min-height: calc(100vh - 310px);
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #bed0e5 transparent;
+  }
+  .trello-workspace .task-lane {
+    flex: 0 0 285px;
+    width: 285px;
+    min-height: 0;
+    height: auto;
+    max-height: calc(100vh - 370px);
+    display: flex;
+    flex-direction: column;
+    background: #f1f3f7;
+    border-radius: 12px;
+    border: 1px solid #dce5ef;
+    box-shadow: none;
+  }
+  .trello-workspace .task-lane-header {
+    padding: 14px;
+    border-bottom: 0;
+    background: transparent;
+  }
+  .trello-workspace .task-lane-header h3 {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 14px;
+    color: #33445b;
+  }
+  .trello-workspace .task-lane-body {
+    padding: 0 9px;
+    overflow-y: auto;
+    max-height: 55vh;
+  }
+  .trello-workspace .task-lane-body .workspace-empty {
+    padding: 16px 8px;
+    font-size: 12px;
+  }
+  .trello-workspace .task-card {
+    background: #fff;
+    border: 1px solid #dfe4ed;
+    border-left: 1px solid #dfe4ed;
+    padding: 12px;
+    margin-bottom: 9px;
+    border-radius: 9px;
+    cursor: grab;
+  }
+  .trello-workspace .task-card:active {
+    cursor: grabbing;
+  }
+  .trello-workspace .task-card h3 {
+    font-size: 14px;
+  }
+  .trello-workspace .task-notes {
+    max-height: 110px;
+  }
+  .trello-add-card {
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: #58677c;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 5px 7px 7px;
+    font-size: 13px;
+  }
+  .trello-add-card:hover {
+    background: #e0e7f2;
+    color: #066fd1;
+  }
+  .trello-add-list {
+    flex: 0 0 270px;
+    border: 1px dashed #a9c5e8;
+    background: #edf4ff;
+    color: #066fd1;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: left;
+  }
+  .trello-add-list:hover {
+    background: #deecff;
+  }
+  .task-lane.drag-target {
+    outline: 3px solid #a8d4ff;
+    outline-offset: 2px;
+  }
+  .task-card.dragging {
+    opacity: 0.45;
+  }
+  @media (max-width: 575px) {
+    .trello-board-heading {
+      padding: 15px;
+      align-items: flex-start;
+    }
+    .trello-board-heading > .badge {
+      display: none;
+    }
+    .trello-workspace .task-board {
+      padding: 12px;
+      min-height: 60vh;
+    }
+    .trello-workspace .task-lane {
+      flex-basis: 270px;
+      width: 270px;
+      max-height: 65vh;
+    }
+  }
+</style>

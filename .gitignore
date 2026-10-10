@@ -1,0 +1,17 @@
+.local-tools/
+.env
+.env.*
+!.env.example
+node_modules/
+.vercel/
+*.log
+auth/config.local.php
+auth/runtime/
+.pnpm-store/
+
+.migration-data/
+migration/.env
+migration/node_modules/
+
+
+tabler-dev/tabler-dev/preview/.env

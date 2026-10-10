@@ -1,0 +1,79 @@
+---
+import Icon from '@ui/Icon.astro'
+import UserAvatar from '@shared/components/UserAvatar.astro'
+---
+
+<div class="dropdown" data-account-menu>
+  <button type="button" class="account-trigger d-flex align-items-center gap-2 text-body" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Open account menu"><UserAvatar /><span class="d-none d-md-inline" data-jobify-user-name>Account</span><Icon name="chevron-down" /></button>
+  <div class="dropdown-menu dropdown-menu-end mt-2" style="min-width:220px">
+    <div class="px-3 py-2"><strong data-jobify-user-name>Account</strong><div class="small text-secondary" data-jobify-user-provider>Your Joblink account</div></div>
+    <div class="dropdown-divider"></div>
+    <div class="d-none" data-account-private>
+      <a class="dropdown-item" href="/settings" data-jobify-account-link><Icon name="settings" class="dropdown-item-icon" />Account settings</a><a class="dropdown-item" href="/applications"><Icon name="briefcase" class="dropdown-item-icon" />My applications</a><div class="dropdown-divider"></div><button
+        class="dropdown-item text-danger"
+        type="button"
+        data-account-signout><Icon name="logout" class="dropdown-item-icon" />Sign out</button
+      >
+    </div>
+    <div data-account-guest><a class="dropdown-item" href="/sign-in">Sign in</a><a class="dropdown-item" href="/sign-up">Create account</a></div>
+    <div class="text-danger small px-3 py-2 d-none" role="alert" data-account-error></div>
+  </div>
+</div>
+<style>
+  .account-trigger {
+    border: 0;
+    padding: 6px 8px;
+    background: transparent;
+    border-radius: 10px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .account-trigger:hover {
+    background: #edf3fc;
+  }
+  .account-trigger [data-jobify-user-name] {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .account-trigger:focus-visible {
+    outline: 2px solid #066fd1;
+    outline-offset: 3px;
+  }
+</style>
+<script>
+  import { getSession, clearProfile, cachedProfile, type SessionUser } from '@shared/lib/client-session'
+  const root = document.querySelector<HTMLElement>('[data-account-menu]')!
+  const update = (user: SessionUser | null) => {
+    root.querySelector('[data-account-private]')!.classList.toggle('d-none', !user)
+    root.querySelector('[data-account-guest]')!.classList.toggle('d-none', Boolean(user))
+  }
+  update(cachedProfile())
+  window.addEventListener('jobify-session', (event) => update((event as CustomEvent<SessionUser | null>).detail))
+  void getSession()
+    .then((session) => update(session.user))
+    .catch(() => {
+      /* Keep the guest menu usable when the service is unavailable. */
+    })
+  async function logout() {
+    const button = root.querySelector<HTMLButtonElement>('[data-account-signout]')!,
+      error = root.querySelector<HTMLElement>('[data-account-error]')!
+    button.disabled = true
+    error.classList.add('d-none')
+    try {
+      const session = await getSession(true)
+      const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf }, body: '{}' })
+      if (!response.ok) throw new Error('Unable to sign out. Please try again.')
+      clearProfile()
+      location.assign('/sign-in')
+    } catch (e) {
+      error.textContent = e instanceof Error ? e.message : 'Unable to sign out.'
+      error.classList.remove('d-none')
+      button.disabled = false
+    }
+  }
+  root.querySelector('[data-account-signout]')!.addEventListener('click', () => {
+    void logout()
+  })
+</script>

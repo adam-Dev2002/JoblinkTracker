@@ -1,0 +1,96 @@
+---
+import Icon from '@ui/Icon.astro'
+interface Props {
+  large?: boolean
+}
+const { large = false } = Astro.props
+---
+
+<span class:list={['avatar rounded-circle bg-primary-lt', large ? 'avatar-xl' : 'avatar-sm']} data-jobify-avatar>
+  <span data-avatar-fallback aria-label="Default profile icon"><Icon name="user" /></span>
+  <img class="d-none rounded-circle" data-avatar-image alt="Profile photo" referrerpolicy="no-referrer" width={large ? 80 : 32} height={large ? 80 : 32} />
+</span>
+<style>
+  [data-jobify-avatar] {
+    position: relative;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  [data-avatar-image] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  [data-avatar-fallback] {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+</style>
+<script>
+  import { cachedProfile, getSession, type SessionUser } from '@shared/lib/client-session'
+  const defaultAvatarIcon = document.querySelector('[data-avatar-fallback]')?.innerHTML || ''
+  function paintProfile(user: SessionUser | null) {
+    document.querySelectorAll<HTMLAnchorElement>('[data-jobify-account-link]').forEach((link) => {
+      link.href = user ? '/settings' : '/sign-in'
+    })
+    document.querySelectorAll<HTMLElement>('[data-jobify-user-name]').forEach((element) => {
+      element.textContent = user?.name || 'Sign in'
+    })
+    document.querySelectorAll<HTMLElement>('[data-jobify-user-provider]').forEach((element) => {
+      element.textContent = user ? (user.provider === 'google' ? 'Google account' : 'Email account') : 'Your Joblink account'
+    })
+    if (!user) {
+      document.querySelectorAll<HTMLElement>('[data-jobify-avatar]').forEach((avatar) => {
+        avatar.querySelector('[data-avatar-image]')?.classList.add('d-none')
+        const fallback = avatar.querySelector('[data-avatar-fallback]')
+        if (fallback) {
+          fallback.innerHTML = defaultAvatarIcon
+          fallback.classList.remove('d-none')
+        }
+      })
+      return
+    }
+    for (const avatar of document.querySelectorAll<HTMLElement>('[data-jobify-avatar]')) {
+      const fallback = avatar.querySelector<HTMLElement>('[data-avatar-fallback]')!
+      fallback.textContent =
+        String(user.name)
+          .trim()
+          .split(/\s+/u)
+          .slice(0, 2)
+          .map((part: string) => Array.from(part)[0] || '')
+          .join('')
+          .toUpperCase() || 'J'
+      fallback.setAttribute('aria-label', 'Default profile icon for ' + user.name)
+      if (user.provider !== 'google' || !user.avatarUrl) continue
+      const image = avatar.querySelector<HTMLImageElement>('[data-avatar-image]')!
+      image.addEventListener(
+        'load',
+        () => {
+          image.classList.remove('d-none')
+          fallback.classList.add('d-none')
+        },
+        { once: true },
+      )
+      image.addEventListener('error', () => {
+        image.classList.add('d-none')
+        fallback.classList.remove('d-none')
+      })
+      image.alt = user.name + ' profile photo'
+      image.src = user.avatarUrl
+    }
+  }
+  const cached = cachedProfile()
+  if (cached) paintProfile(cached)
+  window.addEventListener('jobify-session', (event) => paintProfile((event as CustomEvent<SessionUser | null>).detail))
+  void getSession()
+    .then((session) => paintProfile(session.user))
+    .catch(() => {
+      /* Keep the cached profile during a temporary network failure. */
+    })
+</script>
