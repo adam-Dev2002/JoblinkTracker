@@ -47,7 +47,7 @@ export function attachSuggestions(input: HTMLInputElement, list: HTMLElement, va
       button.setAttribute('role', 'option')
       button.setAttribute('aria-selected', 'false')
       button.textContent = value
-      button.addEventListener('mousedown', (event) => event.preventDefault())
+      button.addEventListener('pointerdown', (event) => event.preventDefault())
       button.addEventListener('click', () => select(index))
       list.appendChild(button)
     })

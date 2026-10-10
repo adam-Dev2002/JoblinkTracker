@@ -708,27 +708,7 @@ window.addEventListener('jobify-session', (event) => {
     location.replace(loginUrl())
   }
 })
-async function init() {
-  render()
-  try {
-    const session = await getSession()
-    signedIn = Boolean(session.user)
-    csrf = session.csrf
-    if (!signedIn) {
-      location.replace(loginUrl())
-      return
-    }
-    items = (await api('workspace/items')).items
-    loaded = true
-    root.dataset.ready = 'true'
-    root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
-      button.disabled = false
-    })
-    render()
-  } catch (e) {
-    error(e instanceof Error ? e.message : 'Unable to load workspace.')
-  }
-  if (view === 'jobs') {
+function initJobSearch() {
     let searchTimer: ReturnType<typeof setTimeout> | undefined
     const searchNow = () => {
       clearTimeout(searchTimer)
@@ -754,7 +734,31 @@ async function init() {
       searchNow,
     )
     attachSuggestions(select<HTMLInputElement>('#job-location'), select('#job-location-suggestions'), () => [...jobs.flatMap((job) => job.location.split(/[,;]/).map((location) => location.trim())), 'Philippines', 'Manila', 'Cebu', 'Davao', 'Worldwide', 'USA', 'United Kingdom', 'Canada', 'Australia'], renderJobs)
-    await loadJobs()
+  return loadJobs()
+}
+async function init() {
+  render()
+  const initialJobs = view === 'jobs' ? initJobSearch() : null
+  try {
+    const session = await getSession()
+    signedIn = Boolean(session.user)
+    csrf = session.csrf
+    if (!signedIn) {
+      location.replace(loginUrl())
+      return
+    }
+    items = (await api('workspace/items')).items
+    loaded = true
+    root.dataset.ready = 'true'
+    root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
+      button.disabled = false
+    })
+    render()
+  } catch (e) {
+    error(e instanceof Error ? e.message : 'Unable to load workspace.')
+  }
+  if (view === 'jobs') {
+    await initialJobs
     const opened = items.find((i) => i.id === Number(sessionStorage.getItem('jobify-opened-application')))
     if (opened) showApplicationNotice(opened)
     const pending = sessionStorage.getItem('jobify-pending-application')
