@@ -11,7 +11,7 @@ export function localApiProxy() {
             return
           }
           const port = (req.url || '').startsWith('/api/assistant/') ? 8083 : (req.url || '').startsWith('/api/jobs/') ? 8082 : 8081
-          const upstream = request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${port}` } }, (incoming) => {
+          const upstream = request({ hostname: '127.0.0.1', port, path: req.url, method: req.method, headers: { ...req.headers } }, (incoming) => {
             res.statusCode = incoming.statusCode || 502
             for (const [name, value] of Object.entries(incoming.headers)) if (value !== undefined && !['connection', 'transfer-encoding', 'keep-alive'].includes(name)) res.setHeader(name, value)
             incoming.pipe(res)

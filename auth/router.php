@@ -7,6 +7,7 @@ header('Referrer-Policy: no-referrer');
 ini_set('display_errors', '0');
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
+ini_set('session.gc_maxlifetime', '7200');
 $runtime = __DIR__ . '/runtime';
 if (!is_dir($runtime)) mkdir($runtime, 0700, true);
 session_save_path($runtime);
@@ -94,7 +95,9 @@ try {
     if ($path === '/api/auth/session' && $method === 'GET') respond(['user' => currentUser($pdo), 'csrf' => $_SESSION['csrf'], 'googleEnabled' => googleConfigError() === null]);
     if (!in_array($path, ['/api/auth/register', '/api/auth/login', '/api/auth/logout', '/api/auth/profile', '/api/auth/password'], true)) respond(['error' => 'Not found'], 404);
     if ($method !== 'POST') { header('Allow: POST'); respond(['error' => 'Method not allowed'], 405); }
-    if (isset($_SERVER['HTTP_ORIGIN']) && $_SERVER['HTTP_ORIGIN'] !== $config['app_url']) respond(['error' => 'Invalid request origin'], 403);
+    // The browser origin follows the host serving this request, including local
+    // aliases and preview domains. The local API proxy preserves that Host.
+    if (!isSameOriginRequest()) respond(['error' => 'Invalid request origin'], 403);
     if (!hash_equals($_SESSION['csrf'], $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) respond(['error' => 'Your session expired. Refresh the page and try again.'], 403);
     if ($path === '/api/auth/logout') {
         $_SESSION = []; session_destroy();

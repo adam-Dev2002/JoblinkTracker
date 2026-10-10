@@ -149,7 +149,7 @@ const register = mode === 'register'
         root.querySelector('[data-account]')!.classList.remove('d-none')
       } else {
         if (session.user) {
-          location.replace(returnTo)
+          location.replace('/job-listing')
           return
         }
         root.querySelector('[data-auth-content]')!.classList.remove('d-none')

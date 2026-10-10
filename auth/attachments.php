@@ -8,7 +8,7 @@ function attachmentRequest(PDO $pdo, array $user, string $method): never {
   header('Content-Type: '.$file['mime']);header("Content-Disposition: " . (isset($_GET['preview']) && str_starts_with($file['mime'],'image/') ? 'inline' : 'attachment') . "; filename*=UTF-8''".rawurlencode($file['name']));header('Content-Length: '.$file['size']);readfile($folder.'/'.$file['stored_name']);exit;
  }
  if($method!=='POST')respond(['error'=>'Method not allowed'],405);
- if(isset($_SERVER['HTTP_ORIGIN'])&&$_SERVER['HTTP_ORIGIN']!==$config['app_url'])respond(['error'=>'Invalid origin'],403);
+ if(!isSameOriginRequest())respond(['error'=>'Invalid origin'],403);
  if(!hash_equals($_SESSION['csrf'],$_SERVER['HTTP_X_CSRF_TOKEN']??''))respond(['error'=>'Session expired. Refresh and try again.'],403);
  $row=filter_var($_POST['itemId']??0,FILTER_VALIDATE_INT);$q=$pdo->prepare("SELECT id FROM workspace_items WHERE id=? AND user_id=? AND kind='sheet'");$q->execute([$row,$user['id']]);if(!$q->fetch())respond(['error'=>'Sheet row not found'],404);
  $files=$_FILES['files']??null;if(!$files||!is_array($files['name'])||count($files['name'])>3)respond(['error'=>'Choose up to 3 files, 2 MB each.'],422);

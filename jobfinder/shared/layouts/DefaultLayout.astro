@@ -64,7 +64,7 @@ const groups = [
     <div class="jobify-main">
       <header class="jobify-topbar">
         <div class="d-flex align-items-center gap-3">
-          <button class="btn btn-icon mobile-menu" aria-label="Open navigation" aria-expanded="false" aria-controls="jobify-sidebar" data-menu-open><Icon name="menu-2" /></button><span class="text-secondary">Workspace <span class="mx-2">/</span><strong class="text-body">{title}</strong></span>
+          <button class="btn btn-icon navigation-toggle" aria-label="Hide navigation" aria-expanded="true" aria-controls="jobify-sidebar" data-menu-open><Icon name="menu-2" /></button><span class="text-secondary">Workspace <span class="mx-2">/</span><strong class="text-body">{title}</strong></span>
         </div><AccountMenu />
       </header>
       <main id="content" class="jobify-content">
@@ -187,6 +187,14 @@ const groups = [
   .jobify-main {
     margin-left: var(--jobify-sidebar-width);
   }
+  @media (min-width: 768px) {
+    .navigation-hidden .jobify-sidebar {
+      transform: translateX(-100%);
+    }
+    .navigation-hidden .jobify-main {
+      margin-left: 0;
+    }
+  }
   .jobify-topbar {
     height: 76px;
     padding: 0 32px;
@@ -214,7 +222,6 @@ const groups = [
   .jobify-content .btn {
     border-radius: 8px;
   }
-  .mobile-menu,
   .sidebar-close,
   .sidebar-backdrop {
     display: none;
@@ -598,7 +605,7 @@ const groups = [
     .jobify-content {
       padding: 22px 16px;
     }
-    .mobile-menu,
+    .navigation-toggle,
     .sidebar-close {
       display: inline-flex;
     }
@@ -626,14 +633,44 @@ const groups = [
   }
 </style>
 <script>
-  const toggle = (open: boolean) => {
-    document.body.classList.toggle('menu-visible', open)
-    document.querySelector('[data-menu-open]')?.setAttribute('aria-expanded', String(open))
+  const mobile = window.matchMedia('(max-width: 767px)')
+  let desktopHidden = false
+  try {
+    desktopHidden = localStorage.getItem('joblink-navigation-hidden') === 'true'
+  } catch {
+    /* Storage is optional. */
   }
-  document.querySelector('[data-menu-open]')?.addEventListener('click', () => toggle(true))
-  document.querySelectorAll('[data-menu-close]').forEach((el) => el.addEventListener('click', () => toggle(false)))
+  const navigation = document.querySelector<HTMLElement>('#jobify-sidebar')!
+  const navigationToggle = document.querySelector<HTMLButtonElement>('[data-menu-open]')!
+  const toggle = (open: boolean) => {
+    document.body.classList.toggle('menu-visible', mobile.matches && open)
+    document.body.classList.toggle('navigation-hidden', !mobile.matches && !open)
+    navigation.inert = !open
+    navigationToggle.setAttribute('aria-expanded', String(open))
+    navigationToggle.setAttribute('aria-label', open ? 'Hide navigation' : 'Show navigation')
+    if (!mobile.matches) {
+      desktopHidden = !open
+      try {
+        localStorage.setItem('joblink-navigation-hidden', String(!open))
+      } catch {
+        /* Storage is optional. */
+      }
+    }
+  }
+  toggle(!mobile.matches && !desktopHidden)
+  mobile.addEventListener('change', () => toggle(!mobile.matches && !desktopHidden))
+  navigationToggle.addEventListener('click', () => toggle(navigationToggle.getAttribute('aria-expanded') !== 'true'))
+  document.querySelectorAll('[data-menu-close]').forEach((el) =>
+    el.addEventListener('click', () => {
+      toggle(false)
+      navigationToggle.focus()
+    }),
+  )
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') toggle(false)
+    if (e.key === 'Escape' && mobile.matches) {
+      toggle(false)
+      navigationToggle.focus()
+    }
   })
   const clock = () => {
     const el = document.querySelector('[data-manila-clock]')

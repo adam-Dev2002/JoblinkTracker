@@ -107,7 +107,7 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     <Analytics />
   </head>
 
-  <body class={bodyClass}>
+  <body class={bodyClass} data-session-required={workspace ? 'true' : undefined}>
     <a href="#content" class="visually-hidden-focusable skip-link">Skip to main content</a>
 
     <!-- BEGIN GLOBAL THEME SCRIPT -->
@@ -117,7 +117,7 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     <slot />
 
     <PageModals />
-    <div class:list={[Astro.url.pathname.startsWith('/sign-in') && 'd-none']}>
+    <div class:list={[/^\/(?:sign-in|sign-up)(?:\/|$)/.test(Astro.url.pathname) && 'd-none']}>
       <AssistantWidget />
     </div>
 
@@ -140,6 +140,18 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     <!-- END GLOBAL MANDATORY SCRIPTS -->
 
     <PageScripts />
+    <script>
+      import { getSession, type SessionUser } from '@shared/lib/client-session'
+      window.addEventListener('jobify-session', (event) => {
+        const user = (event as CustomEvent<SessionUser | null>).detail
+        if (user && /^\/(?:sign-in|sign-up)(?:\/|$)/.test(location.pathname)) {
+          location.replace('/job-listing')
+        } else if (!user && document.body.dataset.sessionRequired === 'true') {
+          location.replace('/sign-in')
+        }
+      })
+      void getSession().catch(() => { /* Page controls provide connection retry. */ })
+    </script>
 
     <!-- BEGIN PAGE SCRIPTS -->
     <script is:inline define:vars={{ themeDefaults, themePresets, sidebarOnlyKeys, navbarOnlyKeys }}>

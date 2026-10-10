@@ -104,7 +104,7 @@ function dropPlaygrounds() {
 // https://astro.build/config
 export default defineConfig({
   output: cloudBackend ? 'server' : 'static',
-  adapter: cloudBackend ? vercel() : undefined,
+  ...(cloudBackend ? { adapter: vercel() } : {}),
   devToolbar: { enabled: false },
   // pages live at the package root (./pages) — all components/lib/data are
   // shared (see the @shared alias)

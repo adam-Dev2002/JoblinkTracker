@@ -1,6 +1,11 @@
 ---
 import SingleLayout from '@shared/layouts/SingleLayout.astro'
 import JoblinkAuth from '../../components/auth/JoblinkAuth.astro'
+import { redirectSignedIn } from '../../server/page-auth.mjs'
+export const prerender = false
+Astro.response.headers.set('Cache-Control', 'no-store')
+const signedInRedirect = await redirectSignedIn(Astro.request, Astro.isPrerendered)
+if (signedInRedirect) return signedInRedirect
 ---
 
 <SingleLayout title="Sign in">

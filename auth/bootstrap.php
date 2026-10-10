@@ -26,6 +26,12 @@ if (is_file(__DIR__ . '/config.local.php')) {
         $config = require __DIR__ . '/config.example.php';
     }
 }
+function isSameOriginRequest(): bool {
+    global $config;
+    if (!isset($_SERVER['HTTP_ORIGIN'])) return true;
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $config['cookie_secure'] ? 'https' : 'http';
+    return $_SERVER['HTTP_ORIGIN'] === $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? '');
+}
 function googleConfigError(): ?string {
     global $config;
     if ($config['google_client_id'] === '' || $config['google_client_secret'] === '') return 'google_not_configured';

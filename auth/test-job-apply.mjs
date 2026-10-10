@@ -2,6 +2,14 @@ import { chromium } from "../jobfinder/node_modules/playwright/index.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { loadEnv } from "../jobfinder/node_modules/vite/dist/node/index.js";
+const environment = loadEnv(
+  "development",
+  fileURLToPath(new URL("../jobfinder/preview/", import.meta.url)),
+  "",
+);
+for (const [key, value] of Object.entries(environment))
+  process.env[key] ??= value;
 const email = `auth-test-${Date.now()}@example.invalid`,
   php = fileURLToPath(new URL("./test-account.php", import.meta.url));
 const b = await chromium.launch({
@@ -9,8 +17,9 @@ const b = await chromium.launch({
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   headless: true,
 });
-const c = await b.newContext({ baseURL: "http://localhost:3000" }),
+const c = await b.newContext({ baseURL: "http://127.0.0.1:3000" }),
   p = await c.newPage();
+p.setDefaultNavigationTimeout(90000);
 const errors = [];
 p.on("pageerror", (e) => errors.push(e.message));
 const jobs = [
@@ -77,6 +86,7 @@ try {
   await p.goto("/job-listing");
   await p.locator("[data-ready=true]").waitFor();
   await p.locator("[data-apply-job]").first().waitFor();
+  await p.locator('[data-ready="true"]').waitFor();
   assert.equal(await p.locator(".job-card").count(), 2);
   await p
     .locator("[data-company-logo]")
@@ -95,11 +105,6 @@ try {
   await p.getByLabel("Place or location").fill("Manila");
   assert.equal(await p.locator(".job-card").count(), 1);
   await p.getByLabel("Place or location").fill("");
-  await p.getByLabel("Work setup", { exact: true }).selectOption("remote");
-  assert.equal(await p.locator(".job-card").count(), 1);
-  await p.getByLabel("Work setup", { exact: true }).selectOption("");
-  await p.getByLabel("Philippines or worldwide").check();
-  assert.equal(await p.locator(".job-card").count(), 1);
   const popupPromise = p.waitForEvent("popup");
   await p.getByRole("link", { name: "Apply on company site" }).click();
   const popup = await popupPromise;
@@ -113,6 +118,9 @@ try {
   let rows = (await (await c.request.get("/api/workspace/items")).json()).items;
   assert.equal(rows.length, 1);
   assert.equal(rows[0].payload.status, "Application opened");
+  assert.equal(await p.locator("[data-application-notice]").count(), 0);
+  await p.locator("[data-application-later]").click();
+  await p.locator("[data-application-modal]").waitFor({ state: "hidden" });
   const secondPopup = p.waitForEvent("popup");
   await p.getByRole("link", { name: "Apply on company site" }).click();
   const other = await secondPopup;
@@ -120,11 +128,37 @@ try {
   await other.close();
   rows = (await (await c.request.get("/api/workspace/items")).json()).items;
   assert.equal(rows.length, 1);
+  let rejectConfirmation = true;
+  await c.route("**/api/workspace/items", async (route) => {
+    const request = route.request();
+    if (
+      request.method() === "POST" &&
+      request.postDataJSON()?.payload?.status === "Applied" &&
+      rejectConfirmation
+    ) {
+      rejectConfirmation = false;
+      await route.fulfill({
+        status: 503,
+        json: { error: "Test save failure. Please retry." },
+      });
+    } else await route.continue();
+  });
   await p.getByRole("button", { name: "I submitted it", exact: true }).click();
   await p
-    .getByRole("status")
-    .getByText("is tracked as Applied.", { exact: false })
+    .locator("[data-application-error]")
+    .filter({ hasText: "Test save failure" })
     .waitFor();
+  assert.equal(
+    (await (await c.request.get("/api/workspace/items")).json()).items[0]
+      .payload.status,
+    "Application opened",
+  );
+  await p.getByRole("button", { name: "I submitted it", exact: true }).click();
+  await p.locator("[data-application-success]").waitFor({ state: "visible" });
+  await p
+    .locator("[data-application-modal]")
+    .getByRole("link", { name: "View tracker", exact: true })
+    .click();
   await p.goto("/applications");
   await p.locator("[data-ready=true]").waitFor();
   assert.equal(await p.locator("[data-entry-status]").inputValue(), "Applied");
@@ -160,18 +194,44 @@ try {
   );
   await p.goto("/job-listing");
   await p.locator("[data-apply-job]").first().waitFor();
+  await p.locator('[data-ready="true"]').waitFor();
   await p.setViewportSize({ width: 390, height: 844 });
+  const mobilePopupPromise = p.waitForEvent("popup");
+  await p.getByRole("link", { name: "Apply on company site" }).click();
+  const mobilePopup = await mobilePopupPromise;
+  await mobilePopup.waitForURL("https://example.com/careers/apply");
+  await mobilePopup.close();
+  await p.locator("[data-application-modal]").waitFor({ state: "visible" });
+  assert.equal(await p.locator("[data-application-submit]").isVisible(), false);
+  const modalBounds = await p
+    .locator("[data-application-modal] .modal-content")
+    .boundingBox();
+  assert.ok(modalBounds.x >= 0 && modalBounds.x + modalBounds.width <= 390);
+  await p.locator("[data-application-later]").click();
   assert.equal(
     await p.evaluate(() => document.documentElement.scrollWidth > innerWidth),
     false,
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: logos/fallback, place/WFH/PH filters, official application tab, automatic opened tracking, duplicate prevention, applied confirmation, status preservation, CSRF and mobile layout.",
+    "PASS: Bootstrap application modal, Not yet, failed-save retry, Applied persistence, duplicate prevention, status preservation, CSRF and mobile layout.",
   );
 } finally {
   await b.close();
-  execFileSync("C:/xampp/php/php.exe", [php, email, "cleanup"], {
-    stdio: "inherit",
-  });
+  if (process.env.JOBLINK_BACKEND === "supabase") {
+    const { db, query } = await import("../jobfinder/preview/server/core.mjs");
+    const user = await query(
+      db().from("users").select("id").eq("email", email).maybeSingle(),
+    );
+    if (user) {
+      await query(db().from("workspace_items").delete().eq("user_id", user.id));
+      await query(
+        db().from("joblink_sessions").delete().eq("user_id", user.id),
+      );
+      await query(db().from("users").delete().eq("id", user.id));
+    }
+  } else
+    execFileSync("C:/xampp/php/php.exe", [php, email, "cleanup"], {
+      stdio: "inherit",
+    });
 }

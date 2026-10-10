@@ -6,6 +6,47 @@ const email = `auth-test-${Date.now()}@example.invalid`;
 const password = "Test-only-password-2026";
 const nextPassword = "Updated-only-password-2026";
 const phpTest = fileURLToPath(new URL("./test-account.php", import.meta.url));
+const { loadEnv } =
+  await import("../jobfinder/node_modules/vite/dist/node/index.js");
+const environment = loadEnv(
+  "development",
+  fileURLToPath(new URL("../jobfinder/preview/", import.meta.url)),
+  "",
+);
+const cloud =
+  (process.env.JOBLINK_BACKEND || environment.JOBLINK_BACKEND) === "supabase";
+async function inspectAccount(cleanup = false) {
+  if (!cloud) {
+    execFileSync(
+      "C:/xampp/php/php.exe",
+      [phpTest, email, ...(cleanup ? ["cleanup"] : [])],
+      { stdio: "inherit" },
+    );
+    return;
+  }
+  for (const [key, value] of Object.entries(environment))
+    process.env[key] ??= value;
+  const { db, query } = await import("../jobfinder/preview/server/core.mjs");
+  if (cleanup) {
+    const user = await query(
+      db().from("users").select("id").eq("email", email).maybeSingle(),
+    );
+    if (user) {
+      await query(
+        db().from("joblink_sessions").delete().eq("user_id", user.id),
+      );
+      await query(db().from("users").delete().eq("id", user.id));
+    }
+    return;
+  }
+  const user = await query(
+    db().from("users").select("*").eq("email", email).single(),
+  );
+  const { default: bcrypt } =
+    await import("../jobfinder/preview/node_modules/bcryptjs/index.js");
+  assert.equal(await bcrypt.compare(password, user.password_hash), true);
+  assert.equal(user.email_verified, false);
+}
 const browser = await chromium.launch({
   executablePath:
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
@@ -13,11 +54,13 @@ const browser = await chromium.launch({
 });
 const context = await browser.newContext({ baseURL: "http://localhost:3000" });
 const page = await context.newPage();
+page.setDefaultNavigationTimeout(60000);
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 try {
-  await page.goto("/sign-up");
+  await page.goto("/sign-up", { waitUntil: "domcontentloaded" });
   await page.locator("[data-auth-form]").waitFor({ state: "visible" });
+  assert.equal(await page.locator("[data-ai-open]").isVisible(), false);
   await page.getByLabel("Name", { exact: true }).fill("Settings Test");
   await page.getByLabel("Email address", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
@@ -25,11 +68,12 @@ try {
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
-  await page.waitForURL("**/job-listing");
-  execFileSync("C:/xampp/php/php.exe", [phpTest, email], { stdio: "inherit" });
+  await page.waitForURL("**/job-listing", { waitUntil: "domcontentloaded" });
+  await inspectAccount();
+  await page.getByRole("button", { name: "Open account menu" }).click();
   await page.locator('[data-jobify-account-link][href="/settings"]').waitFor();
   await page.locator("[data-jobify-account-link]").click();
-  await page.waitForURL("**/settings");
+  await page.waitForURL("**/settings", { waitUntil: "domcontentloaded" });
   await page.locator("[data-content]").waitFor({ state: "visible" });
   assert.equal(
     await page.getByLabel("Email address", { exact: true }).inputValue(),
@@ -101,7 +145,7 @@ try {
     .filter({ hasText: "Password updated." })
     .waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.waitForURL("**/sign-in");
+  await page.waitForURL(/\/sign-in(?:\?|$)/, { waitUntil: "domcontentloaded" });
   await page.locator("[data-auth-form]").waitFor({ state: "visible" });
   await page.getByLabel("Email address", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
@@ -112,11 +156,31 @@ try {
     .waitFor({ state: "visible" });
   await page.getByLabel("Password", { exact: true }).fill(nextPassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL("**/job-listing");
-  await page.goto("/sign-in");
-  await page.waitForURL("**/job-listing");
-  await page.goto("/account");
-  await page.waitForURL("**/settings");
+  await page.waitForURL("**/job-listing", { waitUntil: "domcontentloaded" });
+  await page.goto("/sign-in", { waitUntil: "domcontentloaded" });
+  await page.waitForURL("**/job-listing", { waitUntil: "domcontentloaded" });
+  await page.goto("/sign-up", { waitUntil: "domcontentloaded" });
+  await page.waitForURL("**/job-listing", { waitUntil: "domcontentloaded" });
+  for (const path of [
+    "/",
+    "/news",
+    "/applications",
+    "/desk/taskboard",
+    "/desk/calendar",
+    "/desk/links",
+    "/desk/sheet",
+  ]) {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    await page
+      .locator('[data-jobify-account-link][href="/settings"]')
+      .waitFor({ state: "attached" });
+    assert.equal(
+      (await (await page.request.get("/api/auth/session")).json()).user.email,
+      email,
+    );
+  }
+  await page.goto("/account", { waitUntil: "domcontentloaded" });
+  await page.waitForURL("**/settings", { waitUntil: "domcontentloaded" });
   await page.locator("[data-content]").waitFor({ state: "visible" });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(
@@ -130,16 +194,14 @@ try {
     fullPage: true,
   });
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.waitForURL("**/sign-in");
-  await page.goto("/settings");
-  await page.waitForURL("**/sign-in");
+  await page.waitForURL(/\/sign-in(?:\?|$)/, { waitUntil: "domcontentloaded" });
+  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.waitForURL(/\/sign-in(?:\?|$)/, { waitUntil: "domcontentloaded" });
   assert.deepEqual(errors, []);
   console.log(
     "PASS: signup/login go to jobs, settings require login, profile persists, password update verifies current password, old password rejected, avatar, CSRF/origin, account redirect and mobile layout.",
   );
 } finally {
   await browser.close();
-  execFileSync("C:/xampp/php/php.exe", [phpTest, email, "cleanup"], {
-    stdio: "inherit",
-  });
+  await inspectAccount(true);
 }

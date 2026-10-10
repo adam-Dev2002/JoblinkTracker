@@ -5,6 +5,8 @@ type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
 const hiddenSheetColumns = new Set<string>()
 let visibleSheetIds: number[] = []
+let deletingSheetRows = false
+let sheetWriteQueue: Promise<void> = Promise.resolve()
 type Entry = { id: number; kind: Kind; attachments?: Attachment[]; payload: Record<string, string> & { title: string; company: string; url: string; salary: string; status: string; notes: string; date: string; time: string; value: string } }
 type Job = { id: string; title: string; company: string; location: string; role: string; url: string; source: string; salary: string; date: string; direct: boolean; logo: string; workMode: string; employmentType: string; description: string }
 const root = document.querySelector<HTMLElement>('[data-workspace-view]')!
@@ -186,16 +188,20 @@ function render() {
       companyFilter.append(option)
     }
     companyFilter.value = company
+    const activeCompany = companyFilter.value
     const rows = owned('sheet').filter(
       (row) =>
-        (!company || row.payload.company === company) &&
+        (!activeCompany || row.payload.company === activeCompany) &&
         Object.values(row.payload).join(' ').toLowerCase().includes(query) &&
         (filter === 'all' || (filter === 'files' && (row.attachments?.length || 0) > 0) || (filter === 'images' && row.attachments?.some((a) => a.mime.startsWith('image/'))) || (filter === 'none' && !row.attachments?.length)),
     )
     rows.sort((a, b) => (sort === 'title' ? a.payload.title.localeCompare(b.payload.title) : sort === 'company' ? a.payload.company.localeCompare(b.payload.company) : sort === 'oldest' ? a.id - b.id : b.id - a.id))
     visibleSheetIds = rows.map((row) => row.id)
     for (const id of sheetSelection) if (!items.some((row) => row.id === id)) sheetSelection.delete(id)
-    select<HTMLButtonElement>('[data-sheet-bulk]').disabled = sheetSelection.size === 0
+    select<HTMLButtonElement>('[data-sheet-bulk]').disabled = sheetSelection.size === 0 || deletingSheetRows
+    select<HTMLButtonElement>('[data-sheet-clear-selection]').disabled = sheetSelection.size === 0 || deletingSheetRows
+    const hiddenSelected = Array.from(sheetSelection).filter((id) => !visibleSheetIds.includes(id)).length
+    select('[data-sheet-selected-count]').textContent = hiddenSelected ? `${hiddenSelected} selected outside current filters` : ''
     select('[data-sheet-bulk]').textContent = 'Delete selected (' + sheetSelection.size + ')'
     const all = select<HTMLInputElement>('[data-sheet-all]')
     all.checked = rows.length > 0 && rows.every((row) => sheetSelection.has(row.id))
@@ -208,7 +214,7 @@ function render() {
       )
       .join('')
     root.querySelectorAll<HTMLElement>('[data-sheet-column]').forEach((cell) => cell.classList.toggle('d-none', hiddenSheetColumns.has(cell.dataset.sheetColumn!)))
-    select('[data-sheet-empty]').innerHTML = rows.length ? '' : empty('Your sheet is empty. Add your first row to start organizing information.')
+    select('[data-sheet-empty]').innerHTML = rows.length ? '' : empty(owned('sheet').length ? 'No rows match your filters. Clear filters to see all rows.' : 'Your sheet is empty. Add your first row to start organizing information.')
   }
 }
 const labels: Record<string, string> = { title: 'Title / role', company: 'Company', url: 'Original website URL', salary: 'Salary / range', status: 'Status', notes: 'Notes', date: 'Date', time: 'Time (Manila)', value: 'Value' }
@@ -253,14 +259,14 @@ function closeModal() {
   select('[data-entry-modal]').classList.add('d-none')
   restoreFocus?.focus()
 }
-async function save(kind: Kind, payload: Record<string, string>, id = 0) {
+async function save(kind: Kind, payload: Record<string, string>, id = 0, renderAfter = true) {
   const data = await api('workspace/items', { kind, payload, id })
   const index = items.findIndex((i) => i.id === data.item.id)
   if (index >= 0) {
     data.item.attachments = items[index]?.attachments || []
     items[index] = data.item
   } else items.unshift(data.item)
-  render()
+  if (renderAfter) render()
   return data.item as Entry
 }
 let detailsFocus: HTMLElement | null = null
@@ -404,15 +410,36 @@ async function handleClick(event: Event) {
   }
   clearError()
   try {
+    if (target.hasAttribute('data-application-tracker')) sessionStorage.removeItem('jobify-opened-application')
     if (target.hasAttribute('data-sheet-select')) {
       visibleSheetIds.forEach((id) => sheetSelection.add(id))
       render()
     }
-    if (target.hasAttribute('data-sheet-bulk') && sheetSelection.size && (await confirmDelete('Delete ' + sheetSelection.size + ' selected rows and their attachments? This cannot be undone.'))) {
-      const data = await api('workspace/items', { action: 'bulk-delete', ids: Array.from(sheetSelection) })
-      items = items.filter((row) => !data.deleted.includes(row.id))
+    if (target.hasAttribute('data-sheet-clear-selection')) {
       sheetSelection.clear()
       render()
+    }
+    if (target.hasAttribute('data-sheet-clear-filters')) {
+      select<HTMLInputElement>('[data-sheet-search]').value = ''
+      select<HTMLSelectElement>('[data-sheet-filter]').value = 'all'
+      select<HTMLSelectElement>('[data-sheet-company]').value = ''
+      render()
+    }
+    if (target.hasAttribute('data-sheet-bulk') && !deletingSheetRows && sheetSelection.size && (await confirmDelete('Delete ' + sheetSelection.size + ' selected rows and their attachments, including any hidden by filters? This cannot be undone.'))) {
+      deletingSheetRows = true
+      const selectedIds = Array.from(sheetSelection)
+      render()
+      try {
+        await sheetWriteQueue
+        for (let offset = 0; offset < selectedIds.length; offset += 200) {
+          const data = await api('workspace/items', { action: 'bulk-delete', ids: selectedIds.slice(offset, offset + 200) })
+          items = items.filter((row) => !data.deleted.includes(row.id))
+          data.deleted.forEach((id: number) => sheetSelection.delete(id))
+        }
+      } finally {
+        deletingSheetRows = false
+        render()
+      }
     }
     if (target.dataset.jobCard) showJobDetails(target.dataset.jobCard)
     if (target.dataset.deleteStatus && (await confirmDelete('Delete this status? Its tasks will move to To do.'))) {
@@ -428,6 +455,10 @@ async function handleClick(event: Event) {
     if (target.hasAttribute('data-job-close')) closeJobDetails()
     if (target.dataset.applyJob) {
       event.preventDefault()
+      if (!loaded) {
+        error('Your account is still loading. Please try again in a moment.')
+        return
+      }
       const job = jobs.find((j) => j.id === target.dataset.applyJob)
       if (!job || !safeUrl(job.url)) return
       if (!signedIn) {
@@ -455,7 +486,7 @@ async function handleClick(event: Event) {
         popup.location.href = safeUrl(job.url)
         sessionStorage.setItem('jobify-opened-application', String(item.id))
         closeJobDetails()
-        showApplicationNotice(item)
+        showApplicationModal(item)
       } catch (e) {
         popup.close()
         throw e
@@ -466,9 +497,21 @@ async function handleClick(event: Event) {
     if (target.dataset.confirmApplication) {
       const item = items.find((i) => i.id === Number(target.dataset.confirmApplication))
       if (item) {
-        await save('application', { ...item.payload, status: 'Applied', date: today() }, item.id)
-        sessionStorage.removeItem('jobify-opened-application')
-        if (view === 'jobs') showApplicationNotice(items.find((i) => i.id === item.id)!)
+        const inModal = target.hasAttribute('data-application-submit')
+        const button = target as HTMLButtonElement
+        button.disabled = true
+        try {
+          await save('application', { ...item.payload, status: 'Applied', date: today() }, item.id)
+          sessionStorage.removeItem('jobify-opened-application')
+          if (inModal) updateApplicationModal(items.find((i) => i.id === item.id)!)
+        } catch (e) {
+          if (!inModal) throw e
+          const box = select('[data-application-error]')
+          box.textContent = e instanceof Error ? e.message : 'Unable to update your application. Try again.'
+          box.classList.remove('d-none')
+        } finally {
+          button.disabled = false
+        }
       }
     }
     if (target.hasAttribute('data-modal-close')) closeModal()
@@ -536,11 +579,24 @@ async function handleChange(event: Event) {
       if (i) await save(i.kind, { ...i.payload, status: target.value }, i.id)
     }
     if (target.dataset.sheetId) {
-      const i = items.find((i) => i.id === Number(target.dataset.sheetId))
-      if (i) await save('sheet', { ...i.payload, [target.dataset.sheetField!]: target.value }, i.id)
+      const id = Number(target.dataset.sheetId),
+        field = target.dataset.sheetField!,
+        value = target.value
+      select('[data-sheet-save-status]').textContent = 'Saving changes...'
+      const write = sheetWriteQueue.then(async () => {
+        const i = items.find((i) => i.id === id)
+        if (i) await save('sheet', { ...i.payload, [field]: value }, id, false)
+      })
+      sheetWriteQueue = write.catch(() => {
+        /* The change handler shows the failure. */
+      })
+      const pendingWrite = sheetWriteQueue
+      await write
+      if (sheetWriteQueue === pendingWrite) select('[data-sheet-save-status]').textContent = 'Changes saved.'
     }
   } catch (e) {
     error(e instanceof Error ? e.message : 'Unable to save.')
+    if (target.dataset.sheetId) select('[data-sheet-save-status]').textContent = 'Changes could not be saved. Try again.'
     render()
   }
 }
@@ -627,14 +683,29 @@ function exportCsv(kind: Kind) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-function showApplicationNotice(item: Entry) {
-  const box = select('[data-application-notice]')
-  box.classList.remove('d-none')
-  box.innerHTML =
-    item.payload.status === 'Application opened'
-      ? `<strong>Application page opened for ${htmlEscape(item.payload.title)}.</strong><div class="mt-2">Submit your application on the external website, then confirm here. <button class="btn btn-sm btn-primary ms-2" data-confirm-application="${item.id}">I submitted it</button> <a href="/applications">View tracker</a></div>`
-      : `<strong>${htmlEscape(item.payload.title)} is tracked as ${htmlEscape(item.payload.status)}.</strong> <a href="/applications">View tracker</a>`
+let applicationFocus: HTMLElement | null = null
+function updateApplicationModal(item: Entry) {
+  const opened = item.payload.status === 'Application opened'
+  select('#application-follow-up-title').textContent = opened ? 'Did you submit your application?' : 'Application tracked'
+  select('[data-application-title]').textContent = item.payload.title
+  select('[data-application-message]').textContent = opened ? 'Complete the application on the source website. If you have submitted it, mark it as Applied here. Otherwise, you can do this later from your tracker.' : `This application is tracked as ${item.payload.status}.`
+  select<HTMLAnchorElement>('[data-application-source]').href = safeUrl(item.payload.url)
+  const submit = select<HTMLButtonElement>('[data-application-submit]')
+  submit.dataset.confirmApplication = String(item.id)
+  submit.classList.toggle('d-none', !opened)
+  select('[data-application-later]').textContent = opened ? 'Not yet' : 'Done'
+  select('[data-application-error]').classList.add('d-none')
+  select('[data-application-success]').classList.toggle('d-none', item.payload.status !== 'Applied')
 }
+function showApplicationModal(item: Entry) {
+  applicationFocus = document.activeElement as HTMLElement
+  updateApplicationModal(item)
+  if (!select('[data-application-modal]').classList.contains('show')) select<HTMLButtonElement>('[data-application-modal-trigger]').click()
+}
+select('[data-application-modal]').addEventListener('hidden.bs.modal', () => {
+  sessionStorage.removeItem('jobify-opened-application')
+  if (applicationFocus?.isConnected) applicationFocus.focus()
+})
 function companyPlaceholder() {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-label="Company logo unavailable"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V4h6v3M8 11h1m6 0h1m-8 4h1m6 0h1"/></svg>'
 }
@@ -669,7 +740,10 @@ function renderSources() {
     ['Cyberbacker', 'Virtual assistance opportunities', 'https://cyberbacker.ph/careers/'],
   ]
   select('[data-job-sources]').innerHTML = sources
-    .map(([name, description, url]) => `<div class="col-md-6 col-xl-4"><div class="card"><div class="card-body"><span class="badge bg-blue-lt mb-2">External search</span><h3>${name}</h3><p class="text-secondary small">${description}</p><a href="${htmlEscape(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm">Open search &nearr;</a></div></div></div>`)
+    .map(
+      ([name, description, url]) =>
+        `<div class="col-md-6 col-xl-4"><div class="card"><div class="card-body"><span class="badge bg-blue-lt mb-2">External search</span><h3>${name}</h3><p class="text-secondary small">${description}</p><a href="${htmlEscape(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm">Open search &nearr;</a></div></div></div>`,
+    )
     .join('')
 }
 async function loadJobs() {
@@ -709,31 +783,29 @@ window.addEventListener('jobify-session', (event) => {
   }
 })
 function initJobSearch() {
-    let searchTimer: ReturnType<typeof setTimeout> | undefined
-    const searchNow = () => {
-      clearTimeout(searchTimer)
-      void loadJobs()
-    }
-    select<HTMLFormElement>('[data-job-search]').addEventListener('submit', (event) => {
-      event.preventDefault()
-      searchNow()
-    })
-    select('#job-source').addEventListener('change', searchNow)
-    select('#job-role').addEventListener('change', renderJobs)
-    select('#job-location').addEventListener('input', () => { renderJobs(); renderSources() })
-    select('#job-query').addEventListener('input', () => {
-      renderSources()
-      clearTimeout(searchTimer)
-      searchTimer = setTimeout(searchNow, 350)
-    })
-    select('#job-employment').addEventListener('change', renderJobs)
-    attachSuggestions(
-      select<HTMLInputElement>('#job-query'),
-      select('#job-query-suggestions'),
-      () => [...jobs.map((job) => job.title), 'Virtual assistant', 'Executive assistant', 'Customer support', 'Software developer', 'Web developer', 'Graphic designer', 'Social media manager', 'Bookkeeper', 'Data entry'],
-      searchNow,
-    )
-    attachSuggestions(select<HTMLInputElement>('#job-location'), select('#job-location-suggestions'), () => [...jobs.flatMap((job) => job.location.split(/[,;]/).map((location) => location.trim())), 'Philippines', 'Manila', 'Cebu', 'Davao', 'Worldwide', 'USA', 'United Kingdom', 'Canada', 'Australia'], renderJobs)
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+  const searchNow = () => {
+    clearTimeout(searchTimer)
+    void loadJobs()
+  }
+  select<HTMLFormElement>('[data-job-search]').addEventListener('submit', (event) => {
+    event.preventDefault()
+    searchNow()
+  })
+  select('#job-source').addEventListener('change', searchNow)
+  select('#job-role').addEventListener('change', renderJobs)
+  select('#job-location').addEventListener('input', () => {
+    renderJobs()
+    renderSources()
+  })
+  select('#job-query').addEventListener('input', () => {
+    renderSources()
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(searchNow, 350)
+  })
+  select('#job-employment').addEventListener('change', renderJobs)
+  attachSuggestions(select<HTMLInputElement>('#job-query'), select('#job-query-suggestions'), () => [...jobs.map((job) => job.title), 'Virtual assistant', 'Executive assistant', 'Customer support', 'Software developer', 'Web developer', 'Graphic designer', 'Social media manager', 'Bookkeeper', 'Data entry'], searchNow)
+  attachSuggestions(select<HTMLInputElement>('#job-location'), select('#job-location-suggestions'), () => [...jobs.flatMap((job) => job.location.split(/[,;]/).map((location) => location.trim())), 'Philippines', 'Manila', 'Cebu', 'Davao', 'Worldwide', 'USA', 'United Kingdom', 'Canada', 'Australia'], renderJobs)
   return loadJobs()
 }
 async function init() {
@@ -760,16 +832,14 @@ async function init() {
   if (view === 'jobs') {
     await initialJobs
     const opened = items.find((i) => i.id === Number(sessionStorage.getItem('jobify-opened-application')))
-    if (opened) showApplicationNotice(opened)
+    if (opened) showApplicationModal(opened)
     const pending = sessionStorage.getItem('jobify-pending-application')
     if (pending && signedIn) {
       try {
         const job = JSON.parse(pending) as Job
         if (safeUrl(job.url)) {
           if (!jobs.some((j) => j.id === job.id)) jobs.unshift(job)
-          const box = select('[data-application-notice]')
-          box.innerHTML = '<strong>Continue your application.</strong> <button class="btn btn-sm btn-primary" data-apply-job="' + htmlEscape(job.id) + '">Open application</button>'
-          box.classList.remove('d-none')
+          showJobDetails(job.id)
         }
       } catch {
         /* Invalid pending entries are ignored. */

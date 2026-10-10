@@ -16,7 +16,7 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
         respond(['items' => $items]);
     }
     if ($method !== 'POST') respond(['error' => 'Method not allowed'], 405);
-    if (isset($_SERVER['HTTP_ORIGIN']) && $_SERVER['HTTP_ORIGIN'] !== $config['app_url']) respond(['error' => 'Invalid origin'], 403);
+    if (!isSameOriginRequest()) respond(['error' => 'Invalid origin'], 403);
     if (!hash_equals($_SESSION['csrf'], $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) respond(['error' => 'Session expired. Refresh and try again.'], 403);
     if (!str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')) respond(['error' => 'JSON required'], 415);
     $raw = file_get_contents('php://input', false, null, 0, 16385);
