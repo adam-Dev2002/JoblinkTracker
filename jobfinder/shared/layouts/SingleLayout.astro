@@ -1,5 +1,6 @@
 ---
 import BaseLayout from './BaseLayout.astro'
+import CopyrightNotice from '@shared/components/CopyrightNotice.astro'
 import Logo from '@shared/components/navbar/Logo.astro'
 
 interface Props {
@@ -24,6 +25,7 @@ const { title, containerSize = 'tight', hideLogo } = Astro.props
       }
 
       <slot />
+      <CopyrightNotice />
     </div>
   </main>
   <!-- END PAGE BODY -->

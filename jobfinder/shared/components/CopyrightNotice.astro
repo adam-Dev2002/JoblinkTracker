@@ -1,0 +1,5 @@
+---
+import { site } from '@shared/lib/site'
+const year = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'numeric' }).format(new Date())
+---
+<footer class="text-secondary small text-center px-3 py-3">? {year} {site.copyrightOwner}. All rights reserved.</footer>

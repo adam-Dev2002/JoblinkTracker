@@ -6,6 +6,7 @@ const version = corePackage.version
 
 export const site = {
   title: 'Joblink',
+  copyrightOwner: 'Joblink',
   version,
   docsUrl: 'https://docs.tabler.io',
   cdnUrl: `https://cdn.jsdelivr.net/npm/@tabler/core@${version}`,
