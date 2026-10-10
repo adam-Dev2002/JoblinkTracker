@@ -281,12 +281,12 @@ function showJobDetails(id: string) {
     .join('')
   const logo = select('[data-details-logo]')
   logo.replaceChildren()
-  logo.textContent = Array.from(job.company)[0] || 'J'
+  logo.innerHTML = companyPlaceholder()
   if (safeUrl(job.logo)) {
     const image = document.createElement('img')
     image.src = safeUrl(job.logo)
     image.alt = job.company + ' logo'
-    image.style.cssText = 'width:100%;height:100%;object-fit:contain;background:white;border-radius:inherit'
+    image.style.cssText = 'width:100%;height:100%;object-fit:contain;background:white;padding:4px;border-radius:inherit'
     image.addEventListener('load', () => logo.replaceChildren(image), { once: true })
   }
   const source = select('[data-details-source]')
@@ -634,6 +634,9 @@ function showApplicationNotice(item: Entry) {
       ? `<strong>Application page opened for ${htmlEscape(item.payload.title)}.</strong><div class="mt-2">Submit your application on the external website, then confirm here. <button class="btn btn-sm btn-primary ms-2" data-confirm-application="${item.id}">I submitted it</button> <a href="/applications">View tracker</a></div>`
       : `<strong>${htmlEscape(item.payload.title)} is tracked as ${htmlEscape(item.payload.status)}.</strong> <a href="/applications">View tracker</a>`
 }
+function companyPlaceholder() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-label="Company logo unavailable"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V4h6v3M8 11h1m6 0h1m-8 4h1m6 0h1"/></svg>'
+}
 function renderJobs() {
   const role = select<HTMLSelectElement>('#job-role').value,
     location = select<HTMLInputElement>('#job-location').value.trim().toLowerCase(),
@@ -644,7 +647,7 @@ function renderJobs() {
     list
       .map(
         (j) =>
-          `<div class="col-md-6 col-xl-4"><div class="card job-card" data-job-card="${htmlEscape(j.id)}" tabindex="0" aria-label="Read description for ${htmlEscape(j.title)}" style="cursor:pointer"><div class="card-body d-flex flex-column"><div class="d-flex align-items-center gap-3 mb-3"><span class="avatar bg-white border position-relative" style="flex-shrink:0;width:48px;height:48px"><span data-company-initial>${htmlEscape(Array.from(j.company)[0] || 'J')}</span>${safeUrl(j.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(j.logo))}" alt="${htmlEscape(j.company)} logo" loading="lazy" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:white;padding:4px;border-radius:inherit" />` : ''}</span><div style="min-width:0"><div class="fw-semibold">${htmlEscape(j.company)}</div><span class="text-secondary small" data-job-location>${htmlEscape(j.location)}</span></div></div><h3 class="job-title"><button class="job-title-link" data-job-details="${htmlEscape(j.id)}">${htmlEscape(j.title)}</button></h3><button class="job-details-link" data-job-details="${htmlEscape(j.id)}">Read job description &rarr;</button><div class="d-flex flex-wrap gap-2 mt-2 mb-3"><span class="job-tag">${htmlEscape(j.role)}</span><span class="job-tag">${htmlEscape(j.workMode)}</span><span class="job-tag">${htmlEscape(j.employmentType || 'Not specified')}</span>${j.salary ? `<span class="job-tag">${htmlEscape(j.salary)}</span>` : ''}</div><p class="text-secondary small">Source: <a href="${htmlEscape(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer">${htmlEscape(j.source)}</a>${j.date ? ' | ' + htmlEscape(j.date.slice(0, 10)) : ''}</p><div class="d-flex gap-2 mt-auto"><a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${htmlEscape(j.id)}">${j.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a><button class="btn" data-track="${htmlEscape(j.id)}" aria-label="Save ${htmlEscape(j.title)}">Save</button></div></div></div></div>`,
+          `<div class="col-md-6 col-xl-4"><div class="card job-card" data-job-card="${htmlEscape(j.id)}" tabindex="0" aria-label="Read description for ${htmlEscape(j.title)}" style="cursor:pointer"><div class="card-body d-flex flex-column"><div class="d-flex align-items-center gap-3 mb-3"><span class="avatar bg-white border rounded-3 position-relative text-blue" style="flex-shrink:0;width:48px;height:48px"><span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(j.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(j.logo))}" alt="${htmlEscape(j.company)} logo" loading="lazy" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:white;padding:4px;border-radius:inherit" />` : ''}</span><div style="min-width:0"><div class="fw-semibold">${htmlEscape(j.company)}</div><span class="text-secondary small" data-job-location>${htmlEscape(j.location)}</span></div></div><h3 class="job-title"><button class="job-title-link" data-job-details="${htmlEscape(j.id)}">${htmlEscape(j.title)}</button></h3><button class="job-details-link" data-job-details="${htmlEscape(j.id)}">Read job description &rarr;</button><div class="d-flex flex-wrap gap-2 mt-2 mb-3"><span class="job-tag">${htmlEscape(j.role)}</span><span class="job-tag">${htmlEscape(j.workMode)}</span><span class="job-tag">${htmlEscape(j.employmentType || 'Not specified')}</span>${j.salary ? `<span class="job-tag">${htmlEscape(j.salary)}</span>` : ''}</div><p class="text-secondary small">Source: <a href="${htmlEscape(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer">${htmlEscape(j.source)}</a>${j.date ? ' | ' + htmlEscape(j.date.slice(0, 10)) : ''}</p><div class="d-flex gap-2 mt-auto"><a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${htmlEscape(j.id)}">${j.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a><button class="btn" data-track="${htmlEscape(j.id)}" aria-label="Save ${htmlEscape(j.title)}">Save</button></div></div></div></div>`,
       )
       .join('') || `<div class="col-12">${empty('No matching roles or locations. Try broader filters or search the official sources below.')}</div>`
   root.querySelectorAll<HTMLImageElement>('[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
@@ -653,6 +656,8 @@ function renderSources() {
   const q = select<HTMLInputElement>('#job-query').value || 'virtual assistant',
     encoded = encodeURIComponent(q),
     location = select<HTMLInputElement>('#job-location').value.trim() || 'Philippines'
+  const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(q + ' jobs ' + location)}`
+  select<HTMLAnchorElement>('[data-google-job-search]').href = googleSearchUrl
   const sources: [string, string, string][] = [
     ['Google job search', 'Search jobs and company career pages across the web', `https://www.google.com/search?q=${encodeURIComponent(q + ' jobs ' + location)}`],
     ['Indeed PH', 'Philippine jobs across industries', `https://ph.indeed.com/jobs?q=${encoded}&l=Philippines`],

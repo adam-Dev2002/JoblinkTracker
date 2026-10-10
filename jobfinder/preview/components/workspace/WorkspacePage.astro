@@ -2,6 +2,7 @@
 import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
 import Icon from '@ui/Icon.astro'
 import NewsExperience from '../news/NewsExperience.astro'
+import GoogleJobSearch from '../jobs/GoogleJobSearch.astro'
 interface Props {
   view: string
   title: string
@@ -157,6 +158,8 @@ const desk = [
                       </label>
                       <select class="form-select" id="job-source" name="source">
                         <>
+                          <option value="all">All free job feeds</option>
+                          <option value="jobicy">Jobicy - remote jobs</option>
                           <option value="remotive">Remotive - free remote jobs</option>
                           <option value="arbeitnow">Arbeitnow - free Europe jobs</option>
                           {process.env.JSEARCH_API_KEY && <option value="jsearch">JSearch - connected feed</option>}
@@ -225,6 +228,7 @@ const desk = [
                   </>
                 </div>
               </div>
+              <GoogleJobSearch />
               <div class="alert alert-info d-none" data-application-notice role="status" />
             </>
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -555,7 +559,7 @@ const desk = [
     <div class="jobify-modal d-none job-details-overlay" role="dialog" aria-modal="true" aria-labelledby="job-details-title" data-job-details-modal>
       <section class="card job-details-panel">
         <div class="card-header d-flex justify-content-between"><span class="text-secondary small">JOB DETAILS</span><button class="btn btn-icon" aria-label="Close job details" data-job-close><Icon name="x" /></button></div><div class="card-body">
-          <div class="d-flex gap-3 align-items-center mb-3"><span class="avatar bg-primary-lt" data-details-logo></span><div><h2 id="job-details-title" class="mb-1" data-details-title></h2><div class="text-secondary" data-details-company></div></div></div><div class="d-flex flex-wrap gap-2 mb-4" data-details-tags>
+          <div class="d-flex gap-3 align-items-center mb-3"><span class="avatar bg-white border rounded-3 text-blue" data-details-logo></span><div><h2 id="job-details-title" class="mb-1" data-details-title></h2><div class="text-secondary" data-details-company></div></div></div><div class="d-flex flex-wrap gap-2 mb-4" data-details-tags>
           </div><h3>Job description</h3><div class="job-description-copy" data-details-description></div><div class="small text-secondary border-top pt-3 mt-4" data-details-source></div>
         </div><div class="card-footer d-flex flex-wrap gap-2 justify-content-between">
           <button class="btn" data-job-close>Back to results</button><div class="d-flex gap-2"><button class="btn" data-details-save>Save job</button><a class="btn btn-primary" data-details-apply target="_blank" rel="noopener noreferrer">Apply</a></div>
