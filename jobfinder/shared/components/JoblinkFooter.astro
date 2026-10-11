@@ -31,10 +31,10 @@ const year = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'num
 
 <style>
   .joblink-footer { background: #fff; border-top: 1px solid #e5eaf1; color: #172d40; margin-top: 48px; }
-  .footer-inner { width: min(100%, 1140px); margin: 0 auto; padding: 56px 24px 28px; }
-  h2 { margin: 0 0 40px; max-width: 850px; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; line-height: 1.35; letter-spacing: -.025em; }
+  .footer-inner { box-sizing: border-box; width: 100%; max-width: 1140px; margin-inline: auto; padding: 56px 24px 100px; text-align: center; }
+  h2 { margin: 0 auto 40px; max-width: 850px; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; line-height: 1.35; letter-spacing: -.025em; text-wrap: balance; }
   h2 span { background: #d7efff; padding: 0 .12em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-  .footer-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+  .footer-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; max-width: 560px; margin-inline: auto; }
   h3 { margin: 0 0 16px; font-size: .875rem; font-weight: 700; letter-spacing: .035em; }
   ul { list-style: none; margin: 0; padding: 0; }
   a { color: #536273; text-decoration: none; overflow-wrap: anywhere; }
@@ -43,7 +43,7 @@ const year = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'num
   a:focus-visible { outline: 2px solid #066fd1; outline-offset: 4px; border-radius: 2px; }
   .footer-copyright { margin-top: 36px; padding-top: 24px; border-top: 1px solid #edf1f5; font-size: .8rem; color: #68788a; text-align: center; }
   @media (max-width: 575px) {
-    .footer-inner { padding: 36px 20px 100px; }
+    .footer-inner { padding: 36px 20px calc(100px + env(safe-area-inset-bottom, 0px)); }
     h2 { margin-bottom: 28px; }
     .footer-columns { grid-template-columns: 1fr; gap: 24px; }
     .footer-copyright { margin-top: 28px; }
