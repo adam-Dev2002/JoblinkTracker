@@ -9,6 +9,11 @@ export const site = {
   googleSearchEngineId: 'a0303a067c89c4c3d',
   copyrightOwner: 'Adam',
   copyrightOwnerUrl: 'https://adam-portfolio-jade.vercel.app/',
+  socialLinks: [
+    { label: 'GitHub', href: 'https://github.com/adam-Dev2002' },
+    { label: 'LinkedIn', href: 'https://www.linkedin.com/in/adam-romas' },
+    { label: 'Portfolio', href: 'https://adam-portfolio-jade.vercel.app/' },
+  ],
   version,
   docsUrl: 'https://docs.tabler.io',
   cdnUrl: `https://cdn.jsdelivr.net/npm/@tabler/core@${version}`,

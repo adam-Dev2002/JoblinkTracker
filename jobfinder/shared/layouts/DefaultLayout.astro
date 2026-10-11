@@ -1,6 +1,6 @@
 ---
 import BaseLayout from './BaseLayout.astro'
-import CopyrightNotice from '@shared/components/CopyrightNotice.astro'
+import JoblinkFooter from '@shared/components/JoblinkFooter.astro'
 import Logo from '@shared/components/navbar/Logo.astro'
 import Icon from '@ui/Icon.astro'
 import AccountMenu from '@shared/components/navbar/AccountMenu.astro'
@@ -71,7 +71,7 @@ const groups = [
         <div class="d-flex justify-content-between align-items-start gap-3 mb-4"><div><div class="text-secondary small mb-1">MAKE ROOM FOR YOUR NEXT CHAPTER</div><h1 class="mb-1">{title}</h1>{description && <p class="text-secondary mb-0">{description}</p>}</div><div><slot name="page-header-actions" /></div></div><slot
         />
       </main>
-      <CopyrightNotice />
+      <JoblinkFooter />
     </div>
   </div>
 </BaseLayout>

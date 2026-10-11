@@ -2,7 +2,7 @@
 import BaseLayout from '@shared/layouts/BaseLayout.astro'
 import Logo from '@shared/components/navbar/Logo.astro'
 import Icon from '@ui/Icon.astro'
-import CopyrightNotice from '@shared/components/CopyrightNotice.astro'
+import JoblinkFooter from '@shared/components/JoblinkFooter.astro'
 const features = [
   { title: 'Find your next role', description: 'Search job opportunities and keep the roles you want to pursue in one place.', href: '/job-listing', icon: 'search', action: 'Find work' },
   { title: 'Keep applications moving', description: 'Track your applications, follow-ups, and interviews from your own workspace.', href: '/applications', icon: 'briefcase', action: 'Open application tracker' },
@@ -45,7 +45,7 @@ const features = [
         </div>
       </section>
     </main>
-    <footer class="container pb-4 text-center"><CopyrightNotice /></footer>
+    <JoblinkFooter />
     <a class="landing-assistant" href="/sign-in?returnTo=%2Fdashboard" aria-label="Open Joblink assistant" data-astro-prefetch><Icon name="sparkles" /> Ask Joblink</a>
   </div>
 </BaseLayout>

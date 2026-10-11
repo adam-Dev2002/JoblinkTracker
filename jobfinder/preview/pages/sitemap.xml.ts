@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
 
 export const prerender = false
-const publicPages = ['/', '/sign-in', '/sign-up']
+const publicPages = ['/', '/faq', '/sign-in', '/sign-up']
 const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 export const GET: APIRoute = ({ url }) => {
   const origin = (process.env.APP_URL || url.origin).replace(/\/$/, '')

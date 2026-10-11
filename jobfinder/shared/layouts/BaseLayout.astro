@@ -29,7 +29,7 @@ interface Props {
 }
 
 const { title, pageLibs = [], bodyClass, rtl = false, base = '.', description, themeSettings = {}, workspace = false, assistant = true, publicStyles = false } = Astro.props
-const appPage = /^\/(?:$|dashboard(?:\/|$)|sign-in(?:\/|$)|sign-up(?:\/|$)|settings(?:\/|$)|account(?:\/|$)|job-listing(?:\/|$)|applications(?:\/|$)|news(?:\/|$)|desk(?:\/|$))/.test(Astro.url.pathname)
+const appPage = publicStyles || /^\/(?:$|dashboard(?:\/|$)|sign-in(?:\/|$)|sign-up(?:\/|$)|settings(?:\/|$)|account(?:\/|$)|job-listing(?:\/|$)|applications(?:\/|$)|news(?:\/|$)|desk(?:\/|$))/.test(Astro.url.pathname)
 const publicPage = publicStyles
 const initialSession = (Astro.locals as { joblinkSession?: Session }).joblinkSession
 const cssPlugins = appPage ? (workspace ? ['themes', 'vendors'] : ['themes']) : site.cssPlugins
@@ -155,7 +155,7 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
           location.replace(`/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`)
         }
       })
-      if (!document.querySelector('[data-public-landing]'))
+      if (!document.querySelector('[data-public-landing], [data-public-info]'))
         void getSession().catch(() => { /* Page controls provide connection retry. */ })
     </script>
 
