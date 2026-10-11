@@ -84,7 +84,7 @@ const desk = [
           <div class="row g-4">
             <>
               <div class="col-lg-8">
-                <div class="card" data-dashboard-application-table>
+                <div class="card" data-dashboard-application-panel>
                   <>
                     <div class="card-header d-flex justify-content-between">
                       <>
@@ -578,6 +578,57 @@ const desk = [
 </script>
 
 <style is:global>
+  .dashboard-application-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+  }
+  .dashboard-application-item .avatar { flex-shrink: 0; }
+  .dashboard-application-copy { flex: 1; min-width: 0; }
+  .dashboard-application-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+  }
+  .dashboard-application-title:hover { color: var(--tblr-primary); }
+  .dashboard-application-title:focus-visible {
+    outline: 2px solid var(--tblr-primary);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+  .dashboard-application-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .dashboard-application-meta span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .dashboard-application-meta time { white-space: nowrap; }
+  .dashboard-application-status {
+    max-width: 9rem;
+    flex-shrink: 0;
+    white-space: normal;
+    line-height: 1.4;
+  }
+  @media (max-width: 575px) {
+    .dashboard-application-item { padding: 12px 16px; }
+    .dashboard-application-status { max-width: 6rem; }
+  }
   .application-suggestions {
     max-height: 320px;
   }

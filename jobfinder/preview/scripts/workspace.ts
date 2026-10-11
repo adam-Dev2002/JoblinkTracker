@@ -14,7 +14,7 @@ let selectedApplicationId: number | null = null
 const applicationSelection = new Set<number>()
 let sheetPage = 1
 const workspaceRowsPerPage = 10
-const dashboardRowsPerPage = 7
+const dashboardApplicationsPerPage = 7
 let deletingSheetRows = false
 let sheetWriteQueue: Promise<void> = Promise.resolve()
 type Entry = { id: number; kind: Kind; attachments?: Attachment[]; payload: Record<string, string> & { title: string; company: string; url: string; salary: string; status: string; notes: string; date: string; time: string; value: string } }
@@ -111,13 +111,16 @@ function render() {
   if (view === 'dashboard') {
     const stats: Record<string, number> = { applications: apps.filter((i) => !['Saved', 'Application opened'].includes(i.payload.status)).length, interviews: apps.filter((i) => i.payload.status === 'Interview').length, tasks: tasks.filter((i) => i.payload.status !== 'Done').length, events: events.length }
     for (const [key, value] of Object.entries(stats)) select(`[data-stat="${key}"]`).textContent = String(value)
-    dashboardApplicationPage = Math.min(dashboardApplicationPage, Math.max(1, Math.ceil(apps.length / dashboardRowsPerPage)))
-    renderPagination(select('[data-dashboard-pagination]'), apps.length, dashboardApplicationPage, 'data-dashboard-page', 'applications', false, dashboardRowsPerPage)
+    dashboardApplicationPage = Math.min(dashboardApplicationPage, Math.max(1, Math.ceil(apps.length / dashboardApplicationsPerPage)))
+    renderPagination(select('[data-dashboard-pagination]'), apps.length, dashboardApplicationPage, 'data-dashboard-page', 'applications', false, dashboardApplicationsPerPage)
     select('[data-dashboard-applications]').innerHTML = apps.length
-      ? `<div class="table-responsive"><table class="table mb-0"><tbody>${apps
-          .slice((dashboardApplicationPage - 1) * dashboardRowsPerPage, dashboardApplicationPage * dashboardRowsPerPage)
-          .map((item) => `<tr><td><strong>${htmlEscape(item.payload.title)}</strong><div class="text-secondary small">${htmlEscape(item.payload.company)}</div></td><td><span class="badge bg-primary-lt">${htmlEscape(item.payload.status)}</span></td><td>${htmlEscape(item.payload.date)}</td></tr>`)
-          .join('')}</tbody></table></div>`
+      ? `<ul class="list-group list-group-flush dashboard-application-list" aria-label="Recent applications">${apps
+          .slice((dashboardApplicationPage - 1) * dashboardApplicationsPerPage, dashboardApplicationPage * dashboardApplicationsPerPage)
+          .map((item) => {
+            const initials = (item.payload.company || item.payload.title).trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase()
+            return `<li class="list-group-item dashboard-application-item" data-dashboard-application="${item.id}"><span class="avatar bg-secondary-lt rounded-3" aria-hidden="true">${htmlEscape(initials)}</span><div class="dashboard-application-copy"><button type="button" class="dashboard-application-title" data-edit="${item.id}" title="${htmlEscape(item.payload.title)}" aria-label="Edit application ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.title)}</button><div class="dashboard-application-meta text-secondary"><span>${htmlEscape(item.payload.company || 'Company not specified')}</span>${item.payload.date ? `<time datetime="${htmlEscape(item.payload.date)}">${htmlEscape(item.payload.date)}</time>` : ''}</div></div><span class="badge bg-secondary-lt dashboard-application-status">${htmlEscape(item.payload.status)}</span></li>`
+          })
+          .join('')}</ul>`
       : empty('Your applications will appear here. Start with Find work or add one to your tracker.')
     select('[data-dashboard-tasks]').innerHTML =
       tasks
@@ -501,7 +504,7 @@ async function handleClick(event: Event) {
     if (target.dataset.dashboardPage) {
       dashboardApplicationPage = Number(target.dataset.dashboardPage)
       render()
-      select('[data-dashboard-application-table]').scrollIntoView({ block: 'start' })
+      select('[data-dashboard-application-panel]').scrollIntoView({ block: 'start' })
       root.querySelector<HTMLButtonElement>(`[data-dashboard-page="${dashboardApplicationPage}"]`)?.focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-clear-filters')) {
