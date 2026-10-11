@@ -135,7 +135,7 @@ if (loginRedirect) return loginRedirect
     try {
       await request('logout', {})
       clearProfile()
-      location.assign('/sign-in')
+      location.assign('/sign-in?returnTo=%2Fsettings')
     } catch (e) {
       fail(e)
     }

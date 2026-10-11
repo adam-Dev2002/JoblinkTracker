@@ -1,5 +1,23 @@
 {
   "framework": "astro",
   "installCommand": "cd .. && pnpm install --frozen-lockfile --config.symlink=true --config.store-dir=/tmp/joblink-pnpm-store",
-  "buildCommand": "pnpm --dir ../core build && pnpm build"
+  "buildCommand": "pnpm --dir ../core build && pnpm build",
+  "headers": [
+    {
+      "source": "/_astro/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/static/joblink-mark-:size.png",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }]
+    },
+    {
+      "source": "/dist/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }]
+    },
+    {
+      "source": "/preview/css/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }]
+    }
+  ]
 }

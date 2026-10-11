@@ -11,7 +11,8 @@ let admin
 export function db(){if(!admin){if(!env('SUPABASE_URL')||!env('SUPABASE_SECRET_KEY'))fail(503,'Cloud database is not configured.');admin=createClient(env('SUPABASE_URL'),env('SUPABASE_SECRET_KEY'),{auth:{persistSession:false,autoRefreshToken:false}})}return admin}
 export async function query(promise){const {data,error}=await promise;if(error){if(error.code==='23505')fail(409,'This account or entry already exists.');throw new Error('Cloud database operation failed: '+error.code)}return data}
 export function cookie(request,name){const value=(request.headers.get('cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(name+'='));return value?decodeURIComponent(value.slice(name.length+1)):''}
-export function cookieValue(name,value,maxAge=7200){return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${appUrl().startsWith('https:')?'; Secure':''}`}
+export const SESSION_MAX_AGE = 30 * 24 * 60 * 60
+export function cookieValue(name,value,maxAge=SESSION_MAX_AGE){return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${appUrl().startsWith('https:')?'; Secure':''}`}
 export function json(data,status=200,cookies=[]){const headers=new Headers({'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});for(const cookie of cookies)headers.append('Set-Cookie',cookie);return new Response(JSON.stringify(data),{status,headers})}
 export function redirect(path,cookies=[]){const headers=new Headers({'Location':appUrl()+path,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});for(const value of cookies)headers.append('Set-Cookie',value);return new Response(null,{status:303,headers})}
 export function csrf(request){const value=cookie(request,'joblink_csrf');return /^[a-f0-9]{64}$/.test(value)?value:random()}
@@ -20,8 +21,19 @@ export async function body(request,limit=16384){if(!request.headers.get('content
 export const safeUrl=value=>{if(typeof value!=='string')return '';try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)?url.href:''}catch{return ''}}
 export function googlePhoto(value){const url=safeUrl(value);if(!url)return null;const parsed=new URL(url);return parsed.protocol==='https:'&&!parsed.username&&!parsed.password&&!parsed.port&&(parsed.hostname==='googleusercontent.com'||parsed.hostname.endsWith('.googleusercontent.com'))?url:null}
 export function publicUser(row){return {id:Number(row.id),name:row.name,email:row.email,provider:row.google_sub?'google':'email',emailVerified:row.email_verified,avatarUrl:row.google_sub?googlePhoto(row.avatar_url):null}}
-export async function current(request,required=false){const token=cookie(request,'joblink_session');if(!/^[a-f0-9]{64}$/.test(token)){if(required)fail(401,'Please sign in.');return null}const session=await query(db().from('joblink_sessions').select('user_id,expires_at').eq('token_hash',digest(token)).maybeSingle());if(!session||Date.parse(session.expires_at)<=Date.now()){if(required)fail(401,'Please sign in again.');return null}const user=await query(db().from('users').select('*').eq('id',session.user_id).maybeSingle());if(!user&&required)fail(401,'Please sign in again.');if(user)await query(db().from('joblink_sessions').update({expires_at:new Date(Date.now()+7200000).toISOString()}).eq('token_hash',digest(token)));return user}
-export async function signIn(user,request){const old=cookie(request,'joblink_session');if(/^[a-f0-9]{64}$/.test(old))await query(db().from('joblink_sessions').delete().eq('token_hash',digest(old)));const token=random(),csrfToken=random();await query(db().from('joblink_sessions').insert({token_hash:digest(token),user_id:user.id,csrf_token:csrfToken,expires_at:new Date(Date.now()+7200000).toISOString()}));return {cookies:[cookieValue('joblink_session',token),cookieValue('joblink_csrf',csrfToken)],csrf:csrfToken}}
+export async function current(request,required=false){
+ const token=cookie(request,'joblink_session');
+ if(!/^[a-f0-9]{64}$/.test(token)){if(required)fail(401,'Please sign in.');return null}
+ const session=await query(db().from('joblink_sessions').select('expires_at,users(*)').eq('token_hash',digest(token)).maybeSingle());
+ if(!session||Date.parse(session.expires_at)<=Date.now()){if(required)fail(401,'Please sign in again.');return null}
+ const user=session.users;
+ if(!user&&required)fail(401,'Please sign in again.');
+ // Renew at most once per day instead of writing on every authorized request.
+ if(user&&Date.parse(session.expires_at)-Date.now()<(SESSION_MAX_AGE-86400)*1000)
+  await query(db().from('joblink_sessions').update({expires_at:new Date(Date.now()+SESSION_MAX_AGE*1000).toISOString()}).eq('token_hash',digest(token)));
+ return user
+}
+export async function signIn(user,request){const old=cookie(request,'joblink_session');if(/^[a-f0-9]{64}$/.test(old))await query(db().from('joblink_sessions').delete().eq('token_hash',digest(old)));const token=random(),csrfToken=random();await query(db().from('joblink_sessions').insert({token_hash:digest(token),user_id:user.id,csrf_token:csrfToken,expires_at:new Date(Date.now()+SESSION_MAX_AGE*1000).toISOString()}));return {cookies:[cookieValue('joblink_session',token),cookieValue('joblink_csrf',csrfToken)],csrf:csrfToken}}
 export async function owned(userId,table='workspace_items'){let rows=[];for(let page=0;page<3;page++){const batch=await query(db().from(table).select('*').eq('user_id',userId).order('id',{ascending:false}).range(page*1000,page*1000+999));rows.push(...batch);if(batch.length<1000)break}return rows}
 export async function limit(key,max=20){const used=await query(db().rpc('joblink_hit_limit',{p_key:digest(key),p_window:Math.floor(Date.now()/900000)}));return Number(used)>max}
 export function seal(data){if(env('SESSION_SECRET').length<32)fail(503,'Server session secret is not configured.');const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',createHash('sha256').update(env('SESSION_SECRET')).digest(),iv);const bytes=Buffer.concat([cipher.update(JSON.stringify(data)),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),bytes]).toString('base64url')}

@@ -1,0 +1,71 @@
+---
+import BaseLayout from '@shared/layouts/BaseLayout.astro'
+import Logo from '@shared/components/navbar/Logo.astro'
+import Icon from '@ui/Icon.astro'
+import CopyrightNotice from '@shared/components/CopyrightNotice.astro'
+const features = [
+  { title: 'Find your next role', description: 'Search job opportunities and keep the roles you want to pursue in one place.', href: '/job-listing', icon: 'search', action: 'Find work' },
+  { title: 'Keep applications moving', description: 'Track your applications, follow-ups, and interviews from your own workspace.', href: '/applications', icon: 'briefcase', action: 'Open application tracker' },
+  { title: 'Plan your next step', description: 'Organize tasks and make time for interviews with your task board and calendar.', href: '/desk/taskboard', icon: 'calendar', action: 'Explore planning tools' },
+]
+---
+
+<BaseLayout title="Find work. Move forward." description="Discover JobLink: find opportunities, track applications, and organize your job search.">
+  <div data-public-landing>
+    <header class="container py-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <Logo />
+      <nav aria-label="Main navigation" class="d-flex gap-2">
+        <a class="btn" href="/sign-in">Sign in</a>
+        <a class="btn btn-primary" href="/sign-up">Create an account</a>
+      </nav>
+    </header>
+    <main id="content" class="container pb-5">
+      <section class="landing-hero text-center" aria-labelledby="landing-title">
+        <p class="text-primary fw-bold mb-3">YOUR NEXT OPPORTUNITY STARTS HERE</p>
+        <h1 id="landing-title">Find work.<br />Move forward.</h1>
+        <p class="landing-intro text-secondary">Your job search and daily work, in one place. Discover opportunities, keep track of applications, and plan what comes next with JobLink.</p>
+        <a class="btn btn-primary btn-lg" href="/job-listing"><Icon name="search" /> Find work</a>
+        <p class="text-secondary small mt-3 mb-0">Sign in or create an account when you’re ready to get started.</p>
+      </section>
+      <section aria-labelledby="features-title">
+        <h2 id="features-title" class="text-center mb-4">A little progress, every day.</h2>
+        <div class="row g-3">
+          {features.map(feature => (
+            <div class="col-md-4">
+              <article class="card h-100">
+                <div class="card-body p-4 d-flex flex-column align-items-start">
+                  <span class="avatar bg-primary-lt mb-3"><Icon name={feature.icon} /></span>
+                  <h3 class="h2">{feature.title}</h3>
+                  <p class="text-secondary">{feature.description}</p>
+                  <a class="mt-auto fw-semibold" href={feature.href}>{feature.action} <Icon name="arrow-right" /></a>
+                </div>
+              </article>
+            </div>
+          ))}
+        </div>
+      </section>
+    </main>
+    <footer class="container pb-4 text-center"><CopyrightNotice /></footer>
+  </div>
+</BaseLayout>
+
+<style>
+  .landing-hero { padding: clamp(3rem, 8vw, 7rem) 0; }
+  .landing-hero h1 { font-size: clamp(2.75rem, 7vw, 5rem); line-height: 1.08; letter-spacing: -.04em; }
+  .landing-intro { max-width: 620px; margin: 1.5rem auto 2rem; font-size: 1.2rem; line-height: 1.6; }
+</style>
+
+<script>
+  import { getSession } from '@shared/lib/client-session'
+  if (document.querySelector('[data-public-landing]')) {
+    void getSession().then(session => {
+      if (session.user) location.replace('/job-listing')
+    }).catch(() => { /* Visitors can still read the landing page if the account service is unavailable. */ })
+    document.addEventListener('click', event => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-ai-open]')) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      location.assign('/sign-in?returnTo=%2F')
+    }, true)
+  }
+</script>

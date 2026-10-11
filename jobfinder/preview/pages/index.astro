@@ -1,9 +1,10 @@
 ﻿---
 import WorkspacePage from '../components/workspace/WorkspacePage.astro'
-import { redirectToLogin } from '../server/page-auth.mjs'
+import LandingPage from '../components/LandingPage.astro'
+import { current } from '../server/core.mjs'
 export const prerender = false
-const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
-if (loginRedirect) return loginRedirect
+Astro.response.headers.set('Cache-Control', 'no-store')
+const user = await current(Astro.request)
 ---
 
-<WorkspacePage view="dashboard" title="Dashboard" description="Your job search and daily work, in one place." />
+{user ? <WorkspacePage view="dashboard" title="Dashboard" description="Your job search and daily work, in one place." /> : <LandingPage />}

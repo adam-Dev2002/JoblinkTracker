@@ -7,13 +7,16 @@ header('Referrer-Policy: no-referrer');
 ini_set('display_errors', '0');
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
-ini_set('session.gc_maxlifetime', '7200');
+ini_set('session.gc_maxlifetime', (string) SESSION_MAX_AGE);
 $runtime = __DIR__ . '/runtime';
 if (!is_dir($runtime)) mkdir($runtime, 0700, true);
 session_save_path($runtime);
 session_name('jobscanner_session');
-session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $config['cookie_secure'], 'httponly' => true, 'samesite' => 'Lax']);
+session_set_cookie_params(['lifetime' => SESSION_MAX_AGE, 'path' => '/', 'secure' => $config['cookie_secure'], 'httponly' => true, 'samesite' => 'Lax']);
 session_start();
+if (!empty($_SESSION['user_id'])) {
+    setcookie(session_name(), session_id(), ['expires' => time() + SESSION_MAX_AGE, 'path' => '/', 'secure' => $config['cookie_secure'], 'httponly' => true, 'samesite' => 'Lax']);
+}
 $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];

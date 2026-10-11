@@ -10,8 +10,7 @@ const register = mode === 'register'
 
 <div class="card card-md" data-jobify-auth={mode}>
   <div class="card-body">
-    <div class="text-center text-primary fw-bold mb-2">Joblink</div>
-    <h1 class="h2 text-center mb-4">{mode === 'account' ? 'Your account' : register ? 'Create your account' : 'Welcome back'}</h1>
+    {mode !== 'login' && <h1 class="h2 text-center mb-4">{mode === 'account' ? 'Your account' : 'Create your account'}</h1>}
     <div class="alert alert-danger d-none" role="alert" data-auth-error></div>
     <p class="text-secondary small text-center" role="status" data-auth-loading>Checking your session...</p>
     <button class="btn btn-sm d-none mb-3" type="button" data-auth-retry>Retry connection</button>
@@ -39,7 +38,7 @@ const register = mode === 'register'
           </button>
         </div>
       ) : (
-        <div data-auth-content>
+        <div class="d-none" data-auth-content>
           <a href="/api/auth/google" class="btn w-100 mb-3" data-google>
             <Icon name="brand-google" />
             Continue with Google
@@ -149,7 +148,7 @@ const register = mode === 'register'
         root.querySelector('[data-account]')!.classList.remove('d-none')
       } else {
         if (session.user) {
-          location.replace('/job-listing')
+          location.replace(returnTo)
           return
         }
         root.querySelector('[data-auth-content]')!.classList.remove('d-none')

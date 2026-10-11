@@ -14,7 +14,7 @@ Run from the project root:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-preview.ps1
 ```
 
-Open http://localhost:3000/sign-up or http://localhost:3000/sign-in. The Astro preview proxies `/api/auth` to a PHP service bound to `127.0.0.1:8081`. The database contains user profiles, password hashes, Google identity IDs, and rate-limit counters. PHP sessions use HttpOnly, SameSite cookies and expire after two hours of inactivity. Accounts registered by email are not marked email-verified.
+Open http://localhost:3000/sign-up or http://localhost:3000/sign-in. The Astro preview proxies `/api/auth` to a PHP service bound to `127.0.0.1:8081`. The database contains user profiles, password hashes, Google identity IDs, and rate-limit counters. PHP sessions use HttpOnly, SameSite cookies and persist across browser restarts and expire after 30 days of inactivity. Accounts registered by email are not marked email-verified.
 
 ## Google configuration
 

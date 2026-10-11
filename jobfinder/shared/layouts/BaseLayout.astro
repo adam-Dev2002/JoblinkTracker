@@ -26,6 +26,8 @@ interface Props {
 }
 
 const { title, pageLibs = [], bodyClass, rtl = false, base = '.', description, themeSettings = {}, workspace = false } = Astro.props
+const appPage = /^\/(?:$|sign-in(?:\/|$)|sign-up(?:\/|$)|settings(?:\/|$)|account(?:\/|$)|job-listing(?:\/|$)|applications(?:\/|$)|news(?:\/|$)|desk(?:\/|$))/.test(Astro.url.pathname)
+const cssPlugins = appPage ? (workspace ? ['themes', 'vendors'] : ['themes']) : site.cssPlugins
 
 // The page's own layout, in the switcher's vocabulary: rendered before the theme
 // script runs, so a page keeps its variant until the visitor chooses otherwise.
@@ -65,7 +67,7 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     <title>{title ? `${title} - ` : ''}{site.title} - {site.descriptionShort}</title>
     <meta name="description" content={description ?? site.descriptionShort} />
 
-    <link rel="icon" href={`${base}/static/joblink-mark.png`} type="image/png" />
+    <link rel="icon" href={`${base}/static/joblink-mark-32.png`} type="image/png" />
     <!-- END META -->
 
     {
@@ -85,7 +87,7 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     <!-- END GLOBAL MANDATORY STYLES -->
 
     <!-- BEGIN PLUGINS STYLES -->
-    {site.cssPlugins.map((plugin) => <link href={`${base}/dist/css/tabler-${plugin}${rtlSuffix}${min}.css`} rel="stylesheet" />)}
+    {cssPlugins.map((plugin) => <link href={`${base}/dist/css/tabler-${plugin}${rtlSuffix}${min}.css`} rel="stylesheet" />)}
     <!-- END PLUGINS STYLES -->
 
     <!-- BEGIN DEMO STYLES -->
@@ -117,11 +119,9 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
     <slot />
 
     <PageModals />
-    <div class:list={[/^\/(?:sign-in|sign-up)(?:\/|$)/.test(Astro.url.pathname) && 'd-none']}>
-      <AssistantWidget />
-    </div>
+    {!/^\/(?:sign-in|sign-up)(?:\/|$)/.test(Astro.url.pathname) && <AssistantWidget />}
 
-    {!workspace && <ThemeSettings />}
+    {!workspace && !appPage && <ThemeSettings />}
 
     {
       libJsFiles(false).length > 0 && (
@@ -144,10 +144,8 @@ const libJsFiles = (head: boolean) => pageLibEntries.filter(([, lib]) => Boolean
       import { getSession, type SessionUser } from '@shared/lib/client-session'
       window.addEventListener('jobify-session', (event) => {
         const user = (event as CustomEvent<SessionUser | null>).detail
-        if (user && /^\/(?:sign-in|sign-up)(?:\/|$)/.test(location.pathname)) {
-          location.replace('/job-listing')
-        } else if (!user && document.body.dataset.sessionRequired === 'true') {
-          location.replace('/sign-in')
+        if (!user && document.body.dataset.sessionRequired === 'true') {
+          location.replace(`/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`)
         }
       })
       void getSession().catch(() => { /* Page controls provide connection retry. */ })

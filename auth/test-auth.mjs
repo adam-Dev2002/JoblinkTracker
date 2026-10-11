@@ -156,7 +156,7 @@ try {
     .waitFor({ state: "visible" });
   await page.getByLabel("Password", { exact: true }).fill(nextPassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL("**/job-listing", { waitUntil: "domcontentloaded" });
+  await page.waitForURL("**/settings", { waitUntil: "domcontentloaded" });
   await page.goto("/sign-in", { waitUntil: "domcontentloaded" });
   await page.waitForURL("**/job-listing", { waitUntil: "domcontentloaded" });
   await page.goto("/sign-up", { waitUntil: "domcontentloaded" });

@@ -58,9 +58,10 @@ function googleAvatarUrl(mixed $value): ?string {
     $host = strtolower($url['host'] ?? '');
     return $url && ($url['scheme'] ?? '') === 'https' && !isset($url['user']) && !isset($url['pass']) && !isset($url['port']) && ($host === 'googleusercontent.com' || str_ends_with($host, '.googleusercontent.com')) ? $value : null;
 }
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 function currentUser(PDO $pdo): ?array {
     if (empty($_SESSION['user_id'])) return null;
-    if (time() - ($_SESSION['last_active'] ?? 0) > 7200) {
+    if (time() - ($_SESSION['last_active'] ?? 0) > SESSION_MAX_AGE) {
         session_regenerate_id(true);
         $_SESSION = ['csrf' => bin2hex(random_bytes(32))];
         return null;

@@ -1,10 +1,15 @@
-import { current } from './core.mjs'
+import { current, cookie, cookieValue } from './core.mjs'
+import { safeReturnTo } from './return-to.mjs'
 
 export async function redirectSignedIn(request, isPrerendered) {
   if (isPrerendered || !(await current(request))) return null
   return new Response(null, {
     status: 302,
-    headers: { 'Location': '/job-listing', 'Cache-Control': 'no-store' },
+    headers: {
+      'Location': safeReturnTo(new URL(request.url).searchParams.get('returnTo')),
+      'Cache-Control': 'no-store',
+      'Set-Cookie': cookieValue('joblink_session', cookie(request, 'joblink_session')),
+    },
   })
 }
 
