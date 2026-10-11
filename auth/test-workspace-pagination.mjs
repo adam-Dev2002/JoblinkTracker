@@ -138,12 +138,14 @@ try {
   await page.locator('[data-ready=true]').waitFor();
   const dashboardPager = page.locator('[data-dashboard-pagination]');
   const dashboardReads = readRequests;
-  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 10);
+  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 7);
   await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).click();
-  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 10);
+  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 7);
   await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).click();
-  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 2);
-  assert.match(await dashboardPager.innerText(), /Showing 21–22 of 22 applications/);
+  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 7);
+  await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).click();
+  assert.equal(await page.locator('[data-dashboard-applications] tbody tr').count(), 1);
+  assert.match(await dashboardPager.innerText(), /Showing 22–22 of 22 applications/);
   assert.equal(await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).isDisabled(), true);
   assert.equal(readRequests, dashboardReads, 'Dashboard pages reuse the loaded workspace');
   await page.goto("/applications");
@@ -422,7 +424,7 @@ try {
   assert.equal(await pager().isVisible(), false, 'Exactly 10 rows fit on one page');
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: shared 10-row Bootstrap pagination on Applications, Sheet and dashboard, table counts, no page refetch, filters/sort, edit preservation, cross-page selection, queued cell save, delete clamping, CSV and mobile layout.",
+    "PASS: 10-row pagination on Applications/Sheet and 7-row dashboard pagination, table counts, no page refetch, filters/sort, edit preservation, cross-page selection, queued cell save, delete clamping, CSV and mobile layout.",
   );
 } finally {
   await browser.close();

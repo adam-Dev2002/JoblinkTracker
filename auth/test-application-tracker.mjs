@@ -159,7 +159,7 @@ try {
   assert.equal(await page.getByRole('menuitem', { name: 'Mark as applied' }).isVisible(), true);
   await assertMenuHighlight(menu.locator('[data-table-delete]'), 'danger', menu.locator('[data-table-edit]'));
   assert.equal(await menu.locator('[data-table-mark]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)', 'The initially focused action loses its highlight when another option is hovered');
-  await assertMenuHighlight(menu.locator('[data-table-edit]'), 'primary', menu.locator('[data-table-delete]'));
+  await assertMenuHighlight(menu.locator('[data-table-edit]'), 'hover-bg', menu.locator('[data-table-delete]'));
   await page.getByRole('menuitem', { name: 'Mark as applied' }).click();
   await page.locator('[data-workspace-error]').filter({ hasText: 'Fixture save failed' }).waitFor();
   assert.equal(items[0].payload.status, 'Application opened', 'Failed updates keep the original status');
