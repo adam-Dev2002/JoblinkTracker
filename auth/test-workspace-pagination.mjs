@@ -136,26 +136,17 @@ try {
   });
   await page.goto('/dashboard');
   await page.locator('[data-ready=true]').waitFor();
-  const dashboardPager = page.locator('[data-dashboard-pagination]');
-  const dashboardReads = readRequests;
   assert.equal(await page.locator('[data-dashboard-applications] table').count(), 0, 'Recent applications use a list, not a table');
   assert.equal(await page.locator('[data-dashboard-application]').count(), 7);
+  assert.deepEqual(await page.locator('[data-dashboard-application]').evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('data-dashboard-application')))), [22, 21, 20, 19, 18, 17, 16], 'Only the seven latest applications appear');
+  assert.equal(await page.locator('[data-dashboard-application-panel] .pagination, [data-dashboard-pagination]').count(), 0, 'Recent applications have no paginator');
+  assert.doesNotMatch(await page.locator('[data-dashboard-application-panel]').innerText(), /Showing \d|of \d+ applications/);
   await page.getByRole('button', { name: 'Edit application Application 22', exact: true }).click();
   await page.locator('[data-entry-modal]').waitFor({ state: 'visible' });
   assert.equal(await page.getByLabel('Title / role', { exact: true }).inputValue(), 'Application 22');
   await page.locator('[data-entry-modal]').getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
   await page.locator('[data-dashboard-application-panel]').screenshot({ path: 'auth/runtime/dashboard-applications-list-desktop.png' });
-  await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).click();
-  assert.equal(await page.locator('[data-dashboard-application]').count(), 7);
-  await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).click();
-  assert.equal(await page.locator('[data-dashboard-application]').count(), 7);
-  await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).click();
-  assert.equal(await page.locator('[data-dashboard-application]').count(), 1);
-  assert.match(await dashboardPager.innerText(), /Showing 22–22 of 22 applications/);
-  assert.equal(await dashboardPager.getByRole('button', { name: 'Next page', exact: true }).isDisabled(), true);
-  assert.equal(readRequests, dashboardReads, 'Dashboard pages reuse the loaded workspace');
-  await dashboardPager.getByRole('button', { name: 'Page 1', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.sidebar-close').evaluate(button => button.click());
   await page.waitForTimeout(300);
@@ -438,7 +429,7 @@ try {
   assert.equal(await pager().isVisible(), false, 'Exactly 10 rows fit on one page');
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: 10-row pagination on Applications/Sheet and 7-row dashboard pagination, table counts, no page refetch, filters/sort, edit preservation, cross-page selection, queued cell save, delete clamping, CSV and mobile layout.",
+    "PASS: latest seven dashboard applications without pagination/count details; 10-row table pagination, filters/sort, selection, queued saves, CSV and mobile layout.",
   );
 } finally {
   await browser.close();
