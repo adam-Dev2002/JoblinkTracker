@@ -1,0 +1,69 @@
+---
+import Icon from '@ui/Icon.astro'
+interface Props { kind: 'application' | 'sheet' }
+const { kind } = Astro.props
+const application = kind === 'application'
+---
+<div class="workspace-row-menu" id="workspace-row-menu" popover="auto" role="menu" aria-label={application ? 'Application actions' : 'Sheet row actions'} data-workspace-row-menu data-application-actions-menu={application ? true : undefined}>
+  {application && <button type="button" class="dropdown-item" role="menuitem" data-table-mark><Icon name="check" class="workspace-action-icon" />Mark as applied</button>}
+  <button type="button" class="dropdown-item" role="menuitem" data-table-edit><Icon name="edit" class="workspace-action-icon" />{application ? 'Edit application' : 'Edit row / attachments'}</button>
+  <div class="dropdown-divider" role="separator"></div>
+  <button type="button" class="dropdown-item text-danger" role="menuitem" data-table-delete><Icon name="trash" class="workspace-action-icon" />{application ? 'Delete application' : 'Delete row'}</button>
+</div>
+<style is:global>
+  .workspace-row-menu .workspace-action-icon,
+  .workspace-table-selection .workspace-action-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: inherit;
+  }
+  .workspace-table-selection .dropdown-item { gap: 10px; }
+  .workspace-row-actions {
+    color: var(--tblr-primary);
+    font-weight: 600;
+    border-color: var(--tblr-primary);
+    background: var(--tblr-bg-surface);
+  }
+  .workspace-row-actions:hover,
+  .workspace-row-actions:focus-visible,
+  .workspace-row-actions[aria-expanded='true'] {
+    color: var(--tblr-primary);
+    background: var(--tblr-primary-lt);
+  }
+  .workspace-row-menu {
+    position: fixed;
+    inset: auto;
+    width: 240px;
+    max-width: calc(100vw - 24px);
+    margin: 0;
+    padding: 4px 0;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-bg-surface);
+    color: var(--tblr-body-color);
+    box-shadow: 0 10px 30px #18385420;
+    font-size: 14px;
+  }
+  .workspace-row-menu:popover-open { display: block; }
+  .workspace-row-menu .dropdown-item {
+    gap: 10px;
+    min-height: 40px;
+    padding: 0.5rem 1rem;
+    border-radius: 0;
+    transition: none;
+  }
+  .workspace-row-menu .dropdown-divider {
+    margin: 0.25rem 0;
+    border-top: 1px solid var(--tblr-border-color);
+  }
+  .workspace-row-menu .dropdown-item:hover,
+  .workspace-row-menu .dropdown-item:focus {
+    background: var(--tblr-primary);
+    color: var(--tblr-primary-fg) !important;
+  }
+  .workspace-row-menu .dropdown-item:focus-visible {
+    outline: 2px solid var(--tblr-primary);
+    outline-offset: -2px;
+  }
+</style>

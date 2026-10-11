@@ -1,0 +1,111 @@
+---
+import Icon from '@ui/Icon.astro'
+import WorkspaceRowMenu from './WorkspaceRowMenu.astro'
+interface Props {
+  kind: 'application' | 'sheet'
+  title: string
+  addLabel: string
+}
+const { kind, title, addLabel } = Astro.props
+const application = kind === 'application'
+---
+
+<div class="card overflow-visible workspace-table" data-application-table={application ? true : undefined} data-sheet-table={!application ? true : undefined}>
+  <div class="card-header workspace-table-header">
+    <h3 class="card-title mb-0">{title}</h3>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn" data-export={kind}>Export CSV</button>
+      <button type="button" class="btn btn-primary" data-add={kind}><Icon name="plus" />{addLabel}</button>
+    </div>
+  </div>
+  <div class="card-body border-bottom workspace-table-toolbar">
+    <div class="workspace-table-controls"><slot name="toolbar" /></div>
+  </div>
+  <slot name="selection" />
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover mb-0 workspace-data-table">
+      <thead><tr><slot name="columns" /></tr></thead>
+      <tbody data-application-rows={application ? true : undefined} data-sheet-rows={!application ? true : undefined} />
+    </table>
+  </div>
+  <div data-application-empty={application ? true : undefined} data-sheet-empty={!application ? true : undefined} />
+  <nav class="card-footer d-none workspace-pagination" aria-label={application ? 'Application pages' : 'Sheet pages'} data-application-pagination={application ? true : undefined} data-sheet-pagination={!application ? true : undefined} />
+  <slot name="footer" />
+</div>
+<WorkspaceRowMenu kind={kind} />
+
+<style is:global>
+  .workspace-table {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .workspace-table-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px;
+  }
+  .workspace-table-header .card-title { font-size: 16px; }
+  .workspace-table-toolbar { padding: 20px; }
+  .workspace-table-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+  .workspace-table-controls .workspace-table-search {
+    flex: 1 1 300px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .workspace-table .btn,
+  .workspace-table .form-control,
+  .workspace-table .form-select {
+    min-height: 40px;
+    font-size: 14px;
+  }
+  .workspace-table .workspace-filter-menu {
+    min-width: 260px;
+    max-width: calc(100vw - 32px);
+  }
+  .workspace-table-selection {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--tblr-border-color);
+    background: var(--tblr-primary-lt);
+  }
+  .workspace-data-table {
+    width: 100%;
+    min-width: 1280px;
+    table-layout: fixed;
+    font-size: 14px;
+  }
+  .workspace-data-table > thead > tr > th {
+    padding: 14px 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .workspace-data-table > tbody > tr { height: 80px; }
+  .workspace-data-table > tbody > tr > td {
+    padding: 18px 20px;
+    overflow-wrap: anywhere;
+  }
+  .workspace-data-table .table-col-select { width: 60px; }
+  .workspace-data-table .table-col-index { width: 64px; }
+  .workspace-data-table .table-col-date { width: 124px; }
+  .workspace-data-table .table-col-title { width: 260px; }
+  .workspace-data-table .table-col-company { width: 168px; }
+  .workspace-data-table .table-col-value { width: 128px; }
+  .workspace-data-table .table-col-status { width: 220px; }
+  .workspace-data-table .table-col-notes { width: 200px; }
+  .workspace-data-table .table-col-attachments { width: 220px; }
+  .workspace-data-table .table-col-actions { width: 120px; text-align: right; }
+  .workspace-data-table .form-check-input { margin: 0; }
+  .workspace-data-table [data-sheet-field] { min-width: 0; width: 100%; }
+  .workspace-table .card-footer { padding: 16px 20px; }
+  @media (max-width: 575px) {
+    .workspace-table-controls .workspace-table-search { flex-basis: 100%; }
+    .workspace-table-header, .workspace-table-toolbar { padding: 16px; }
+  }
+</style>

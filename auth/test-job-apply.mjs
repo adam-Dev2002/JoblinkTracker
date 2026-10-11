@@ -143,7 +143,7 @@ try {
       });
     } else await route.continue();
   });
-  await p.getByRole("button", { name: "I submitted it", exact: true }).click();
+  await p.getByRole("button", { name: "Mark as applied", exact: true }).click();
   await p
     .locator("[data-application-error]")
     .filter({ hasText: "Test save failure" })
@@ -153,7 +153,7 @@ try {
       .payload.status,
     "Application opened",
   );
-  await p.getByRole("button", { name: "I submitted it", exact: true }).click();
+  await p.getByRole("button", { name: "Mark as applied", exact: true }).click();
   await p.locator("[data-application-success]").waitFor({ state: "visible" });
   await p
     .locator("[data-application-modal]")

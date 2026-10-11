@@ -2,13 +2,17 @@
 import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
 import Icon from '@ui/Icon.astro'
 import NewsExperience from '../news/NewsExperience.astro'
-import GoogleJobSearch from '../jobs/GoogleJobSearch.astro'
+import WorkspaceTable from './WorkspaceTable.astro'
+import { site } from '@shared/lib/site'
+import { classifications } from '../../scripts/google-job-query'
 interface Props {
   view: string
   title: string
   description: string
 }
 const { view, title, description } = Astro.props
+const configuredGoogleEngine = process.env.GOOGLE_SEARCH_ENGINE_ID || site.googleSearchEngineId
+const googleEngineId = /^[a-zA-Z0-9:_-]{1,100}$/.test(configuredGoogleEngine) ? configuredGoogleEngine : ''
 const desk = [
   ['taskboard', 'Task board'],
   ['calendar', 'Calendar'],
@@ -18,7 +22,7 @@ const desk = [
 ---
 
 <DefaultLayout title={title} description={description}>
-  <div data-workspace-view={view} aria-busy="true">
+  <div data-workspace-view={view} data-google-engine-id={view === 'jobs' ? googleEngineId : undefined} aria-busy="true">
     <p class="text-secondary small" role="status" data-workspace-loading>Loading your workspace...</p>
     <div class="alert alert-danger d-none workspace-error" role="alert" data-workspace-error></div>
     {
@@ -80,7 +84,7 @@ const desk = [
           <div class="row g-4">
             <>
               <div class="col-lg-8">
-                <div class="card">
+                <div class="card" data-dashboard-application-table>
                   <>
                     <div class="card-header d-flex justify-content-between">
                       <>
@@ -89,6 +93,7 @@ const desk = [
                       </>
                     </div>
                     <div data-dashboard-applications />
+                    <nav class="card-footer d-none workspace-pagination" aria-label="Recent application pages" data-dashboard-pagination />
                   </>
                 </div>
               </div>
@@ -138,27 +143,33 @@ const desk = [
             <div class="card-body">
               <form class="row g-3" data-job-search>
                 <>
-                  <div class="col-md-6">
+                  <div class="col-md-8">
                     <>
                       <label class="form-label" for="job-query">
                         Role or keyword
                       </label>
                       <div class="position-relative">
                         <>
-                          <input class="form-control" id="job-query" name="q" placeholder="Virtual assistant, developer, marketing " maxlength="120" />
+                          <div class="input-group">
+                            <button type="submit" class="input-group-text" aria-label="Search jobs" title="Search jobs">
+                              <Icon name="search" />
+                            </button>
+                            <input type="search" class="form-control" id="job-query" name="q" placeholder="Search jobs, companies, or skills" maxlength="120" />
+                          </div>
                           <div class="search-suggestions d-none" id="job-query-suggestions" role="listbox" aria-label="Job role suggestions" />
                         </>
                       </div>
                     </>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-4">
                     <>
                       <label class="form-label" for="job-source">
                         Search feed
                       </label>
                       <select class="form-select" id="job-source" name="source">
                         <>
-                          <option value="all">All free job feeds</option>
+                          <option value="all">All job listings</option>
+                          <option value="google">Google · job sites</option>
                           <option value="jobicy">Jobicy - remote jobs</option>
                           <option value="remotive">Remotive - free remote jobs</option>
                           <option value="arbeitnow">Arbeitnow - free Europe jobs</option>
@@ -167,21 +178,9 @@ const desk = [
                       </select>
                     </>
                   </div>
-                  <div class="col-md-3">
-                    <>
-                      <label class="form-label" for="job-role">
-                        Classify by role
-                      </label>
-                      <select class="form-select" id="job-role">
-                        <option value="">All roles</option>
-                        {['Virtual assistance', 'Development & IT', 'Design & creative', 'Customer support', 'Sales & marketing', 'Finance & operations', 'Other roles'].map((role) => (
-                          <option>{role}</option>
-                        ))}
-                      </select>
-                    </>
-                  </div>
                 </>
               </form>
+              <p class="form-hint mt-2 mb-0">Search job listings by role, company, or skill. All job listings includes Google job-site results when you search.</p>
             </div>
           </div>
           <>
@@ -191,7 +190,7 @@ const desk = [
                   <>
                     <div class="row g-3">
                       <>
-                        <div class="col-md-5">
+                        <div class="col-md-6 col-xl-4">
                           <>
                             <label class="form-label" for="job-location">
                               Place or location
@@ -204,7 +203,7 @@ const desk = [
                             </div>
                           </>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6 col-xl-3">
                           <>
                             <label class="form-label" for="job-employment">
                               Employment type
@@ -217,29 +216,86 @@ const desk = [
                             </select>
                           </>
                         </div>
+                        <div class="col-md-6 col-xl-2">
+                          <label class="form-label" for="job-listing-time">
+                            Listing time
+                          </label>
+                          <select class="form-select" id="job-listing-time">
+                            <option value="">Any time</option>
+                            <option value="1">Last 24 hours</option>
+                            <option value="3">Last 3 days</option>
+                            <option value="7">Last 7 days</option>
+                            <option value="14">Last 14 days</option>
+                            <option value="30">Last 30 days</option>
+                          </select>
+                        </div>
+                        <div class="col-md-6 col-xl-3">
+                          <label class="form-label" for="job-classification">
+                            Classification
+                          </label>
+                          <select class="form-select" id="job-classification">
+                            <option value="">All classifications</option>
+                            {classifications.map((classification) => (
+                              <option>{classification}</option>
+                            ))}
+                          </select>
+                        </div>
                       </>
                     </div>
-                    <p class="form-hint mt-2 mb-0">Filter the loaded results by location and employment type. Types not provided by the source are shown as Not specified.</p>
+                    <p class="form-hint mt-2 mb-0">Filter listings by location, employment type, listing time, and classification. Google filters refine the search; confirm job details and listing dates on the original website.</p>
                   </>
                 </div>
               </div>
-              <GoogleJobSearch />
             </>
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <>
-                <h2 class="mb-0">Explore opportunities</h2>
-                <span class="text-secondary small" data-job-count />
-              </>
-            </div>
-            <p class="text-secondary small" data-feed-message>
-              Loading the live job feed
-            </p>
-            <div class="row g-3 mb-4" data-job-results />
-          </>
-          <>
-            <h2 class="mb-2">Search more job sites</h2>
-            <p class="text-secondary">These searches open Google, job boards, or agency websites in a new tab. Listings from these searches are not imported into Joblink.</p>
-            <div class="row g-3" data-job-sources />
+            <section class="border rounded-3 p-3 p-md-4 mb-4 job-results-panel" aria-labelledby="job-results-title">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <>
+                  <h2 class="mb-0" id="job-results-title">
+                    Explore opportunities
+                  </h2>
+                  <span class="text-secondary small" data-job-count />
+                </>
+              </div>
+              <p class="text-secondary small" data-feed-message>
+                Loading the live job feed
+              </p>
+              <div class="card border mb-3 job-selection-toolbar" data-job-selection-toolbar>
+                <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                  <div class="d-flex flex-wrap align-items-center gap-3 job-selection-summary">
+                    <label class="form-check mb-0">
+                      <input class="form-check-input" type="checkbox" data-job-select-all disabled />
+                      <span class="form-check-label">Select up to 50 new jobs</span>
+                      <span class="form-hint" data-job-selection-scope>
+                        Across all pages
+                      </span>
+                    </label>
+                    <span class="text-secondary small" data-job-selected-count role="status">
+                      0 selected · Max 50
+                    </span>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 job-selection-actions">
+                    <button type="button" class="btn btn-primary btn-sm" data-job-bulk-save disabled>
+                      <Icon name="bookmark" />
+                      Save selected
+                    </button>
+                    <button type="button" class="btn btn-sm" data-job-bulk-export disabled>
+                      <Icon name="download" />
+                      Export selected
+                    </button>
+                    <button type="button" class="btn btn-sm" data-job-clear-selection disabled>
+                      Clear selection
+                    </button>
+                  </div>
+                </div>
+                <div class="card-footer small d-none" data-job-bulk-status role="status" aria-live="polite" />
+              </div>
+              <div class="row g-3" data-job-results />
+              <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
+              <div class="d-none google-jobs-results" data-google-jobs aria-busy="false">
+                <p class="text-secondary small" data-google-jobs-status role="status" aria-live="polite" />
+                <div data-google-jobs-host />
+              </div>
+            </section>
           </>
         </>
       )
@@ -267,53 +323,53 @@ const desk = [
               </div>
             ))}
           </div>
-          <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
-            <>
-              <div class="d-flex gap-2 flex-grow-1">
-                <>
-                  <input class="form-control" placeholder="Search company, role or notes" aria-label="Search applications" data-item-search />
-                  <select class="form-select w-auto" aria-label="Filter application status" data-status-filter>
+          <WorkspaceTable kind="application" title="Tracked applications" addLabel="Add application">
+            <Fragment slot="toolbar">
+              <div class="position-relative workspace-table-search">
+                <input type="search" class="form-control" placeholder="Search your tracked jobs" aria-label="Search applications" data-item-search />
+                <div class="search-suggestions d-none application-suggestions" id="application-search-suggestions" role="listbox" aria-label="Tracked jobs" data-application-suggestions />
+              </div>
+              <div class="dropdown">
+                <button type="button" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Filter" data-application-filter-toggle>Filter <span class="badge bg-primary-lt d-none ms-1" data-application-filter-badge /></button>
+                <div class="dropdown-menu dropdown-menu-end p-3 workspace-filter-menu">
+                  <label class="form-label" for="application-status-filter">Status</label>
+                  <select id="application-status-filter" class="form-select mb-3" aria-label="Filter application status" data-status-filter>
                     <option value="">All statuses</option>
-                    {['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].map((status) => (
-                      <option>{status}</option>
-                    ))}
+                    {['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].map((status) => <option>{status}</option>)}
                   </select>
-                </>
+                  <label class="form-label" for="application-company-filter">Company</label>
+                  <select id="application-company-filter" class="form-select" aria-label="Filter application company" data-application-company><option value="">All companies</option></select>
+                  <button type="button" class="btn w-100 mt-3" data-application-clear-filters>Clear filters</button>
+                </div>
               </div>
-              <button class="btn" data-export="application">
-                Export CSV
-              </button>
-              <button class="btn btn-primary" data-add="application">
-                <Icon name="plus" />
-                Add application
-              </button>
-            </>
-          </div>
-          <div class="card">
-            <>
-              <div class="table-responsive">
-                <table class="table table-vcenter mb-0">
-                  <>
-                    <thead>
-                      <tr>
-                        <>
-                          <th>Date</th>
-                          <th>Role</th>
-                          <th>Company</th>
-                          <th>Salary</th>
-                          <th>Status</th>
-                          <th>Notes</th>
-                          <th>Actions</th>
-                        </>
-                      </tr>
-                    </thead>
-                    <tbody data-application-rows />
-                  </>
-                </table>
+              <div class="dropdown">
+                <button type="button" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" data-application-sort-toggle>Sort by</button>
+                <div class="dropdown-menu dropdown-menu-end p-3 workspace-filter-menu">
+                  <label class="form-label" for="application-sort">Order applications</label>
+                  <select id="application-sort" class="form-select" aria-label="Sort applications" data-application-sort>
+                    <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Role A–Z</option><option value="company">Company A–Z</option><option value="status">Status A–Z</option>
+                  </select>
+                </div>
               </div>
-              <div data-application-empty />
-            </>
-          </div>
+              <span class="small text-secondary ms-sm-auto" role="status" data-application-filter-count />
+            </Fragment>
+            <div slot="selection" class="workspace-table-selection d-none" data-application-selection-toolbar>
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="fw-semibold" role="status" data-application-selected-count />
+                <div class="dropdown ms-auto">
+                  <button type="button" class="btn btn-white" data-bs-toggle="dropdown" aria-expanded="false">Selected actions</button>
+                  <div class="dropdown-menu dropdown-menu-end">
+                    <button type="button" class="dropdown-item" data-application-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
+                    <button type="button" class="dropdown-item" data-application-clear-selection><Icon name="x" class="workspace-action-icon" />Clear selection</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <Fragment slot="columns">
+              <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select all filtered applications across pages" data-application-all /></th>
+              <th class="table-col-date">Date</th><th class="table-col-title">Role</th><th class="table-col-company">Company</th><th class="table-col-value">Salary</th><th class="table-col-status">Status</th><th class="table-col-notes">Notes</th><th class="table-col-actions">Actions</th>
+            </Fragment>
+          </WorkspaceTable>
         </>
       )
     }
@@ -408,152 +464,59 @@ const desk = [
     {
       view === 'sheet' && (
         <section aria-label="Sheet workspace">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-            <>
-              <div class="d-flex align-items-center gap-2">
-                <>
-                  <span class="small text-secondary" data-sheet-count />
-                </>
-              </div>
-              <div class="d-flex gap-2">
-                <>
-                  <button class="btn btn-sm" data-export="sheet">
-                    Export CSV
-                  </button>
-                  <button class="btn btn-sm btn-primary" data-add="sheet">
-                    Add row
-                  </button>
-                </>
-              </div>
-            </>
-          </div>
-          <div class="card overflow-visible">
-            <div class="card-header d-flex flex-wrap gap-2 justify-content-between">
-              <>
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                  <>
-                    <input class="form-check-input m-0" type="checkbox" aria-label="Select all visible sheet rows" data-sheet-all />
-                    <span class="small text-secondary">Select rows</span>
-                    <button class="btn btn-sm" data-sheet-select>
-                      Select all visible
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" data-sheet-bulk disabled>
-                      Delete selected (0)
-                    </button>
-                    <button class="btn btn-sm" data-sheet-clear-selection disabled>
-                      Clear selection
-                    </button>
-                    <span class="small text-secondary" role="status" data-sheet-selected-count />
-                  </>
+          <WorkspaceTable kind="sheet" title="Workspace sheet" addLabel="Add row">
+            <Fragment slot="toolbar">
+              <div class="position-relative workspace-table-search"><input type="search" class="form-control" placeholder="Search your sheet rows" aria-label="Search sheet" data-sheet-search /></div>
+              <div class="dropdown">
+                <button type="button" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Filter">Filter <span class="badge bg-primary-lt d-none ms-1" data-sheet-filter-badge /></button>
+                <div class="dropdown-menu dropdown-menu-end p-3 workspace-filter-menu">
+                  <label class="form-label" for="sheet-attachment-filter">Attachments</label>
+                  <select id="sheet-attachment-filter" class="form-select mb-3" aria-label="Filter sheet rows" data-sheet-filter><option value="all">All rows</option><option value="files">With attachments</option><option value="images">With pictures</option><option value="none">Without attachments</option></select>
+                  <label class="form-label" for="sheet-company-filter">Company / category</label>
+                  <select id="sheet-company-filter" class="form-select" aria-label="Filter sheet company" data-sheet-company><option value="">All companies / categories</option></select>
+                  <button type="button" class="btn w-100 mt-3" data-sheet-clear-filters>Clear filters</button>
                 </div>
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                  <input class="form-control form-control-sm" style="width:220px;max-width:100%" placeholder="Search rows..." aria-label="Search sheet" data-sheet-search />
-                  <div class="dropdown">
-                    <>
-                      <button class="btn btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                        Filter
-                      </button>
-                      <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:260px">
-                        <>
-                          <label class="form-label">Attachments</label>
-                          <select class="form-select form-select-sm mb-3" aria-label="Filter sheet rows" data-sheet-filter>
-                            <>
-                              <option value="all">All rows</option>
-                              <option value="files">With attachments</option>
-                              <option value="images">With pictures</option>
-                              <option value="none">Without attachments</option>
-                            </>
-                          </select>
-                          <label class="form-label">Company / category</label>
-                          <select class="form-select form-select-sm" aria-label="Filter sheet company" data-sheet-company>
-                            <option value="">All companies / categories</option>
-                          </select>
-                          <button class="btn btn-sm mt-3" data-sheet-clear-filters>
-                            Clear filters
-                          </button>
-                        </>
-                      </div>
-                    </>
-                  </div>
-                  <div class="dropdown">
-                    <>
-                      <button class="btn btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                        Sort
-                      </button>
-                      <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:230px">
-                        <>
-                          <label class="form-label">Order rows</label>
-                          <select class="form-select form-select-sm" aria-label="Sort sheet" data-sheet-sort>
-                            <>
-                              <option value="newest">Newest first</option>
-                              <option value="oldest">Oldest first</option>
-                              <option value="title">Title A-Z</option>
-                              <option value="company">Company A-Z</option>
-                            </>
-                          </select>
-                        </>
-                      </div>
-                    </>
-                  </div>
-                  <div class="dropdown">
-                    <>
-                      <button class="btn btn-sm rounded-pill" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                        Columns
-                      </button>
-                      <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:220px">
-                        <div class="fw-semibold mb-2">Show columns</div>
-                        {[
-                          ['company', 'Company'],
-                          ['value', 'Value'],
-                          ['notes', 'Notes'],
-                          ['attachments', 'Attachments'],
-                        ].map(([value, label]) => (
-                          <label class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" checked value={value} data-sheet-column-toggle />
-                            <span class="form-check-label">{label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </>
+              </div>
+              <div class="dropdown">
+                <button type="button" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Sort by</button>
+                <div class="dropdown-menu dropdown-menu-end p-3 workspace-filter-menu">
+                  <label class="form-label" for="sheet-sort">Order rows</label>
+                  <select id="sheet-sort" class="form-select" aria-label="Sort sheet" data-sheet-sort><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option><option value="company">Company A–Z</option></select>
+                </div>
+              </div>
+              <div class="dropdown">
+                <button type="button" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Columns</button>
+                <div class="dropdown-menu dropdown-menu-end p-3 workspace-filter-menu">
+                  <div class="fw-semibold mb-3">Show columns</div>
+                  {[
+                    ['company', 'Company'], ['value', 'Value'], ['notes', 'Notes'], ['attachments', 'Attachments'],
+                  ].map(([value, label]) => <label class="form-check mb-2"><input class="form-check-input" type="checkbox" checked value={value} data-sheet-column-toggle /><span class="form-check-label">{label}</span></label>)}
+                </div>
+              </div>
+              <span class="small text-secondary ms-sm-auto" role="status" data-sheet-count />
+            </Fragment>
+            <div slot="selection" class="workspace-table-selection d-none" data-sheet-selection-toolbar>
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="fw-semibold" role="status" data-sheet-selected-count />
+                <div class="dropdown ms-auto">
+                  <button type="button" class="btn btn-white" data-bs-toggle="dropdown" aria-expanded="false">Selected actions</button>
+                  <div class="dropdown-menu dropdown-menu-end">
+                    <button type="button" class="dropdown-item" data-sheet-select><Icon name="checkbox" class="workspace-action-icon" />Select all results</button>
+                    <button type="button" class="dropdown-item" data-sheet-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
+                    <button type="button" class="dropdown-item" data-sheet-clear-selection disabled><Icon name="x" class="workspace-action-icon" />Clear selection</button>
+                    <div class="dropdown-divider" />
+                    <button type="button" class="dropdown-item text-danger" data-sheet-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-sheet-bulk-label>Delete selected (0)</span></button>
                   </div>
                 </div>
-              </>
+              </div>
             </div>
-            <>
-              <div class="table-responsive">
-                <table class="table table-vcenter table-hover table-bordered mb-0">
-                  <>
-                    <thead>
-                      <tr>
-                        <>
-                          <th style="width:42px" />
-                          <th style="width:44px">#</th>
-                          <th>Title / role</th>
-                          <th data-sheet-column="company">Company / category</th>
-                          <th data-sheet-column="value">Value</th>
-                          <th data-sheet-column="notes">Notes</th>
-                          <th data-sheet-column="attachments">Attachments</th>
-                          <th>Actions</th>
-                        </>
-                      </tr>
-                    </thead>
-                    <tbody data-sheet-rows />
-                  </>
-                </table>
-              </div>
-              <div data-sheet-empty />
-              <div class="card-footer bg-transparent">
-                <>
-                  <button class="btn btn-sm btn-link p-0" data-add="sheet">
-                    + New row
-                  </button>
-                  <span class="small text-secondary ms-3" role="status" data-sheet-save-status>
-                    Changes save when you leave a cell.
-                  </span>
-                </>
-              </div>
-            </>
-          </div>
+            <Fragment slot="columns">
+              <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select all filtered sheet rows across pages" data-sheet-all /></th><th class="table-col-index">#</th><th class="table-col-title">Title / role</th><th class="table-col-company" data-sheet-column="company">Company / category</th><th class="table-col-value" data-sheet-column="value">Value</th><th class="table-col-notes" data-sheet-column="notes">Notes</th><th class="table-col-attachments" data-sheet-column="attachments">Attachments</th><th class="table-col-actions">Actions</th>
+            </Fragment>
+            <div slot="footer" class="card-footer bg-transparent d-flex flex-wrap align-items-center gap-3">
+              <button type="button" class="btn btn-link p-0" data-add="sheet">+ New row</button><span class="small text-secondary" role="status" data-sheet-save-status>Changes save when you leave a cell.</span>
+            </div>
+          </WorkspaceTable>
         </section>
       )
     }
@@ -589,7 +552,7 @@ const desk = [
           </div>
           <div class="modal-footer">
             <button type="button" class="btn" data-bs-dismiss="modal" data-application-later>Not yet</button>
-            <button type="button" class="btn btn-primary" data-application-submit>I submitted it</button>
+            <button type="button" class="btn btn-primary" data-application-submit>Mark as applied</button>
           </div>
         </div>
       </div>
@@ -617,6 +580,267 @@ const desk = [
 </script>
 
 <style is:global>
+  .application-suggestions {
+    max-height: 320px;
+  }
+  .application-suggestions .suggestion-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .application-suggestion-copy {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .application-suggestion-copy strong,
+  .application-suggestion-copy small {
+    display: block;
+  }
+  .application-suggestions .badge {
+    flex-shrink: 0;
+    white-space: normal;
+    max-width: 110px;
+  }
+  .google-jobs-results {
+    margin-top: 1.5rem;
+  }
+  [data-workspace-view='jobs'][data-job-source='google'] .google-jobs-results {
+    margin-top: 0;
+  }
+  .google-jobs-results .gsc-above-wrapper-area {
+    display: none;
+  }
+  .google-jobs-results .gsc-control-cse {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .google-jobs-results .gsc-results-wrapper-visible {
+    max-width: 100%;
+  }
+  .google-jobs-results .gsc-results-wrapper-overlay {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  .google-jobs-results .gsc-control-wrapper-cse,
+  .google-jobs-results .gsc-above-wrapper-area,
+  .google-jobs-results .gsc-wrapper,
+  .google-jobs-results .gsc-resultsbox-visible,
+  .google-jobs-results .gsc-results {
+    width: 100% !important;
+    max-width: none !important;
+  }
+  .google-jobs-results .gsc-results {
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .google-jobs-results .gsc-control-cse .gsc-webResult.gsc-result,
+  .google-jobs-results .gsc-control-cse .gsc-webResult.gsc-result:hover,
+  .google-jobs-results .gsc-control-cse .gsc-webResult.gsc-result:focus-within {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .google-jobs-results .gsc-result-info {
+    display: none !important;
+  }
+  .google-jobs-results .gsc-orderby-container {
+    padding-right: 0;
+  }
+  .google-jobs-results .gsc-results.gsc-webResult .gsc-cursor-box {
+    width: 100%;
+    margin: 1.5rem 0 0;
+    text-align: center;
+  }
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    margin: 0;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius);
+    background: var(--tblr-bg-surface);
+    color: var(--tblr-body-color);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:hover,
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:focus-visible {
+    background: var(--tblr-primary-lt);
+    color: var(--tblr-primary);
+  }
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-current-page {
+    border-color: var(--tblr-primary);
+    background: var(--tblr-primary);
+    color: var(--tblr-primary-fg);
+  }
+  .google-jobs-results .gcsc-more-maybe-branding-root {
+    width: 100%;
+    padding: 1rem 0 0;
+    text-align: center;
+  }
+  .google-jobs-results .gcsc-branding,
+  .google-jobs-results .gcsc-find-more-on-google-branding {
+    width: 100%;
+    text-align: center;
+  }
+  .google-jobs-results .gcsc-find-more-on-google {
+    display: none !important;
+  }
+  .google-jobs-results .gsc-modal-background-image,
+  .google-jobs-results .gsc-results-close-btn {
+    display: none !important;
+  }
+  body:has(.google-jobs-results).gsc-overflow-hidden {
+    overflow: auto !important;
+  }
+  .google-job-card .avatar {
+    width: 48px;
+    height: 48px;
+  }
+  .google-job-grid,
+  .job-results-panel [data-job-results] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: 1fr;
+    gap: 1rem;
+  }
+  .google-job-grid > .job-card,
+  .job-results-panel [data-job-results] > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .google-job-grid > .job-card {
+    height: auto;
+  }
+  .google-job-grid {
+    width: 100%;
+  }
+  .job-results-panel [data-job-results] {
+    margin: 0;
+  }
+  .job-results-panel [data-job-results] > div {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .job-results-panel [data-job-results] > .col-12 {
+    grid-column: 1 / -1;
+  }
+  .google-job-grid > p {
+    grid-column: 1 / -1;
+  }
+  @container job-results (min-width: 640px) {
+    .google-job-grid,
+    .job-results-panel [data-job-results] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @container job-results (min-width: 1000px) {
+    .google-job-grid,
+    .job-results-panel [data-job-results] {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @container job-results (max-width: 639px) {
+    .job-selection-actions {
+      width: 100%;
+    }
+    .job-selection-actions .btn {
+      flex: 1 1 auto;
+      min-height: 2.75rem;
+    }
+  }
+  .google-job-card {
+    cursor: pointer;
+    min-width: 0;
+  }
+  .google-job-source {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .google-job-preview {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    line-height: 1.6;
+    min-height: 3.2em;
+  }
+  .google-job-card [data-source-icon] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 6px;
+    background: white;
+    border-radius: inherit;
+  }
+  .job-results-panel {
+    container: job-results / inline-size;
+    scroll-margin-top: 6rem;
+  }
+  .workspace-pagination .pagination {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  [data-application-table],
+  [data-sheet-table] {
+    scroll-margin-top: 1rem;
+  }
+  .job-selection-summary,
+  .job-selection-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .job-card .card-body {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .job-card .job-title {
+    line-height: 1.4;
+    min-height: 2.8em;
+  }
+  .job-card .job-title-link {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    width: 100%;
+  }
+  .job-card.border-primary {
+    background: var(--tblr-primary-lt);
+  }
+  .job-card .job-pick {
+    cursor: pointer;
+    flex-shrink: 0;
+  }
   .job-details-panel {
     max-width: 860px !important;
   }

@@ -2,10 +2,16 @@
 
 ## Live feeds
 
-The feed selector shows free imported sources and JSearch only when its server key is configured. External site searches appear separately.
+Explore jobs renders 12 cards per page, with Bootstrap Previous/numbered/Next controls below the results. Filtering returns to page 1; selections persist between pages. **Select all results** selects every loaded match across those pages.
+
+The Node feed cache keeps up to 24 public feeds in memory, combines simultaneous reads of the same feed, and stores compressed payloads in the existing database cache. Database cache reads have a two-second limit, writes have a 1.5-second limit, and upstream feed requests have an eight-second limit. A database-cache outage falls back to the public provider. Fresh memory hits require no database request. Existing feed TTLs still apply.
+
+The browser reuses successful search responses for five minutes, cancels superseded searches, and limits each search request to 15 seconds. Changing a result page makes no network request. Initial loads show placeholders, and searches keep existing cards visible while waiting for the replacement results. These changes improve feed loading; third-party availability and sign-in/database latency can still affect cold page loads.
+
+Explore jobs uses one keyword box with a search icon and Enter-to-search. Imported-feed searches match job titles, companies, categories and description skills. All words must match a listing; comma-separated groups are alternatives. **Google · job sites** uses Google's official Search Element through that same input. **All job listings** shows feed matches and Google job-site results together when searching. The classification dropdown filters feed categories and refines Google's query. [Google integration and setup guide](GOOGLE-JOB-SEARCH.md).
 
 - **Remotive**: enabled without credentials at `/api/jobs/search`. Feed cached for six hours; source listings are delayed by 24 hours. Listing cards link back to Remotive with attribution. Users can browse listings without signing up. Location eligibility is supplied by the feed and should be checked on the original listing. [Provider documentation](https://github.com/remotive-com/remote-jobs-api)
-- **All free job feeds**: combines cached Remotive, Arbeitnow and Jobicy results, deduplicates listing URLs and continues when one provider is unavailable.
+- **All job listings**: combines cached Remotive, Arbeitnow and Jobicy results, deduplicates listing URLs and continues when one provider is unavailable.
 - **Jobicy**: free remote jobs with employer logos and descriptions. Uses the public listing URL, retains source attribution and caches the first 100 listings for six hours. Direct ATS links require a separate commercial agreement; this connector sends no payment key. [Provider documentation](https://jobicy.com/jobs-rss-feed)
 - **Arbeitnow**: free, no API key, at `/api/jobs/search?source=arbeitnow`. The first provider page is cached for six hours; Joblink displays up to 100 matches. Includes full descriptions, company names, location and remote flags, with links back to Arbeitnow. Coverage is mostly Europe; remote roles may still have country and language restrictions. [Provider documentation](https://www.arbeitnow.com/blog/job-board-api)
 - **JSearch**: optional Philippine search connector at `/api/jobs/search?source=jsearch&q=virtual+assistant`. It searches Google for Jobs data with `country=ph`; publisher coverage varies. Results are cached for one hour and require a signed-in Joblink user. [Provider documentation](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch)
@@ -23,17 +29,15 @@ Register for JSearch through RapidAPI and select a plan yourself. Joblink does n
 
 Keep Google credentials and database settings as they are. Save, then select **Philippines · JSearch** in Find work. An empty key returns an explicit unconnected state. API errors return a readable error; they never generate mock jobs. API secrets remain server-side.
 
-Indeed, JobStreet PH, OnlineJobs.ph, LinkedIn and the VA-agency cards are **official-site links**, not connected scanners. Indeed's documented APIs are partner-oriented, and SEEK's documented integrations focus on hiring workflows. Their presence in the directory does not imply import access. JSearch may return their public indexed listings, but coverage is not guaranteed. [Indeed documentation](https://docs.indeed.com/), [SEEK documentation](https://developer.seek.com/).
-
-Google job search normally opens a browser link using the entered role and location. With `GOOGLE_SEARCH_ENGINE_ID` configured, the Google Search Element displays job-site results inside Joblink instead. It needs a Programmable Search Engine ID, not a Custom Search JSON API key. Google results remain external listings and are not automatically imported or tracked. The Google Custom Search JSON API is closed to new customers, so it is not used. [Google documentation](https://developers.google.com/custom-search/v1/overview)
-
-Joblink opens source listings or provider-supplied application links. Clicking Apply creates or updates an **Application opened** record. The user confirms submission to mark it **Applied**; Joblink does not automatically know whether an external application was submitted. External search cards open websites and do not create individual job records.
+Joblink opens source listings or provider-supplied application links. Clicking Apply creates or updates an **Application opened** record. The user confirms submission to mark it **Applied**; Joblink does not automatically know whether an external application was submitted.
 
 ## Saved workspace
 
 `GET /api/workspace/items` returns the signed-in user's records. `POST` creates/updates an entry, or deletes it with `{ "id": 123, "action": "delete" }`. Writes require the session's CSRF token in `X-CSRF-Token`, enforce origin checks and validate field lengths, URLs, statuses and dates. Updates and deletes always scope IDs to the signed-in owner.
 
 Data lives in `workspace_items`: applications, tasks, events, links and sheet rows. Calendar dates and times use Manila time. CSV exports escape cell contents and guard against spreadsheet formula execution. Sheets are basic editable records, not a spreadsheet formula engine.
+
+Applications and Sheet use the same Bootstrap pagination as Explore jobs: 12 records per page with Previous, numbered pages, Next, and a visible record range. Search/filter/sort changes return to page 1; edits retain the current page and deletions move to the last valid page when necessary. Sheet selections persist across pages, and **Select all results** covers all rows matching the current filters. Changing a sheet page waits for queued cell saves. CSV export includes records from every page.
 
 ## Main files
 
@@ -61,7 +65,7 @@ News and job feeds run on a separate local PHP process at port 8082; account and
 
 ## Applying and tracking
 
-Find Work displays provider-supplied employer logos, with initials when a logo is missing or fails to load. Place, role, WFH, and Philippines/worldwide eligibility filters narrow the loaded results; WFH is not a guarantee of worldwide eligibility.
+Find Work displays provider-supplied employer logos, with initials when a logo is missing or fails to load. Keyword search, location, employment type, and listing time narrow the results. Remote-work tags are not a guarantee of worldwide eligibility.
 
 The Apply button saves an account-owned entry as **Application opened** before opening a new tab. When the provider supplies a verified direct application URL, the tab opens that employer page; otherwise the button says **Apply via source** and opens the original job-board listing. Joblink does not invent employer application URLs.
 
@@ -72,5 +76,3 @@ Cross-site submission cannot be observed by Joblink. After submitting on the ext
 `company-brands.json` records verified company websites and icon provenance. `refresh-company-logos.mjs` finds raster brand icons from those websites and saves them under `shared/static/company-logos/`. The current feed uses these local icons before the provider URLs, which were returning HTTP 403. Unknown brands retain the provider image or initials. CodeForAI could not be confidently matched to an official brand, so no unrelated logo was assigned.
 
 For automatic discovery of new brands, add `brandfetch_client_id` to `config.local.php`. The optional Brandfetch search integration caches exact company-name matches for seven days. An empty client ID makes no Brandfetch requests. [Provider setup](https://docs.brandfetch.com/reference/brand-search-api). The lookup has not been tested with live credentials.
-
-Indeed PH, JobStreet PH, OnlineJobs.ph and LinkedIn now appear in the Search feed selector. Without JSearch credentials they return an official search link, not imported records. With credentials, the connector searches JSearch using the publisher name and filters returned publishers; coverage depends on that provider. Live publisher imports have not been tested without credentials.

@@ -1,41 +1,138 @@
-type GoogleElement = { execute: (query: string) => void }
-type GoogleWindow = Window & { __gcse?: { callback: () => void }; google?: { search?: { cse?: { element?: { getElement: (name: string) => GoogleElement | undefined } } } } }
-const root = document.querySelector<HTMLElement>('[data-google-search]')
-if (root?.dataset.engineId) {
-  const button = root.querySelector<HTMLAnchorElement>('[data-google-job-search]')!
-  const results = root.querySelector<HTMLElement>('[data-google-results]')!
-  const status = root.querySelector<HTMLElement>('[data-google-status]')!
-  let loading = false
-  const execute = () => {
-    const element = (window as GoogleWindow).google?.search?.cse?.element?.getElement('joblink-jobs')
-    if (!element) return false
-    const role = document.querySelector<HTMLInputElement>('#job-query')?.value.trim() || 'jobs'
-    const location = document.querySelector<HTMLInputElement>('#job-location')?.value.trim() || 'Philippines'
-    element.execute(role + ' jobs ' + location)
-    status.textContent = 'Results provided by Google.'
+import { googleJobQuery, googleJobListingUrl, type GoogleJobFilters } from './google-job-query'
+
+export type GoogleJobResult = { url: string; listingUrl?: string; title: string; content?: string; visibleUrl?: string }
+type GoogleElement = { execute: (query: string) => void; clearAllResults: () => void }
+type ReadyCallback = (name: string, query: string, promos: GoogleJobResult[], results: GoogleJobResult[], div: HTMLElement) => boolean
+type GoogleWindow = Window & {
+  __gcse?: { parsetags: string; initializationCallback: () => void; searchCallbacks: { web: { starting: (name: string, query: string) => string; ready: ReadyCallback; rendered: () => void } } }
+  google?: { search?: { cse?: { element?: { render: (config: object) => void; getElement: (name: string) => GoogleElement | null } } } }
+}
+export function createGoogleJobSearch(root: HTMLElement, renderResults: (results: GoogleJobResult[], div: HTMLElement) => void) {
+  const panel = root.querySelector<HTMLElement>('[data-google-jobs]')!
+  const status = root.querySelector<HTMLElement>('[data-google-jobs-status]')!
+  const host = root.querySelector<HTMLElement>('[data-google-jobs-host]')!
+  const engineId = root.dataset.googleEngineId || ''
+  const googleWindow = window as GoogleWindow
+  const name = 'joblink-google-jobs'
+  let initialization: Promise<void> | null = null
+  let latestQuery = ''
+  let active = false
+  let resultTimer: ReturnType<typeof setTimeout> | undefined
+  const setStatus = (message: string, announcementOnly = false) => {
+    status.textContent = message
+    status.classList.toggle('visually-hidden', announcementOnly)
+  }
+  const finish = (message: string, announcementOnly = false) => {
+    clearTimeout(resultTimer)
+    panel.setAttribute('aria-busy', 'false')
+    setStatus(message, announcementOnly)
+  }
+  const ready: ReadyCallback = (_name, query, promos, results, div) => {
+    div.replaceChildren()
+    if (!active || query !== latestQuery) return true
+    // Keep Google promotions, branding, ads and pagination intact.
+    for (const promo of promos || []) {
+      try {
+        const url = new URL(promo.url)
+        if (!['https:', 'http:'].includes(url.protocol)) continue
+        const link = document.createElement('a')
+        link.href = url.href
+        link.textContent = 'Promotion: ' + new DOMParser().parseFromString(promo.title, 'text/html').body.textContent
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        link.className = 'd-block mb-3'
+        div.append(link)
+      } catch {
+        /* Ignore malformed promotional URLs. */
+      }
+    }
+    const listings = (results || []).map((result) => ({ ...result, listingUrl: googleJobListingUrl(result.url) })).filter((result) => result.listingUrl)
+    const organic = document.createElement('div')
+    div.append(organic)
+    renderResults(listings, organic)
+    finish(`${listings.length} job ${listings.length === 1 ? 'listing' : 'listings'} on this page.`, true)
     return true
   }
-  button.addEventListener('click', (event) => {
-    event.preventDefault()
-    results.classList.remove('d-none')
-    if (execute() || loading) return
-    loading = true
-    ;(window as GoogleWindow).__gcse = { callback: () => { loading = false; execute() } }
-    const script = document.createElement('script')
-    script.src = 'https://cse.google.com/cse.js?cx=' + encodeURIComponent(root.dataset.engineId!)
-    script.async = true
-    script.addEventListener('error', () => {
-      loading = false
-      status.textContent = 'Google results could not load. Use the link below to continue.'
-      const fallback = document.createElement('a')
-      fallback.className = 'btn btn-sm'
-      fallback.href = button.href
-      fallback.target = '_blank'
-      fallback.rel = 'noopener noreferrer'
-      fallback.textContent = 'Open Google search'
-      status.replaceChildren(document.createTextNode('Google results could not load. '), fallback)
-      script.remove()
-    }, { once: true })
-    document.head.append(script)
-  })
+  const initialize = () => {
+    if (initialization) return initialization
+    initialization = new Promise<void>((resolve, reject) => {
+      let settled = false
+      const script = document.createElement('script')
+      const timer = setTimeout(() => failed('Google search took too long to load. Try searching again.'), 12000)
+      const failed = (message: string) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        script.remove()
+        initialization = null
+        reject(new Error(message))
+      }
+      googleWindow.__gcse = {
+        parsetags: 'explicit',
+        initializationCallback: () => {
+          if (settled) return
+          const api = googleWindow.google?.search?.cse?.element
+          if (!api) {
+            failed('Google search could not initialize. Try again.')
+            return
+          }
+          api.render({ div: host, tag: 'searchresults-only', gname: name, attributes: { autoSearchOnLoad: false, enableHistory: false, enableImageSearch: false, webSearchResultSetSize: 'filtered_cse', linkTarget: '_blank' } })
+          settled = true
+          clearTimeout(timer)
+          resolve()
+        },
+        searchCallbacks: {
+          web: {
+            starting: (_name, query) => {
+              if (active && query === latestQuery) {
+                panel.setAttribute('aria-busy', 'true')
+                setStatus('Searching job listings…')
+                clearTimeout(resultTimer)
+                resultTimer = setTimeout(() => finish('Google results are taking longer than expected. Try searching again or choose a job feed.'), 15000)
+              }
+              return query
+            },
+            ready,
+            rendered: () => {
+              /* Results-ready finishes the current query. */
+            },
+          },
+        },
+      }
+      script.src = 'https://cse.google.com/cse.js?cx=' + encodeURIComponent(engineId)
+      script.async = true
+      script.addEventListener('error', () => failed('Google search could not load. Check your connection or try another feed.'), { once: true })
+      document.head.append(script)
+    })
+    return initialization
+  }
+  return {
+    hide() {
+      active = false
+      clearTimeout(resultTimer)
+      panel.classList.add('d-none')
+      panel.setAttribute('aria-busy', 'false')
+    },
+    async search(filters: GoogleJobFilters) {
+      active = true
+      panel.classList.remove('d-none')
+      panel.setAttribute('aria-busy', 'true')
+      setStatus('Searching job listings…')
+      const query = googleJobQuery(filters)
+      latestQuery = query
+      if (!engineId) {
+        finish('Google job search is not connected yet. Choose another job feed for now.')
+        return
+      }
+      try {
+        await initialize()
+        if (!active || query !== latestQuery) return
+        const element = googleWindow.google?.search?.cse?.element?.getElement(name)
+        if (!element) throw new Error('Google search is not ready yet. Try searching again.')
+        element.execute(query)
+      } catch (error) {
+        if (active && query === latestQuery) finish(error instanceof Error ? error.message : 'Google search is unavailable. Try again.')
+      }
+    },
+  }
 }

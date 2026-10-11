@@ -128,13 +128,13 @@ try {
     .click();
   assert.equal(await page.locator("[data-sheet-rows] tr").count(), 3);
   await page.getByRole("button", { name: "Filter", exact: true }).click();
-  await page.getByRole("button", { name: "Sort", exact: true }).click();
+  await page.getByRole("button", { name: "Sort by", exact: true }).click();
   await page.getByLabel("Sort sheet").selectOption("title");
   assert.equal(
     await page.locator('[data-sheet-field="title"]').first().inputValue(),
     "Alpha updated",
   );
-  await page.getByRole("button", { name: "Sort", exact: true }).click();
+  await page.getByRole("button", { name: "Sort by", exact: true }).click();
   await page.getByRole("button", { name: "Columns", exact: true }).click();
   await page.locator('[data-sheet-column-toggle][value="notes"]').uncheck();
   assert.equal(
@@ -143,9 +143,7 @@ try {
   );
   await page.getByRole("button", { name: "Columns", exact: true }).click();
   await page.locator("[data-sheet-search]").fill("Alpha updated");
-  await page
-    .getByRole("button", { name: "Select all visible", exact: true })
-    .click();
+  await page.getByLabel('Select all filtered sheet rows across pages').check();
   await page.locator("[data-sheet-search]").fill("no match");
   assert.match(
     await page.locator("[data-sheet-empty]").innerText(),
@@ -155,6 +153,7 @@ try {
     await page.locator("[data-sheet-selected-count]").innerText(),
     /1 selected outside/,
   );
+  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
   await page
     .getByRole("button", { name: "Clear selection", exact: true })
     .click();
@@ -179,9 +178,8 @@ try {
     .locator("[data-sheet-count]")
     .filter({ hasText: "204 of 204 rows" })
     .waitFor();
-  await page
-    .getByRole("button", { name: "Select all visible", exact: true })
-    .click();
+  await page.getByLabel('Select all filtered sheet rows across pages').check();
+  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
   await page.locator("[data-sheet-bulk]").click();
   await page
     .locator("[data-confirm-modal]")
@@ -193,6 +191,7 @@ try {
     ).items.filter((row) => row.kind === "sheet").length,
     204,
   );
+  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
   await page.locator("[data-sheet-bulk]").click();
   await page.locator("[data-confirm-accept]").click();
   await page
