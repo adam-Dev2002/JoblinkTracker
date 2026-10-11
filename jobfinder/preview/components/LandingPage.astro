@@ -10,13 +10,13 @@ const features = [
 ]
 ---
 
-<BaseLayout title="Find work. Move forward." description="Discover JobLink: find opportunities, track applications, and organize your job search.">
+<BaseLayout title="Find work. Move forward." description="Discover JobLink: find opportunities, track applications, and organize your job search." assistant={false} publicStyles>
   <div data-public-landing>
     <header class="container py-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
       <Logo />
       <nav aria-label="Main navigation" class="d-flex gap-2">
-        <a class="btn" href="/sign-in">Sign in</a>
-        <a class="btn btn-primary" href="/sign-up">Create an account</a>
+        <a class="btn" href="/sign-in" data-astro-prefetch>Sign in</a>
+        <a class="btn btn-primary" href="/sign-up" data-astro-prefetch>Create an account</a>
       </nav>
     </header>
     <main id="content" class="container pb-5">
@@ -24,7 +24,7 @@ const features = [
         <p class="text-primary fw-bold mb-3">YOUR NEXT OPPORTUNITY STARTS HERE</p>
         <h1 id="landing-title">Find work.<br />Move forward.</h1>
         <p class="landing-intro text-secondary">Your job search and daily work, in one place. Discover opportunities, keep track of applications, and plan what comes next with JobLink.</p>
-        <a class="btn btn-primary btn-lg" href="/job-listing"><Icon name="search" /> Find work</a>
+        <a class="btn btn-primary btn-lg" href="/job-listing" data-astro-prefetch><Icon name="search" /> Find work</a>
         <p class="text-secondary small mt-3 mb-0">Sign in or create an account when you’re ready to get started.</p>
       </section>
       <section aria-labelledby="features-title">
@@ -37,7 +37,7 @@ const features = [
                   <span class="avatar bg-primary-lt mb-3"><Icon name={feature.icon} /></span>
                   <h3 class="h2">{feature.title}</h3>
                   <p class="text-secondary">{feature.description}</p>
-                  <a class="mt-auto fw-semibold" href={feature.href}>{feature.action} <Icon name="arrow-right" /></a>
+                  <a class="mt-auto fw-semibold" href={feature.href} data-astro-prefetch>{feature.action} <Icon name="arrow-right" /></a>
                 </div>
               </article>
             </div>
@@ -46,6 +46,7 @@ const features = [
       </section>
     </main>
     <footer class="container pb-4 text-center"><CopyrightNotice /></footer>
+    <a class="landing-assistant" href="/sign-in?returnTo=%2Fdashboard" aria-label="Open Joblink assistant" data-astro-prefetch><Icon name="sparkles" /> Ask Joblink</a>
   </div>
 </BaseLayout>
 
@@ -53,19 +54,19 @@ const features = [
   .landing-hero { padding: clamp(3rem, 8vw, 7rem) 0; }
   .landing-hero h1 { font-size: clamp(2.75rem, 7vw, 5rem); line-height: 1.08; letter-spacing: -.04em; }
   .landing-intro { max-width: 620px; margin: 1.5rem auto 2rem; font-size: 1.2rem; line-height: 1.6; }
+  .landing-assistant { position: fixed; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-radius: 28px; background: #066fd1; color: #fff; font-weight: 600; box-shadow: 0 6px 24px #066fd133; }
+  .landing-assistant:hover { color: #fff; background: #0559ae; }
 </style>
 
 <script>
   import { getSession } from '@shared/lib/client-session'
   if (document.querySelector('[data-public-landing]')) {
-    void getSession().then(session => {
-      if (session.user) location.replace('/job-listing')
-    }).catch(() => { /* Visitors can still read the landing page if the account service is unavailable. */ })
-    document.addEventListener('click', event => {
-      if (!(event.target instanceof Element) || !event.target.closest('[data-ai-open]')) return
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      location.assign('/sign-in?returnTo=%2F')
-    }, true)
+    const checkAccount = () => {
+      void getSession().then(session => {
+        if (session.user) location.replace('/dashboard')
+      }).catch(() => { /* Visitors can still read the landing page if the account service is unavailable. */ })
+    }
+    if (document.readyState === 'complete') checkAccount()
+    else window.addEventListener('load', checkAccount, { once: true })
   }
 </script>

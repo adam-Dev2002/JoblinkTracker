@@ -1,4 +1,4 @@
-import { current, cookie, cookieValue } from './core.mjs'
+import { current, cookie, cookieValue, publicUser, env } from './core.mjs'
 import { safeReturnTo } from './return-to.mjs'
 
 export async function redirectSignedIn(request, isPrerendered) {
@@ -13,8 +13,18 @@ export async function redirectSignedIn(request, isPrerendered) {
   })
 }
 
-export async function redirectToLogin(request, url, isPrerendered) {
-  if (isPrerendered || (await current(request))) return null
+export async function redirectToLogin(request, url, isPrerendered, locals = {}) {
+  if (isPrerendered) return null
+  const user = await current(request)
+  if (user) {
+    const token = cookie(request, 'joblink_csrf')
+    if (/^[a-f0-9]{64}$/.test(token)) locals.joblinkSession = {
+      user: publicUser(user),
+      csrf: token,
+      googleEnabled: Boolean(env('GOOGLE_CLIENT_ID') && env('GOOGLE_CLIENT_SECRET')),
+    }
+    return null
+  }
 
   const returnTo = `${url.pathname}${url.search}`
   return new Response(null, {

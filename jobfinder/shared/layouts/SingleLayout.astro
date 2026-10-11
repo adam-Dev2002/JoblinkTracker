@@ -4,15 +4,16 @@ import CopyrightNotice from '@shared/components/CopyrightNotice.astro'
 import Logo from '@shared/components/navbar/Logo.astro'
 
 interface Props {
+  publicStyles?: boolean
   title?: string
   containerSize?: string
   hideLogo?: boolean
 }
 
-const { title, containerSize = 'tight', hideLogo } = Astro.props
+const { title, containerSize = 'tight', hideLogo, publicStyles = false } = Astro.props
 ---
 
-<BaseLayout title={title}>
+<BaseLayout title={title} publicStyles={publicStyles}>
   <!-- BEGIN PAGE BODY -->
   <main class="page page-center" id="content">
     <div class:list={['container', containerSize !== 'normal' && `container-${containerSize}`, 'py-4']}>

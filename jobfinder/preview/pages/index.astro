@@ -1,10 +1,6 @@
 ﻿---
-import WorkspacePage from '../components/workspace/WorkspacePage.astro'
 import LandingPage from '../components/LandingPage.astro'
-import { current } from '../server/core.mjs'
-export const prerender = false
-Astro.response.headers.set('Cache-Control', 'no-store')
-const user = await current(Astro.request)
+export const prerender = true
 ---
 
-{user ? <WorkspacePage view="dashboard" title="Dashboard" description="Your job search and daily work, in one place." /> : <LandingPage />}
+<LandingPage />

@@ -8,6 +8,6 @@ const signedInRedirect = await redirectSignedIn(Astro.request, Astro.isPrerender
 if (signedInRedirect) return signedInRedirect
 ---
 
-<SingleLayout title="Sign in">
+<SingleLayout title="Sign in" publicStyles>
   <JoblinkAuth mode="login" />
 </SingleLayout>

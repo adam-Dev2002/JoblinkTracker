@@ -809,7 +809,7 @@ function initJobSearch() {
   return loadJobs()
 }
 async function init() {
-  render()
+  // Paint static controls immediately while data is still being fetched.
   const initialJobs = view === 'jobs' ? initJobSearch() : null
   try {
     const session = await getSession()
@@ -828,6 +828,9 @@ async function init() {
     render()
   } catch (e) {
     error(e instanceof Error ? e.message : 'Unable to load workspace.')
+  } finally {
+    root.setAttribute('aria-busy', 'false')
+    root.querySelector('[data-workspace-loading]')?.classList.add('d-none')
   }
   if (view === 'jobs') {
     await initialJobs

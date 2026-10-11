@@ -18,7 +18,8 @@ const desk = [
 ---
 
 <DefaultLayout title={title} description={description}>
-  <div data-workspace-view={view}>
+  <div data-workspace-view={view} aria-busy="true">
+    <p class="text-secondary small" role="status" data-workspace-loading>Loading your workspace...</p>
     <div class="alert alert-danger d-none workspace-error" role="alert" data-workspace-error></div>
     {
       desk.some(([tool]) => tool === view) && (
@@ -51,7 +52,7 @@ const desk = [
                       </span>
                     </div>
                     <div class="stat-value" data-stat={key}>
-                      0
+                      <span class="placeholder col-4" aria-label="Loading" />
                     </div>
                     <div class="text-secondary small mt-1">From your workspace</div>
                   </div>

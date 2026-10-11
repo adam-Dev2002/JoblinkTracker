@@ -15,7 +15,7 @@ const groups = [
   {
     label: 'WORKSPACE',
     items: [
-      { label: 'Dashboard', href: '/', icon: 'layout-dashboard' },
+      { label: 'Dashboard', href: '/dashboard', icon: 'layout-dashboard' },
       { label: 'News & events', href: '/news', icon: 'news' },
     ],
   },
@@ -41,7 +41,7 @@ const groups = [
 <BaseLayout title={title} workspace base="">
   <div class="jobify-shell">
     <aside class="jobify-sidebar" id="jobify-sidebar">
-      <div class="sidebar-brand"><Logo href="/" /><button class="btn btn-icon sidebar-close" aria-label="Close navigation" data-menu-close><Icon name="x" /></button></div>
+      <div class="sidebar-brand"><Logo href="/dashboard" /><button class="btn btn-icon sidebar-close" aria-label="Close navigation" data-menu-close><Icon name="x" /></button></div>
       <div class="sidebar-clock"><span class="text-secondary small">Your workspace Manila</span><strong data-manila-clock></strong></div>
       <nav aria-label="Main navigation">
         {
@@ -49,7 +49,7 @@ const groups = [
             <div class="nav-group">
               <div class="nav-caption">{group.label}</div>
               {group.items.map((item) => (
-                <a href={item.href} class:list={['sidebar-link', path === item.href && 'active']} aria-current={path === item.href ? 'page' : undefined}>
+                <a href={item.href} data-astro-prefetch class:list={['sidebar-link', path === item.href && 'active']} aria-current={path === item.href ? 'page' : undefined}>
                   <Icon name={item.icon} />
                   <span>{item.label}</span>
                 </a>

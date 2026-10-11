@@ -2,7 +2,8 @@
 import WorkspacePage from '../../components/workspace/WorkspacePage.astro'
 import { redirectToLogin } from '../../server/page-auth.mjs'
 export const prerender = false
-const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered)
+Astro.response.headers.set('Cache-Control', 'no-store')
+const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered, Astro.locals)
 if (loginRedirect) return loginRedirect
 ---
 

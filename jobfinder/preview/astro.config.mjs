@@ -106,6 +106,7 @@ export default defineConfig({
   output: cloudBackend ? 'server' : 'static',
   ...(cloudBackend ? { adapter: vercel() } : {}),
   devToolbar: { enabled: false },
+  prefetch: { defaultStrategy: 'hover', prefetchAll: false },
   // pages live at the package root (./pages) — all components/lib/data are
   // shared (see the @shared alias)
   srcDir: '.',

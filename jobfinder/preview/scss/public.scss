@@ -1,0 +1,47 @@
+// The public pages use the same Tabler tokens and components without loading
+// workspace tables, modals, charts, editors, or the full responsive utility set.
+@use 'sass:map';
+@use '../../core/scss/config' as config;
+@use '../../core/scss/mixins/utilities-api' as api;
+@use '../../core/scss/bootstrap/root';
+@use '../../core/scss/bootstrap/reboot';
+@use '../../core/scss/bootstrap/type';
+@use '../../core/scss/bootstrap/containers';
+@use '../../core/scss/bootstrap/grid';
+@use '../../core/scss/bootstrap/forms/labels';
+@use '../../core/scss/bootstrap/forms/form-control';
+@use '../../core/scss/bootstrap/buttons';
+@use '../../core/scss/bootstrap/card';
+@use '../../core/scss/props';
+@use '../../core/scss/layout/root' as layout-root;
+@use '../../core/scss/layout/core';
+@use '../../core/scss/layout/page';
+@use '../../core/scss/layout/dark';
+@use '../../core/scss/layout/accessibility';
+@use '../../core/scss/ui/alerts';
+@use '../../core/scss/ui/avatars';
+@use '../../core/scss/ui/buttons' as ui-buttons;
+@use '../../core/scss/ui/cards';
+@use '../../core/scss/ui/icons';
+@use '../../core/scss/ui/grid' as ui-grid;
+@use '../../core/scss/ui/forms' as ui-forms;
+@use '../../core/scss/ui/type' as ui-type;
+@use '../../core/scss/utils/colors';
+@use '../../core/scss/helpers/index' as helpers;
+
+$public-utilities: ();
+@each $key in ('display', 'width', 'height', 'flex', 'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'align-self', 'margin', 'margin-x', 'margin-y', 'margin-top', 'margin-bottom', 'padding', 'padding-x', 'padding-y', 'padding-top', 'padding-bottom', 'gap', 'font-weight', 'text-align', 'color', 'text-decoration') {
+  $utility: map.get(config.$utilities, $key);
+  $public-utilities: map.set($public-utilities, $key, map.merge($utility, (responsive: false)));
+}
+@include api.utilities-api($public-utilities);
+
+.h1 { @extend h1; }
+.h2 { @extend h2; }
+.h3 { @extend h3; }
+.small { @extend small; }
+
+// Logo layout and public avatar positioning do not need the navbar module.
+.navbar-brand { display: block; margin: 0; padding: 0; }
+.position-relative { position: relative !important; }
+.rounded-circle { border-radius: 50% !important; }
