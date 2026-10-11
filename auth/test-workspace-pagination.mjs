@@ -232,6 +232,8 @@ try {
   await page.locator("[data-ready=true]").waitFor();
   assert.deepEqual(await tableMetrics(), applicationMetrics, 'Application and Sheet use the same table spacing, type, row height, and controls');
   await page.locator('[data-sheet-actions="125"]').click();
+  assert.equal(await page.locator('[data-sheet-actions="125"] svg.workspace-action-chevron').count(), 1);
+  assert.equal(await page.locator('[data-sheet-table] .card-footer:not(.workspace-pagination)').count(), 0, 'The redundant sheet footer is removed');
   await page.getByRole('menuitem', { name: 'Edit row / attachments', exact: true }).click();
   await page.locator('[data-entry-modal]').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#entry-attachments').count(), 1, 'Shared row menu preserves sheet attachments');
@@ -257,6 +259,18 @@ try {
     /2 selected.*1 on other pages/,
   );
   await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: 'Selected actions', exact: true }).locator('svg.workspace-action-chevron').count(), 1);
+  const bulkDelete = page.locator('[data-sheet-bulk]');
+  await bulkDelete.hover();
+  const bulkColors = await bulkDelete.evaluate(node => {
+    const sample = document.createElement('span');
+    sample.style.backgroundColor = 'var(--tblr-danger)';
+    node.append(sample);
+    const expected = getComputedStyle(sample).backgroundColor;
+    sample.remove();
+    return { actual: getComputedStyle(node).backgroundColor, expected };
+  });
+  assert.equal(bulkColors.actual, bulkColors.expected, 'Bulk Delete highlights red');
   const selectedDownloadReady = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export selected', exact: true }).click();
   const selectedDownload = await selectedDownloadReady;

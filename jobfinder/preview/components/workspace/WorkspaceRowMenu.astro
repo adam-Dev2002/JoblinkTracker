@@ -4,7 +4,8 @@ interface Props { kind: 'application' | 'sheet' }
 const { kind } = Astro.props
 const application = kind === 'application'
 ---
-<div class="workspace-row-menu" id="workspace-row-menu" popover="auto" role="menu" aria-label={application ? 'Application actions' : 'Sheet row actions'} data-workspace-row-menu data-application-actions-menu={application ? true : undefined}>
+<template data-table-action-arrow><Icon name="chevron-down" class="workspace-action-chevron" /></template>
+<div class="workspace-row-menu workspace-actions-menu" id="workspace-row-menu" popover="auto" role="menu" aria-label={application ? 'Application actions' : 'Sheet row actions'} data-workspace-row-menu data-application-actions-menu={application ? true : undefined}>
   {application && <button type="button" class="dropdown-item" role="menuitem" data-table-mark><Icon name="check" class="workspace-action-icon" />Mark as applied</button>}
   <button type="button" class="dropdown-item" role="menuitem" data-table-edit><Icon name="edit" class="workspace-action-icon" />{application ? 'Edit application' : 'Edit row / attachments'}</button>
   <div class="dropdown-divider" role="separator"></div>
@@ -18,8 +19,22 @@ const application = kind === 'application'
     flex-shrink: 0;
     color: inherit;
   }
-  .workspace-table-selection .dropdown-item { gap: 10px; }
+  .workspace-row-actions .workspace-action-chevron {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin: 0;
+  }
+  .workspace-actions-menu .dropdown-item {
+    gap: 10px;
+    background: transparent;
+    color: var(--tblr-body-color);
+    outline: none;
+    transition: none;
+  }
+  .workspace-table-selection .dropdown-item { color: var(--tblr-primary); }
   .workspace-row-actions {
+    gap: 8px;
     color: var(--tblr-primary);
     font-weight: 600;
     border-color: var(--tblr-primary);
@@ -57,13 +72,19 @@ const application = kind === 'application'
     margin: 0.25rem 0;
     border-top: 1px solid var(--tblr-border-color);
   }
-  .workspace-row-menu .dropdown-item:hover,
-  .workspace-row-menu .dropdown-item:focus {
+  .workspace-actions-menu .dropdown-item:not(:disabled):hover,
+  .workspace-actions-menu:not(:has(.dropdown-item:hover)) .dropdown-item:focus-visible {
     background: var(--tblr-primary);
     color: var(--tblr-primary-fg) !important;
   }
-  .workspace-row-menu .dropdown-item:focus-visible {
+  .workspace-actions-menu .dropdown-item.text-danger:not(:disabled):hover,
+  .workspace-actions-menu:not(:has(.dropdown-item:hover)) .dropdown-item.text-danger:focus-visible {
+    background: var(--tblr-danger);
+    color: var(--tblr-danger-fg, #fff) !important;
+  }
+  .workspace-actions-menu:not(:has(.dropdown-item:hover)) .dropdown-item:focus-visible {
     outline: 2px solid var(--tblr-primary);
     outline-offset: -2px;
   }
+  .workspace-actions-menu:not(:has(.dropdown-item:hover)) .dropdown-item.text-danger:focus-visible { outline-color: var(--tblr-danger); }
 </style>

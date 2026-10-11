@@ -357,8 +357,8 @@ const desk = [
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <span class="fw-semibold" role="status" data-application-selected-count />
                 <div class="dropdown ms-auto">
-                  <button type="button" class="btn btn-white" data-bs-toggle="dropdown" aria-expanded="false">Selected actions</button>
-                  <div class="dropdown-menu dropdown-menu-end">
+                  <button type="button" class="btn btn-outline-primary workspace-row-actions" data-bs-toggle="dropdown" aria-expanded="false">Selected actions <Icon name="chevron-down" class="workspace-action-chevron" /></button>
+                  <div class="dropdown-menu dropdown-menu-end workspace-actions-menu">
                     <button type="button" class="dropdown-item" data-application-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
                     <button type="button" class="dropdown-item" data-application-clear-selection><Icon name="x" class="workspace-action-icon" />Clear selection</button>
                   </div>
@@ -499,8 +499,8 @@ const desk = [
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <span class="fw-semibold" role="status" data-sheet-selected-count />
                 <div class="dropdown ms-auto">
-                  <button type="button" class="btn btn-white" data-bs-toggle="dropdown" aria-expanded="false">Selected actions</button>
-                  <div class="dropdown-menu dropdown-menu-end">
+                  <button type="button" class="btn btn-outline-primary workspace-row-actions" data-bs-toggle="dropdown" aria-expanded="false">Selected actions <Icon name="chevron-down" class="workspace-action-chevron" /></button>
+                  <div class="dropdown-menu dropdown-menu-end workspace-actions-menu">
                     <button type="button" class="dropdown-item" data-sheet-select><Icon name="checkbox" class="workspace-action-icon" />Select all results</button>
                     <button type="button" class="dropdown-item" data-sheet-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
                     <button type="button" class="dropdown-item" data-sheet-clear-selection disabled><Icon name="x" class="workspace-action-icon" />Clear selection</button>
@@ -513,9 +513,7 @@ const desk = [
             <Fragment slot="columns">
               <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select all filtered sheet rows across pages" data-sheet-all /></th><th class="table-col-index">#</th><th class="table-col-title">Title / role</th><th class="table-col-company" data-sheet-column="company">Company / category</th><th class="table-col-value" data-sheet-column="value">Value</th><th class="table-col-notes" data-sheet-column="notes">Notes</th><th class="table-col-attachments" data-sheet-column="attachments">Attachments</th><th class="table-col-actions">Actions</th>
             </Fragment>
-            <div slot="footer" class="card-footer bg-transparent d-flex flex-wrap align-items-center gap-3">
-              <button type="button" class="btn btn-link p-0" data-add="sheet">+ New row</button><span class="small text-secondary" role="status" data-sheet-save-status>Changes save when you leave a cell.</span>
-            </div>
+            <span slot="footer" class="visually-hidden" role="status" data-sheet-save-status />
           </WorkspaceTable>
         </section>
       )

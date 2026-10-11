@@ -50,6 +50,19 @@ try {
   const search = page.getByRole('combobox', { name: 'Search applications' });
   const suggestions = page.getByRole('listbox', { name: 'Tracked jobs' });
   const menu = page.getByRole('menu', { name: 'Application actions' });
+  async function assertMenuHighlight(item, color, other) {
+    await item.hover();
+    const actual = await item.evaluate((node, color) => {
+      const sample = document.createElement('span');
+      sample.style.backgroundColor = `var(--tblr-${color})`;
+      node.append(sample);
+      const expected = getComputedStyle(sample).backgroundColor;
+      sample.remove();
+      return { actual: getComputedStyle(node).backgroundColor, expected };
+    }, color);
+    assert.equal(actual.actual, actual.expected);
+    assert.notEqual(await other.evaluate(node => getComputedStyle(node).backgroundColor), actual.expected, 'Hover highlights one menu item at a time');
+  }
   async function setFilter(label, value) {
     const control = page.getByLabel(label);
     if (!await control.isVisible()) await page.locator('[data-application-filter-toggle]').click();
@@ -141,8 +154,12 @@ try {
   await search.press('Escape');
   const actions = page.locator('[data-application-actions="1"]');
   await actions.click();
+  assert.equal(await actions.locator('svg.workspace-action-chevron').count(), 1, 'Row actions have a down arrow');
   assert.equal(await menu.isVisible(), true);
   assert.equal(await page.getByRole('menuitem', { name: 'Mark as applied' }).isVisible(), true);
+  await assertMenuHighlight(menu.locator('[data-table-delete]'), 'danger', menu.locator('[data-table-edit]'));
+  assert.equal(await menu.locator('[data-table-mark]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)', 'The initially focused action loses its highlight when another option is hovered');
+  await assertMenuHighlight(menu.locator('[data-table-edit]'), 'primary', menu.locator('[data-table-delete]'));
   await page.getByRole('menuitem', { name: 'Mark as applied' }).click();
   await page.locator('[data-workspace-error]').filter({ hasText: 'Fixture save failed' }).waitFor();
   assert.equal(items[0].payload.status, 'Application opened', 'Failed updates keep the original status');

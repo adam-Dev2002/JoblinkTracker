@@ -111,10 +111,7 @@ try {
     .locator(`[data-sheet-id="${alpha.id}"][data-sheet-field="value"]`)
     .fill("42");
   await page.locator("[data-sheet-search]").focus();
-  await page
-    .locator("[data-sheet-save-status]")
-    .filter({ hasText: "Changes saved." })
-    .waitFor();
+  await page.waitForFunction(() => document.querySelector('[data-sheet-save-status]')?.textContent === 'Changes saved.');
   const saved = (
     await (await context.request.get("/api/workspace/items")).json()
   ).items.find((row) => row.id === alpha.id);
