@@ -1,0 +1,26 @@
+---
+import PublicInfoLayout from '@shared/layouts/PublicInfoLayout.astro'
+import { site } from '@shared/lib/site'
+export const prerender = true
+---
+
+<PublicInfoLayout title="About JobLink" description="A little progress, every day. A simpler place to manage your next career move.">
+  <section class="card"><div class="card-body">
+    <h2>Your job search, in one place</h2>
+    <p class="text-secondary">JobLink brings job discovery and personal planning together. Find opportunities, track applications, and keep your next steps organized without losing the details that matter.</p>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Make room for your next chapter</h2>
+    <ul class="text-secondary mb-0">
+      <li>Discover jobs and open the original application page.</li>
+      <li>Keep track of applications, follow-ups, and interviews.</li>
+      <li>Plan your day with a task board and calendar.</li>
+      <li>Save useful links and organize research in your sheet.</li>
+    </ul>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Built by Adam</h2>
+    <p class="text-secondary mb-3">JobLink is an independent project built by Adam. Explore more of his work or connect through the social links below.</p>
+    <a class="btn btn-primary" href={site.copyrightOwnerUrl} target="_blank" rel="noopener noreferrer">Visit Adam’s portfolio</a>
+  </div></section>
+</PublicInfoLayout>

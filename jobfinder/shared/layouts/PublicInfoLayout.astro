@@ -1,0 +1,38 @@
+---
+import BaseLayout from './BaseLayout.astro'
+import Logo from '@shared/components/navbar/Logo.astro'
+import JoblinkFooter from '@shared/components/JoblinkFooter.astro'
+interface Props {
+  title: string
+  description: string
+}
+const { title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description} assistant={false} publicStyles>
+  <header class="info-header">
+    <Logo />
+    <a class="btn" href="/job-listing" data-astro-prefetch>Find work</a>
+  </header>
+  <main id="content" class="info-content" data-public-info>
+    <a class="info-back" href="/" data-astro-prefetch>← Back to JobLink</a>
+    <h1>{title}</h1>
+    <p class="text-secondary info-description">{description}</p>
+    <div class="info-body"><slot /></div>
+  </main>
+  <JoblinkFooter />
+</BaseLayout>
+
+<style>
+  .info-header { width: min(100%, 1140px); padding: 24px; margin: auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .info-content { width: min(100%, 800px); margin: 32px auto 64px; padding: 0 24px; }
+  .info-back { display: inline-block; margin-bottom: 24px; }
+  h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; }
+  .info-description { line-height: 1.7; margin-bottom: 32px; }
+  .info-body :global(.card) { margin-bottom: 24px; }
+  .info-body :global(.card-body) { padding: 24px; }
+  .info-body :global(h2) { font-size: 1.25rem; margin-bottom: 12px; }
+  .info-body :global(p), .info-body :global(li) { line-height: 1.7; }
+  .info-body :global(p:last-child) { margin-bottom: 0; }
+  .info-body :global(a) { overflow-wrap: anywhere; }
+</style>

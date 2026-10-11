@@ -1,0 +1,27 @@
+---
+import PublicInfoLayout from '@shared/layouts/PublicInfoLayout.astro'
+import { site } from '@shared/lib/site'
+export const prerender = true
+const linkedin = site.socialLinks.find(link => link.label === 'LinkedIn')!
+---
+
+<PublicInfoLayout title="Advertise with JobLink" description="Have a career opportunity or useful resource to share? Let’s start a conversation.">
+  <section class="card"><div class="card-body">
+    <h2>Reach people taking their next step</h2>
+    <p class="text-secondary">Contact Adam to discuss sharing your company, job opportunity, or career resource with JobLink. Placement, timing, and any costs can be discussed directly before an arrangement is agreed.</p>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>What to include in your enquiry</h2>
+    <ul class="text-secondary mb-0">
+      <li>Your company or organization and website.</li>
+      <li>The opportunity or resource you want to promote.</li>
+      <li>Your intended audience, location, and timing.</li>
+      <li>A way to reach you and any questions about placement.</li>
+    </ul>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Start a conversation</h2>
+    <p class="text-secondary mb-3">Send an enquiry through Adam’s LinkedIn profile to discuss whether your proposal is a good fit for JobLink.</p>
+    <a class="btn btn-primary" href={linkedin.href} target="_blank" rel="noopener noreferrer">Contact Adam on LinkedIn</a>
+  </div></section>
+</PublicInfoLayout>

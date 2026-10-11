@@ -1,0 +1,27 @@
+---
+import PublicInfoLayout from '@shared/layouts/PublicInfoLayout.astro'
+export const prerender = true
+---
+
+<PublicInfoLayout title="Transparency" description="How JobLink sources opportunities, handles your workspace, and supports your job search.">
+  <section class="card"><div class="card-body">
+    <h2>Where opportunities come from</h2>
+    <p class="text-secondary">JobLink displays listings from external sources such as Remotive, Arbeitnow, and Jobicy. Other search options may take you directly to third-party job sites. Listings can change or expire, so check the original source for current details and eligibility.</p>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Applications stay in your hands</h2>
+    <p class="text-secondary">JobLink helps you find and track opportunities. You submit applications on the original listing or employer website. Opening an application page is tracked separately from marking an application as Applied; JobLink does not automatically submit it for you.</p>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Your personal workspace</h2>
+    <p class="text-secondary">Your profile and saved applications, tasks, events, links, sheet rows, and attached files are associated with your account. You must sign in to access your saved workspace. Cookies keep you signed in across visits.</p>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Using the assistant</h2>
+    <p class="text-secondary">When an external AI provider is enabled, your conversation is sent to that provider to generate an answer. Relevant saved workspace records can also be included when account context is enabled. The assistant panel describes the active provider and account context. Answers may be incomplete or out of date; review the original sources before acting on them.</p>
+  </div></section>
+  <section class="card"><div class="card-body">
+    <h2>Questions and enquiries</h2>
+    <p class="text-secondary">Read the <a href="/faq" data-astro-prefetch>FAQ</a> for common questions, or visit <a href="/advertise" data-astro-prefetch>Advertise</a> to contact Adam about a promotion or partnership.</p>
+  </div></section>
+</PublicInfoLayout>

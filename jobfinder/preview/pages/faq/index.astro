@@ -1,7 +1,5 @@
 ---
-import BaseLayout from '@shared/layouts/BaseLayout.astro'
-import Logo from '@shared/components/navbar/Logo.astro'
-import JoblinkFooter from '@shared/components/JoblinkFooter.astro'
+import PublicInfoLayout from '@shared/layouts/PublicInfoLayout.astro'
 export const prerender = true
 const questions = [
   { question: 'What can I do with JobLink?', answer: 'Find job opportunities, track applications, and organize your next steps with a task board, calendar, saved links, and a sheet.' },
@@ -13,24 +11,13 @@ const questions = [
 ]
 ---
 
-<BaseLayout title="Frequently asked questions" description="Answers to common questions about JobLink, accounts, job applications, and your workspace." assistant={false} publicStyles>
-  <header class="faq-header"><Logo /><a class="btn" href="/job-listing" data-astro-prefetch>Find work</a></header>
-  <main id="content" class="faq-content" data-public-info>
-    <a class="faq-back" href="/" data-astro-prefetch>← Back to JobLink</a>
-    <h1>Frequently asked questions</h1>
-    <p class="text-secondary">A few things to know before your next step.</p>
+<PublicInfoLayout title="Frequently asked questions" description="A few things to know before your next step.">
     <div class="faq-questions">
       {questions.map(item => <details><summary>{item.question}</summary><p>{item.answer}</p></details>)}
     </div>
-  </main>
-  <JoblinkFooter />
-</BaseLayout>
+</PublicInfoLayout>
 
 <style>
-  .faq-header { width: min(100%, 1140px); padding: 24px; margin: auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  .faq-content { width: min(100%, 800px); margin: 32px auto 64px; padding: 0 24px; }
-  .faq-back { display: inline-block; margin-bottom: 24px; }
-  h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; }
   .faq-questions { margin-top: 32px; }
   details { border-bottom: 1px solid #dce3eb; padding: 16px 0; }
   summary { cursor: pointer; font-weight: 600; font-size: 1rem; padding: 8px 0; }
