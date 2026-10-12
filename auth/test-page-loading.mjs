@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mockOpenAvailability } from './job-availability-fixture.mjs';
 import { writeFile, unlink } from 'node:fs/promises';
 import { chromium } from '../jobfinder/node_modules/playwright/index.mjs';
 
@@ -24,6 +25,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const context = await browser.newContext({ baseURL: 'http://127.0.0.1:3000', viewport: { width: 1530, height: 1000 } });
   const page = await context.newPage();
+  await mockOpenAvailability(context);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.setDefaultTimeout(5000);

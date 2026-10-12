@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mockOpenAvailability } from './job-availability-fixture.mjs';
 import { writeFile, unlink } from 'node:fs/promises';
 import { chromium } from '../jobfinder/node_modules/playwright/index.mjs';
 
@@ -17,6 +18,7 @@ try {
   });
   const context = await browser.newContext({ baseURL: process.env.JOBLINK_BASE_URL || 'http://127.0.0.1:3000', viewport: { width: 1530, height: 1000 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
+  await mockOpenAvailability(context);
   page.setDefaultTimeout(10000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

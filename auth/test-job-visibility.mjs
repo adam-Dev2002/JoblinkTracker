@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mockOpenAvailability } from './job-availability-fixture.mjs';
 import { writeFile, unlink } from 'node:fs/promises';
 import { chromium } from '../jobfinder/node_modules/playwright/index.mjs';
 
@@ -18,6 +19,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const context = await browser.newContext({ baseURL: 'http://127.0.0.1:3000', reducedMotion: 'reduce' });
   const page = await context.newPage();
+  await mockOpenAvailability(context);
   page.setDefaultTimeout(10000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -154,7 +156,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   assert.match(await page.locator('[data-job-count]').innerText(), /^0 results on this page$/);
   assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 0 entries/);
   await page.evaluate(() => window.redrawVisibilityGoogle());
-  await page.locator('.google-job-grid').getByText('No unapplied jobs', { exact: false }).waitFor();
+  await page.locator('.google-job-grid').getByText('No open, unapplied jobs', { exact: false }).waitFor();
   assert.equal(await page.locator('.google-job-card').count(), 0, 'Provider redraw also filters applied jobs');
 
   // Tracker edits are reconciled on navigation, including a slow fresh response.

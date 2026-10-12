@@ -88,6 +88,10 @@ try {
   await p.locator("[data-apply-job]").first().waitFor();
   await p.locator('[data-ready="true"]').waitFor();
   assert.equal(await p.locator(".job-card").count(), 2);
+  const availabilitySession = await (await c.request.get('/api/auth/session')).json();
+  assert.equal((await c.request.get('/api/jobs/availability')).status(), 405);
+  assert.equal((await c.request.post('/api/jobs/availability', { data: { urls: ['https://www.onlinejobs.ph/jobseekers/job/assistant-123'] } })).status(), 403);
+  assert.equal((await c.request.post('/api/jobs/availability', { data: { urls: ['http://127.0.0.1/private'] }, headers: { 'X-CSRF-Token': availabilitySession.csrf } })).status(), 422);
   await p
     .locator("[data-company-logo]")
     .first()

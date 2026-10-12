@@ -3,6 +3,7 @@ import { loadEnv } from "../jobfinder/node_modules/vite/dist/node/index.js";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { mockOpenAvailability } from './job-availability-fixture.mjs';
 
 for (const [key, value] of Object.entries(
   loadEnv(
@@ -20,6 +21,7 @@ const browser = await chromium.launch({
 });
 const context = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
 const page = await context.newPage();
+await mockOpenAvailability(context);
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
 const jobs = Array.from({ length: 218 }, (_, index) => ({

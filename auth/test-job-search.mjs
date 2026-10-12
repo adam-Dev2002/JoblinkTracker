@@ -26,6 +26,7 @@ delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SECRET_KEY;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url) => {
+  if (String(url).includes('/remote-jobs/status?')) return new Response(JSON.stringify({ jobs: [{ id: 1, status: 'active' }, { id: 2, status: 'closed' }, { id: 3, status: 'unknown' }] }));
   const row = {
     title: "Senior Developer",
     company_name: "Acme Tools",
@@ -41,6 +42,8 @@ globalThis.fetch = async (url) => {
             category: "Software",
             candidate_required_location: "Worldwide",
           },
+          { ...row, id: 2, status: 'closed' },
+          { ...row, id: 3, validThrough: '2000-01-01' },
         ],
       }
     : String(url).includes("jobicy.com")
@@ -54,6 +57,8 @@ globalThis.fetch = async (url) => {
               jobIndustry: ["Software"],
               url: row.url,
             },
+            { id: 2, jobTitle: row.title, url: row.url },
+            { id: 3, jobTitle: row.title, url: row.url },
           ],
         }
       : {
@@ -64,6 +69,8 @@ globalThis.fetch = async (url) => {
               tags: ["Software"],
               location: "Worldwide",
             },
+            { ...row, slug: 'closed', active: false },
+            { ...row, slug: 'filled', totalJobOpenings: 0 },
           ],
         };
   return new Response(JSON.stringify(payload), {

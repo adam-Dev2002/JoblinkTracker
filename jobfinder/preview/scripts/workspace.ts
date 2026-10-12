@@ -5,6 +5,8 @@ import { companyLogo, validCompanyLogo } from '../server/company-logo.mjs'
 import { getSession } from '@shared/lib/client-session'
 import { readPageData, writePageData } from '@shared/lib/page-data-cache'
 import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './google-job-search'
+import { googleJobListingUrl } from './google-job-query'
+import { isClosedListing } from './job-availability.mjs'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
@@ -19,7 +21,7 @@ const recentApplicationLimit = 7
 let deletingSheetRows = false
 let sheetWriteQueue: Promise<void> = Promise.resolve()
 type Entry = { id: number; kind: Kind; attachments?: Attachment[]; payload: Record<string, string> & { title: string; company: string; url: string; salary: string; status: string; notes: string; date: string; time: string; value: string } }
-type Job = { id: string; title: string; company: string; location: string; role: string; url: string; applyUrl?: string; source: string; salary: string; date: string; direct: boolean; logo: string; workMode: string; employmentType: string; description: string }
+type Job = { id: string; title: string; company: string; location: string; role: string; url: string; applyUrl?: string; source: string; salary: string; date: string; direct: boolean; logo: string; workMode: string; employmentType: string; description: string; availability?: string }
 const root = document.querySelector<HTMLElement>('[data-workspace-view]')!
 const view = root.dataset.workspaceView!
 const select = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!
@@ -37,6 +39,7 @@ const safeUrl = (value: string | undefined) => {
   }
 }
 let items: Entry[] = []
+const availabilityKey = (url: string) => safeUrl(url).split('#')[0]!
 let cacheOwner: number | null = null
 let workspaceRevision = 0
 let jobs: Job[] = []
@@ -144,7 +147,7 @@ function render() {
   if (!loaded) return
   if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
   if (view === 'jobs' && jobSearchInitialized) {
-    for (const [id, job] of jobSelection) if (hasApplied(job)) jobSelection.delete(id)
+    for (const [id, job] of jobSelection) if (hasApplied(job) || isClosedListing(job)) jobSelection.delete(id)
     renderGoogleJobCards()
     if (jobs.length || !jobsLoading) renderJobs(false)
   }
@@ -687,6 +690,16 @@ async function handleClick(event: Event) {
         render()
         showApplicationModal(item)
       } catch (e) {
+        if (googleJobListingUrl(job.url)) {
+          const availability = await api('jobs/availability', { urls: [job.url], fresh: true }, AbortSignal.timeout(18000))
+          const status = availability.jobs?.find((result: { url: string; status: string }) => availabilityKey(result.url) === availabilityKey(job.url))?.status
+          if (status !== 'open') {
+            job.availability = status === 'closed' ? 'closed' : 'unknown'
+            jobSelection.delete(job.id)
+            render()
+            throw new Error(status === 'closed' ? 'This job is closed or filled and has been removed from the results.' : 'This job could not be confirmed as open. Try another listing or search again.')
+          }
+        }
         popup.close()
         throw e
       } finally {
@@ -792,7 +805,7 @@ async function handleChange(event: Event) {
         for (const job of [...jobs, ...googleJobs.values()].filter((job) => [...visibleJobIds, ...visibleGoogleJobIds].includes(job.id))) {
           if (jobSelection.has(job.id)) continue
           if (jobSelection.size >= maxSelectedJobs) break
-          if (!trackedApplication(job)) jobSelection.set(job.id, job)
+          if (!trackedApplication(job) && !isClosedListing(job)) jobSelection.set(job.id, job)
         }
       }
       if (target.checked && jobSelection.size === maxSelectedJobs) jobBulkStatus(`Selected ${maxSelectedJobs} jobs. Save or deselect this batch before selecting more.`)
@@ -1032,7 +1045,7 @@ function updateJobSelection() {
   const selectedVisible = visibleIds.filter((id) => jobSelection.has(id)).length
   const hidden = jobSelection.size - selectedVisible
   const hasSelection = jobSelection.size > 0
-  const hasNewJobs = visibleIds.some(id => { const job = findJob(id); return job && !trackedApplication(job) })
+  const hasNewJobs = visibleIds.some(id => { const job = findJob(id); return job && !trackedApplication(job) && !isClosedListing(job) })
   all.checked = hasSelection
   all.indeterminate = false
   all.disabled = busy || (!hasSelection && (jobsLoading || !hasNewJobs))
@@ -1113,6 +1126,15 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
         company: '',
         location: '',
         role: '',
+  googleResultsHost = null
+  const cachedPreview = select('[data-google-jobs-preview]')
+  if (div !== cachedPreview) {
+    cachedPreview.replaceChildren()
+    cachedPreview.classList.add('d-none')
+  }
+  visibleGoogleJobIds = []
+  updateJobSelection()
+  div.innerHTML = '<p class="text-secondary" role="status">Checking which jobs are still open…</p>'
         url,
         applyUrl: safeUrl(result.url),
         source: 'Google · ' + new URL(url).hostname,
@@ -1127,7 +1149,22 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
     }),
   )
   if (generation !== googleRenderGeneration || select('[data-google-jobs]').classList.contains('d-none')) return
-  const cachedPreview = select('[data-google-jobs-preview]')
+  const candidates = listings.filter(job => !isClosedListing(job) && !hasApplied(job)).slice(0, jobsPerPage)
+  let verified: { url: string; status: string }[] = []
+  let unavailable = false
+  if (candidates.length) {
+    try {
+      const response = await api('jobs/availability', { urls: candidates.map(job => job.url) }, AbortSignal.timeout(18000))
+      verified = response.jobs || []
+    } catch { unavailable = true }
+  }
+  if (generation !== googleRenderGeneration || !div.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
+  for (const job of listings) {
+    const status = verified.find(result => availabilityKey(result.url) === availabilityKey(job.url))?.status
+    job.availability = isClosedListing(job) || status === 'closed' ? 'closed' : status === 'open' ? 'open' : 'unknown'
+    if (job.availability !== 'open') jobSelection.delete(job.id)
+  }
+  select('[data-job-availability-message]').textContent = unavailable || candidates.some(job => job.availability === 'unknown') ? 'Some listings could not be confirmed as open and are hidden. Search again to retry.' : ''
   if (div !== cachedPreview) {
     cachedPreview.replaceChildren()
     cachedPreview.classList.add('d-none')
@@ -1141,7 +1178,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
 function renderGoogleJobCards() {
   const div = googleResultsHost
   if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
-  const listings = Array.from(googleJobs.values()).filter(job => !hasApplied(job))
+  const listings = Array.from(googleJobs.values()).filter(job => job.availability === 'open' && !isClosedListing(job) && !hasApplied(job))
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
     '<div class="google-job-grid">' +
@@ -1153,7 +1190,7 @@ function renderGoogleJobCards() {
         return renderJobCard(job, { domain, origin: website.origin, iconUrl })
       })
       .join('') +
-    (listings.length ? '' : '<p class="text-secondary mb-0">No unapplied jobs on this Google results page. Try another page or broader keywords.</p>') +
+    (listings.length ? '' : '<p class="text-secondary mb-0">No open, unapplied jobs on this Google results page. Try another page or broader keywords.</p>') +
     '</div>'
   div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
   if (select<HTMLSelectElement>('#job-source').value === 'google') select('[data-job-count]').textContent = `${listings.length} results on this page`
@@ -1195,8 +1232,25 @@ async function saveSelectedJobs() {
         failed++
         failureMessage = e instanceof Error ? e.message : 'Unable to save.'
       }
+    const toCheck = selectedJobs.filter(job => googleJobListingUrl(job.url))
+    const availability = new Map<string, string>()
+    for (let offset = 0; offset < toCheck.length; offset += jobsPerPage) {
+      const batch = toCheck.slice(offset, offset + jobsPerPage)
+      jobBulkStatus('Checking selected jobs are still open…')
+      try {
+        const response = await api('jobs/availability', { urls: batch.map(job => job.url), fresh: true }, AbortSignal.timeout(18000))
+        for (const result of response.jobs || []) availability.set(availabilityKey(result.url), result.status)
+      } catch { /* Unverified jobs are skipped below. */ }
     }
-    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} saved.${skipped ? ` ${skipped} already in your tracker.` : ''}${failed ? ` ${failed} could not be saved and remain selected. Try Save selected again.` : ''}`)
+    }
+    const unavailable = selectedJobs.filter(job => job.availability === 'closed' || job.availability === 'unknown').length
+    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} saved.${skipped > unavailable ? ` ${skipped - unavailable} already in your tracker.` : ''}${unavailable ? ` ${unavailable} closed or unverified listings skipped.` : ''}${failed ? ` ${failed} could not be saved and remain selected. Try Save selected again.` : ''}`)
+      if (isClosedListing(job) || (googleJobListingUrl(job.url) && availability.get(availabilityKey(job.url)) !== 'open')) {
+        job.availability = isClosedListing(job) || availability.get(availabilityKey(job.url)) === 'closed' ? 'closed' : 'unknown'
+        jobSelection.delete(job.id)
+        skipped++
+        continue
+      }
     if (failed) error(failureMessage)
   } finally {
     savingSelectedJobs = false
@@ -1216,6 +1270,7 @@ function exportSelectedJobs() {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage) {
+    render()
   const pages = Math.ceil(count / perPage)
   nav.classList.toggle('d-none', count === 0)
   if (count === 0) {
@@ -1257,7 +1312,7 @@ function renderJobs(resetPage = true) {
     // Feed timestamps without an offset are interpreted in UTC on every device.
     const date = (j.date || '').trim()
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date + 'T00:00:00Z' : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date) ? date.replace(' ', 'T') + 'Z' : date)
-    return !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
+    return !isClosedListing(j) && j.availability !== 'unknown' && !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
   })
   visibleJobIds = list.map((job) => job.id)
   jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / jobsPerPage)))

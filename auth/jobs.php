@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/company-logos.php';
+require_once __DIR__ . '/job-availability.php';
 function fetchFeed(string $url, array $headers = []): array {
     $curl = curl_init($url);
     curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_HTTPHEADER => $headers, CURLOPT_USERAGENT => 'Jobify/1.0 (job discovery; source attribution)']);
@@ -67,8 +68,9 @@ function jobsRequest(string $path): never {
             throttle(db(), 'job-search');
             session_write_close();
             $url = 'https://jsearch.p.rapidapi.com/search?' . http_build_query(['query' => ($query ?: 'jobs') . ' in Philippines' . ($publisher ? ' via ' . $publisher : ''), 'country' => 'ph', 'num_pages' => 1]);
-            $feed = cachedFeed('jsearch:' . $query . ':' . $publisher, $url, ['X-RapidAPI-Key: ' . $config['jsearch_api_key'], 'X-RapidAPI-Host: jsearch.p.rapidapi.com'], 3600);
+            $feed = cachedFeed('jsearch-open-v2:' . $query . ':' . $publisher, $url, ['X-RapidAPI-Key: ' . $config['jsearch_api_key'], 'X-RapidAPI-Host: jsearch.p.rapidapi.com'], 300);
             foreach ($feed['data'] ?? [] as $row) {
+                if (closedJobRow($row)) continue;
                 if ($publisher && stripos(($row['job_publisher'] ?? '') . ' ' . ($row['job_apply_link'] ?? ''), str_replace('.ph', '', $publisher)) === false) continue;
                 $url = safeJobUrl($row['job_apply_link'] ?? ''); $direct = (bool)($row['job_apply_is_direct'] ?? false);
                 foreach ($row['apply_options'] ?? [] as $option) { if (!empty($option['is_direct']) && safeJobUrl($option['apply_link'] ?? '')) { $url = safeJobUrl($option['apply_link']); $direct = true; break; } }
@@ -78,14 +80,16 @@ function jobsRequest(string $path): never {
         } elseif ($source === 'remotive') {
             $feed = cachedFeed('remotive', 'https://remotive.com/api/remote-jobs');
             foreach ($feed['jobs'] ?? [] as $row) {
+                if (closedJobRow($row)) continue;
                 $title = $row['title'] ?? ''; $company = $row['company_name'] ?? '';
                 if ($query && !str_contains(mb_strtolower($title . ' ' . $company . ' ' . ($row['category'] ?? '')), mb_strtolower($query))) continue;
                 $url = safeJobUrl($row['url'] ?? ''); if (!$url) continue;
                 $jobs[] = ['id' => (string)$row['id'], 'title' => $title, 'description' => jobDescription($row['description'] ?? ''), 'company' => $company, 'location' => $row['candidate_required_location'] ?: 'Check listing', 'role' => roleFor($title), 'url' => $url, 'source' => 'Remotive', 'salary' => $row['salary'] ?? '', 'date' => $row['publication_date'] ?? '', 'logo' => companyLogo($company, safeJobUrl($row['company_logo'] ?? '')), 'employmentType' => employmentType($row['job_type'] ?? ''), 'workMode' => 'Remote / WFH', 'direct' => false];
             }
         } elseif ($source === 'arbeitnow') {
-            $feed = cachedFeed('arbeitnow-v1', 'https://www.arbeitnow.com/api/job-board-api');
+            $feed = cachedFeed('arbeitnow-open-v2', 'https://www.arbeitnow.com/api/job-board-api', [], 300);
             foreach ($feed['data'] ?? [] as $row) {
+                if (closedJobRow($row)) continue;
                 $title = $row['title'] ?? ''; $company = $row['company_name'] ?? '';
                 if ($query && !str_contains(mb_strtolower($title . ' ' . $company . ' ' . implode(' ', $row['tags'] ?? [])), mb_strtolower($query))) continue;
                 $url = safeJobUrl($row['url'] ?? ''); if (!$url) continue;

@@ -44,6 +44,8 @@ The classification dropdown filters imported jobs by their assigned role categor
 
 Google results provide a title, URL, and summary. Joblink does not invent a salary, employer, employment type, or posting date when that information is absent. **View / apply** opens the original job page. Saving keeps a bookmark in your application tracker; opening the page does not mean you have submitted an application.
 
+Indexed results are not proof that a vacancy is still open. Joblink checks each original listing before rendering its card, using current job metadata and application controls. Closed, filled, expired, missing and unverifiable listings are hidden; blocked sources show a short retry message. Restored Google previews go through the same checks. Apply and bulk Save recheck supported job-board links to catch a listing that closed after it was displayed. Source-page checks cannot detect a filled role until the employer or job board publishes the update.
+
 **Select up to 50 new jobs** chooses at most 50 unsaved matches across loaded feed pages and the current Google page. The total selection is capped at 50, including selections outside the current filters or Google page. Additional checkboxes are disabled until space is available. Saved jobs are skipped by bulk selection; individual selection remains available for export. Source website and original-listing links open in new tabs. Source icons fall back to a built-in icon if the favicon cannot load.
 
 ## If you need structured Google for Jobs data
