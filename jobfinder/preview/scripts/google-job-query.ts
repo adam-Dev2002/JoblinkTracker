@@ -27,7 +27,7 @@ export function googleJobQuery(filters: GoogleJobFilters) {
 export function isGoogleJobListing(value: string) {
   try {
     const url = new URL(value)
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return false
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) return false
     const host = url.hostname.toLowerCase().replace(/^www\./, '')
     if (host === 'onlinejobs.ph') return /^\/jobseekers\/job\/[^/]+/.test(url.pathname)
     if (host === 'linkedin.com') return /^\/jobs\/view\/[^/]+/.test(url.pathname)
@@ -46,7 +46,10 @@ export function googleJobListingUrl(value: string) {
     if (['google.com', 'www.google.com'].includes(url.hostname) && url.pathname === '/url') {
       url = new URL(url.searchParams.get('q') || url.searchParams.get('url') || '')
     }
-    return isGoogleJobListing(url.href) ? url.href : ''
+    if (!isGoogleJobListing(url.href)) return ''
+    url.protocol = 'https:'
+    url.hash = ''
+    return url.href
   } catch {
     return ''
   }

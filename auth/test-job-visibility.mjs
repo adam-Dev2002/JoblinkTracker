@@ -177,6 +177,17 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   release();
   workspaceGate = null;
   await card(6).waitFor({ state: 'detached' });
+  // A cached Applied status must not prevent availability checks from running.
+  // A delayed fresh tracker response may restore the same job to Saved.
+  await page.locator('#job-source').selectOption('google');
+  await page.locator('[data-google-jobs-host] .google-job-grid').waitFor();
+  items.find(item => item.id === 7).payload.status = 'Saved';
+  workspaceGate = new Promise(resolve => { release = resolve; });
+  await page.reload();
+  await page.locator('[data-google-jobs-host] .google-job-grid').waitFor();
+  release(); workspaceGate = null;
+  await page.locator('.google-job-card').waitFor();
+  assert.equal(await page.locator('.google-job-card').count(), 1, 'Fresh tracker state restores an open listing even when the preview said Applied');
   assert.deepEqual(errors, []);
   console.log('PASS: applied and later statuses hidden across feeds/Google/cache, opened-card confirmation, failed-save retries, selection/counts, mobile layout, tracker edits and delayed refresh.');
 } finally {

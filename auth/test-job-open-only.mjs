@@ -63,7 +63,7 @@ try {
   await page.locator('[data-job-count]').filter({ hasText: /^2 results on this page$/ }).waitFor();
   assert.equal(await page.locator('.google-job-card').count(), 2);
   assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 2 entries/);
-  assert.match(await page.locator('[data-job-availability-message]').innerText(), /could not be confirmed/);
+  assert.match(await page.locator('[data-job-availability-message]').innerText(), /could not confirm/);
   assert.equal(checks[0].urls.includes(job(14).url), false, 'Known-closed search snippets are discarded before network checks');
   // A listing that fills after display is checked again before opening/tracking.
   statuses.set(job(10).url, 'closed');

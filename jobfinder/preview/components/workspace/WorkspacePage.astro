@@ -260,21 +260,27 @@ const desk = [
               <p class="text-secondary small" data-feed-message>
                 Loading the live job feed
               </p>
-              <div class="card border mb-3 job-selection-toolbar" data-job-selection-toolbar>
+              <div class="card border mb-3 job-selection-toolbar d-none" data-job-selection-toolbar>
                 <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
                   <div class="d-flex flex-wrap align-items-center gap-3 job-selection-summary">
+                    <label class="d-flex align-items-center gap-2 mb-0 text-nowrap" data-job-entries-control>
+                      Show entries
+                      <select class="form-select form-select-sm w-auto" aria-label="Show job entries" data-job-entries data-entries-control disabled>
+                        <option value="12">12</option><option value="24">24</option><option value="48">48</option><option value="all">All</option>
+                      </select>
+                    </label>
                     <label class="form-check mb-0">
                       <input class="form-check-input" type="checkbox" data-job-select-all disabled />
-                      <span class="form-check-label" data-job-selection-label>Select all results</span>
+                      <span class="form-check-label" data-job-selection-label>Select this page</span>
                       <span class="form-hint" data-job-selection-scope>
-                        Across all pages
+                        Current page only
                       </span>
                     </label>
                     <span class="text-secondary small" data-job-selected-count role="status">
                       0 selected
                     </span>
                   </div>
-                  <div class="d-flex flex-wrap gap-2 job-selection-actions">
+                  <div class="d-flex flex-wrap gap-2 job-selection-actions d-none" data-job-selection-actions>
                     <button type="button" class="btn btn-primary btn-sm" data-job-bulk-save disabled>
                       <Icon name="bookmark" />
                       Save selected
@@ -289,13 +295,14 @@ const desk = [
                     </button>
                   </div>
                 </div>
-                <div class="card-footer small d-none" data-job-bulk-status role="status" aria-live="polite" />
               </div>
+              <div class="small mb-3 d-none" data-job-bulk-status role="status" aria-live="polite" />
               <div class="row g-3" data-job-results><div class="col-12"><DataPlaceholder variant="cards" /></div></div>
               <template data-job-placeholder><DataPlaceholder variant="cards" /></template>
               <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
               <div class="d-none google-jobs-results" data-google-jobs aria-busy="false">
                 <p class="text-secondary small" data-job-availability-message role="status" />
+                <button type="button" class="btn btn-sm mb-3 d-none" data-retry-job-availability>Retry availability checks</button>
                 <p class="text-secondary small" data-google-jobs-status role="status" aria-live="polite" />
                 <div class="d-none" data-google-jobs-preview />
                 <div data-google-jobs-host />
@@ -362,14 +369,14 @@ const desk = [
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <span class="fw-semibold" role="status" data-application-selected-count />
                 <div class="d-flex flex-wrap gap-2 ms-auto">
-                  <button type="button" class="btn btn-sm" data-application-select><Icon name="checkbox" class="workspace-action-icon" /><span data-application-select-label>Select all results</span></button>
+                  <button type="button" class="btn btn-sm" data-application-select><Icon name="checkbox" class="workspace-action-icon" /><span data-application-select-label>Select this page</span></button>
                   <button type="button" class="btn btn-sm" data-application-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
                   <button type="button" class="btn btn-sm text-danger" data-application-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-application-bulk-label>Delete selected (0)</span></button>
                 </div>
               </div>
             </div>
             <Fragment slot="columns">
-              <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select all filtered applications across pages" data-application-all /></th>
+              <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select applications on this page" data-application-all /></th>
               <th class="table-col-date">Date</th><th class="table-col-title">Role</th><th class="table-col-company">Company</th><th class="table-col-value">Salary</th><th class="table-col-status">Status</th><th class="table-col-notes">Notes</th><th class="table-col-actions">Actions</th>
             </Fragment>
           </WorkspaceTable>
@@ -502,14 +509,14 @@ const desk = [
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <span class="fw-semibold" role="status" data-sheet-selected-count />
                 <div class="d-flex flex-wrap gap-2 ms-auto">
-                  <button type="button" class="btn btn-sm" data-sheet-select><Icon name="checkbox" class="workspace-action-icon" /><span data-sheet-select-label>Select all results</span></button>
+                  <button type="button" class="btn btn-sm" data-sheet-select><Icon name="checkbox" class="workspace-action-icon" /><span data-sheet-select-label>Select this page</span></button>
                   <button type="button" class="btn btn-sm" data-sheet-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
                   <button type="button" class="btn btn-sm text-danger" data-sheet-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-sheet-bulk-label>Delete selected (0)</span></button>
                 </div>
               </div>
             </div>
             <Fragment slot="columns">
-              <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select all filtered sheet rows across pages" data-sheet-all /></th><th class="table-col-index">#</th><th class="table-col-title">Title / role</th><th class="table-col-company" data-sheet-column="company">Company / category</th><th class="table-col-value" data-sheet-column="value">Value</th><th class="table-col-notes" data-sheet-column="notes">Notes</th><th class="table-col-attachments" data-sheet-column="attachments">Attachments</th><th class="table-col-actions">Actions</th>
+              <th class="table-col-select"><input type="checkbox" class="form-check-input m-0" aria-label="Select sheet rows on this page" data-sheet-all /></th><th class="table-col-index">#</th><th class="table-col-title">Title / role</th><th class="table-col-company" data-sheet-column="company">Company / category</th><th class="table-col-value" data-sheet-column="value">Value</th><th class="table-col-notes" data-sheet-column="notes">Notes</th><th class="table-col-attachments" data-sheet-column="attachments">Attachments</th><th class="table-col-actions">Actions</th>
             </Fragment>
             <span slot="footer" class="visually-hidden" role="status" data-sheet-save-status />
           </WorkspaceTable>
@@ -814,7 +821,7 @@ const desk = [
     max-width: 100%;
   }
   .google-job-grid > .job-card {
-    height: auto;
+    height: 100%;
   }
   .google-job-grid {
     width: 100%;
@@ -943,6 +950,19 @@ const desk = [
     min-width: 0;
     padding: 1.25rem;
     overflow-wrap: anywhere;
+    height: 100%;
+  }
+  .job-card-footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .job-card-actions .btn-primary {
+    min-width: 0;
+  }
+  .job-card-actions button {
+    flex-shrink: 0;
   }
   .job-card .job-title {
     line-height: 1.4;

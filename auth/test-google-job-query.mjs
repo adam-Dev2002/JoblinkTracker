@@ -53,6 +53,8 @@ console.log(
 );
 const originalListing =
   "https://www.onlinejobs.ph/jobseekers/job/assistant-123";
+assert.equal(googleJobListingUrl('http://www.onlinejobs.ph/jobseekers/job/assistant-123#apply'), originalListing, 'Old HTTP indexed URLs use the supported HTTPS listing');
+assert.equal(googleJobListingUrl('https://www.onlinejobs.ph:8443/jobseekers/job/assistant-123'), '', 'Unsupported ports are rejected before batch availability checks');
 assert.equal(
   googleJobListingUrl(
     "https://www.google.com/url?client=internal-element-cse&q=" +

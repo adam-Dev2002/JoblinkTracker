@@ -20,7 +20,15 @@ const application = kind === 'application'
     </div>
   </div>
   <div class="card-body border-bottom workspace-table-toolbar">
-    <div class="workspace-table-controls"><slot name="toolbar" /></div>
+    <div class="workspace-table-controls">
+      <label class="d-flex align-items-center gap-2 mb-0 text-nowrap">
+        Show entries
+        <select class="form-select w-auto" aria-label={`Show ${application ? 'application' : 'sheet'} entries`} data-entries-control data-application-entries={application ? true : undefined} data-sheet-entries={!application ? true : undefined} disabled>
+          <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="all">All</option>
+        </select>
+      </label>
+      <slot name="toolbar" />
+    </div>
   </div>
   <slot name="selection" />
   <div class="table-responsive">

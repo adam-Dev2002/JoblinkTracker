@@ -22,6 +22,6 @@ export function isClosedListing(row, now = Date.now()) {
     const deadline = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? value + 'T23:59:59.999Z' : value)
     if (Number.isFinite(deadline) && deadline < now) return true
   }
-  const title = plainJobText(row.title || row.jobTitle || row.job_title)
+  const title = plainJobText(row.title || row.jobTitle || row.job_title || row.text)
   return /^(?:\[|\()?\s*(?:closed|filled|expired|hiring closed)\s*(?:\]|\)|[-:–—]|$)/i.test(title) || /\b(?:position|role|job|vacancy)\s+(?:filled|closed|expired)\b/i.test(title) || hasClosureNotice(title) || hasClosureNotice(row.description || row.jobDescription || row.job_description || row.content)
 }

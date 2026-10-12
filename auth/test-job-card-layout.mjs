@@ -176,6 +176,8 @@ try {
   assert.equal(await page.locator('.gsc-cursor').count(), 0, 'A single Google page still has an entry count');
   await page.evaluate(() => window.drawGoogleCards(0, true));
   await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 0 entries on page 1');
+  assert.equal(await page.locator('.gsc-cursor-box').isVisible(), false, 'A genuinely empty Google page has no stale page controls');
+  assert.equal(await page.locator('[data-job-selection-toolbar]').isVisible(), false);
   await page.locator('#job-source').selectOption('jobicy');
   await page.locator('[data-google-jobs]').waitFor({ state: 'hidden' });
   await checkLayout('[data-job-results]', 12);

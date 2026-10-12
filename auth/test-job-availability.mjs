@@ -22,6 +22,7 @@ assert.equal(pageAvailability('<h1>Assistant</h1><button disabled>Apply now</but
 assert.equal(pageAvailability(schema({}) + '<button disabled>Apply now</button>', url, now), 'unknown', 'A disabled application overrides possibly stale schema');
 assert.equal(pageAvailability('<h1>Assistant</h1><a href="/apply">Apply now</a>', url, now), 'open');
 assert.equal(pageAvailability('<h1>Just a moment</h1><p>Verify you are human</p>' + schema({}), url, now), 'unknown');
+assert.equal(pageAvailability(schema({}) + '<footer>This site is protected by reCAPTCHA. Privacy and Terms apply.</footer>', url, now), 'open', 'A normal reCAPTCHA footer is not a blocked availability check');
 assert.equal(pageAvailability('<h1>Jobs</h1><p>Search jobs</p>', url, now), 'unknown');
 assert.equal(pageAvailability(schema({ url: 'https://www.onlinejobs.ph/jobseekers/job/other-999' }), url, now), 'unknown', 'An unrelated job schema cannot verify this listing');
 assert.equal(pageAvailability(schema({ url: 'https://ph.indeed.com/viewjob?jk=other' }), 'https://ph.indeed.com/viewjob?jk=this', now), 'unknown');
@@ -57,3 +58,16 @@ const previousCalls = calls;
 assert.equal((await checker(['https://example.com/jobs/1']))[0].status, 'unknown');
 assert.equal(calls, previousCalls);
 console.log('PASS: closure/filled flags, expiry boundaries, active JSON-LD and application prompts, stale metadata, unknown/challenge pages, URL and redirect restrictions, bounded reads, coalescing, TTL and fresh checks.');
+const sourceRequests = [];
+const sourceChecker = createAvailabilityChecker({ fetcher: async value => {
+  const endpoint = String(value);
+  sourceRequests.push(endpoint);
+  if (endpoint.includes('boards-api.greenhouse.io') && endpoint.endsWith('/123')) return new Response(JSON.stringify({ id: 123, title: 'Developer', absolute_url: 'https://job-boards.greenhouse.io/acme/jobs/123' }), { headers: { 'content-type': 'application/json' } });
+  if (endpoint.includes('api.lever.co') && endpoint.includes('/active?')) return new Response(JSON.stringify({ id: 'active', text: 'Developer', hostedUrl: 'https://jobs.lever.co/acme/active' }), { headers: { 'content-type': 'application/json' } });
+  if (endpoint.includes('api.lever.co') && endpoint.includes('/gone?')) return new Response('', { status: 404 });
+  return new Response('<h1>Verify you are human</h1>', { status: 403 });
+} });
+const sourceResults = await sourceChecker(['https://job-boards.greenhouse.io/acme/jobs/123', 'https://jobs.lever.co/acme/active', 'https://jobs.lever.co/acme/gone', 'https://www.linkedin.com/jobs/view/developer-123']);
+assert.deepEqual(sourceResults.map(result => result.status), ['open', 'open', 'closed', 'unknown']);
+assert.equal(sourceRequests.filter(url => url.startsWith('https://jobs.lever.co/') || url.startsWith('https://job-boards.greenhouse.io/')).length, 0, 'Published ATS APIs verify listings without depending on their HTML pages');
+console.log('PASS: published Greenhouse/Lever jobs, removed ATS jobs and blocked listings remain distinct.');

@@ -277,10 +277,12 @@ try {
   );
   await page.locator('[data-sheet-pick="113"]').check();
   await choosePage(1);
-  assert.equal(await page.locator('[data-sheet-pick="125"]').isChecked(), true);
+  assert.equal(await page.locator('[data-sheet-pick="125"]').isChecked(), false);
+  await page.locator('[data-sheet-pick="125"]').check();
+  await page.locator('[data-sheet-pick="124"]').check();
   assert.match(
     await page.locator("[data-sheet-selected-count]").innerText(),
-    /2 selected.*1 on other pages/,
+    /2 selected/,
   );
   const bulkDelete = page.locator('[data-sheet-bulk]');
   await bulkDelete.hover();
@@ -300,21 +302,20 @@ try {
   let selectedCsv = '';
   for await (const chunk of await selectedDownload.createReadStream()) selectedCsv += chunk;
   assert.equal(selectedCsv.trim().split('\r\n').length, 3);
-  assert.ok(selectedCsv.includes('Sheet row 125') && selectedCsv.includes('Sheet row 113'));
-  await page.getByLabel("Select all filtered sheet rows across pages").check();
-  assert.match(await page.locator("[data-sheet-bulk]").innerText(), /21/);
+  assert.ok(selectedCsv.includes('Sheet row 125') && selectedCsv.includes('Sheet row 124'));
+  await page.getByLabel("Select sheet rows on this page").check();
+  assert.match(await page.locator("[data-sheet-bulk]").innerText(), /10/);
   await page.getByRole("button", { name: "Filter", exact: true }).click();
   await page.getByLabel("Filter sheet company").selectOption("Acme");
   assert.match(
     await page.locator("[data-sheet-selected-count]").innerText(),
-    /10 selected outside current filters/,
+    /5 selected/,
   );
-  await page
-    .getByLabel("Select all filtered sheet rows across pages")
-    .uncheck();
+  await page.getByLabel("Select sheet rows on this page").check();
+  await page.getByLabel("Select sheet rows on this page").uncheck();
   assert.match(
     await page.locator("[data-sheet-selected-count]").innerText(),
-    /10 selected/,
+    /^$/,
   );
   await page.getByRole("button", { name: "Sort by", exact: true }).click();
   await page.getByLabel("Sort sheet").selectOption("oldest");
@@ -373,10 +374,9 @@ try {
     .getByRole("button", { name: "Clear filters", exact: true })
     .click();
   await page.getByRole("button", { name: "Filter", exact: true }).click();
-  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
-  await page.getByLabel('Select all filtered sheet rows across pages').check();
-  assert.match(await page.locator("[data-sheet-bulk]").innerText(), /21/);
-  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
+  await page.getByLabel('Select sheet rows on this page').check();
+  assert.match(await page.locator("[data-sheet-bulk]").innerText(), /10/);
+  await page.getByRole('button', { name: 'Deselect this page', exact: true }).click();
   await choosePage(3);
   const sheetActions = page.locator('[data-sheet-actions]').first();
   const sheetId = await sheetActions.getAttribute('data-sheet-actions');

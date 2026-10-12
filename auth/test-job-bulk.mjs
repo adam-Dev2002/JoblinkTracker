@@ -212,7 +212,7 @@ try {
   assert.equal(await page.locator('[data-job-pick="bulk-12"]').count(), 1);
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 selected/,
+    /0 selected/,
   );
   await page.getByRole("button", { name: "Page 19", exact: true }).click();
   assert.equal(await page.locator("[data-job-results] .job-card").count(), 2);
@@ -236,7 +236,7 @@ try {
   await page.getByRole("button", { name: "Page 1", exact: true }).click();
   assert.equal(
     await page.locator('[data-job-pick="bulk-0"]').isChecked(),
-    true,
+    false,
   );
   assert.equal(
     searchRequests,
@@ -254,16 +254,16 @@ try {
   );
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 outside current results/,
+    /^0 selected/,
   );
-  assert.equal(await page.locator('[data-job-select-all]').isChecked(), true);
-  assert.equal(await page.locator('[data-job-selection-label]').innerText(), 'Deselect 1 job');
+  assert.equal(await page.locator('[data-job-select-all]').isChecked(), false);
+  assert.equal(await page.locator('[data-job-selection-label]').innerText(), 'Select this page');
   await page.locator('[data-job-select-all]').uncheck();
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Unchecking also clears jobs hidden by date filters');
   await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /209 selected/,
+    /12 selected/,
   );
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(
@@ -319,7 +319,7 @@ try {
     await page
       .locator("[data-job-select-all]")
       .evaluate((input) => input.indeterminate),
-    false,
+    true,
   );
   await page.getByLabel("Place or location").fill("USA");
   assert.equal(await page.locator("[data-job-results] .job-card").count(), 12);
@@ -329,18 +329,18 @@ try {
   );
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 outside current results/,
+    /^0 selected/,
   );
   await page.getByLabel('Place or location').fill('No matching location');
-  assert.equal(await page.locator('[data-job-select-all]').isEnabled(), true, 'Hidden selections can be cleared with zero matching jobs');
-  await page.locator('[data-job-select-all]').uncheck();
+  assert.equal(await page.locator('[data-job-select-all]').isEnabled(), false);
+  assert.equal(await page.locator('[data-job-selection-toolbar]').isVisible(), false, 'Empty results hide selection controls');
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/);
   assert.equal(await page.locator('[data-job-select-all]').isEnabled(), false, 'Empty results cannot start a new batch');
   await page.getByLabel('Place or location').fill('USA');
   await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /109 selected/,
+    /12 selected/,
   );
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(
@@ -364,7 +364,7 @@ try {
   assert.equal(source, "jobicy");
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 outside current results/,
+    /^0 selected/,
   );
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Switching feeds does not prevent clearing hidden selections');
@@ -374,6 +374,7 @@ try {
     () =>
       document.querySelector("[data-job-count]").textContent === "218 results",
   );
+  await page.locator('[data-job-entries]').selectOption('all');
   await page.locator('[data-job-pick="bulk-1"]').check();
   const downloadPromise = page.waitForEvent("download");
   await page.locator("[data-job-bulk-export]").click();
@@ -503,7 +504,7 @@ try {
   assert.equal(await page.locator("[data-job-results] .job-card").count(), 0);
   assert.match(
     await page.locator("[data-job-selection-scope]").innerText(),
-    /This Google results page/,
+    /Current page only/,
   );
   assert.equal(await page.evaluate(() => window.googleInjection), undefined);
   await page.locator(".google-job-card [data-job-details]").first().click();
@@ -590,10 +591,9 @@ try {
   );
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 outside current results/,
+    /^0 selected/,
   );
-  await page.locator('[data-job-select-all]').press('Space');
-  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Keyboard deselection clears previous Google pages');
+  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Changing Google pages clears the previous selection');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(
     await page.evaluate(

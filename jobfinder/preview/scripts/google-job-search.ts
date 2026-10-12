@@ -19,6 +19,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   let latestQuery = ''
   let active = false
   let resultCount = 0
+  let indexedResultCount = 0
   let resultTimer: ReturnType<typeof setTimeout> | undefined
   const updatePagination = () => {
     if (!active) return
@@ -33,6 +34,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       else results.append(footer)
     }
     footer.classList.add('workspace-pagination')
+    footer.classList.toggle('d-none', indexedResultCount === 0)
     const cursor = footer.querySelector<HTMLElement>('.gsc-cursor')
     const pages = Array.from(cursor?.querySelectorAll<HTMLElement>('.gsc-cursor-page') || [])
     const current = Math.max(0, pages.findIndex((page) => page.classList.contains('gsc-cursor-current-page')))
@@ -82,8 +84,8 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     if (!announcementOnly) root.querySelector('[data-google-jobs-preview] .data-placeholder')?.remove()
   }
   const ready: ReadyCallback = (_name, query, promos, results, div) => {
-    div.replaceChildren()
     if (!active || query !== latestQuery) return true
+    div.replaceChildren()
     // Keep Google promotions, branding, ads and pagination intact.
     for (const promo of promos || []) {
       try {
@@ -102,6 +104,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     }
     const listings = (results || []).map((result) => ({ ...result, listingUrl: googleJobListingUrl(result.url) })).filter((result) => result.listingUrl)
     resultCount = listings.length
+    indexedResultCount = listings.length
     const organic = document.createElement('div')
     div.append(organic)
     renderResults(listings, organic)

@@ -22,7 +22,7 @@ function listingIdentity(value) {
 export function pageAvailability(html, url, now = Date.now()) {
   const visible = plainJobText(html)
   if (hasClosureNotice(html)) return 'closed'
-  if (/verify (?:you are|you're) human|access denied|security check|just a moment|captcha|unusual traffic/i.test(visible)) return 'unknown'
+  if (/verify (?:you are|you're) human|access denied|security check|just a moment|(?:complete|solve) (?:the |this )?captcha|captcha (?:challenge|required)|unusual traffic/i.test(visible)) return 'unknown'
   const heading = plainJobText(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1])
   if (isClosedListing({ title: heading })) return 'closed'
   if (/^(?:sign in|log\s?in|register|job search|jobs|careers|page not found|404)$/i.test(heading)) return 'unknown'
@@ -55,6 +55,25 @@ export function pageAvailability(html, url, now = Date.now()) {
   if (activeControl) return 'open'
   return 'unknown'
 }
+function publishedJobApi(value) {
+  const url = new URL(value), parts = url.pathname.split('/').filter(Boolean)
+  if (url.hostname === 'jobs.lever.co' && parts.length === 2) return { provider: 'lever', id: parts[1], url: `https://api.lever.co/v0/postings/${encodeURIComponent(parts[0])}/${encodeURIComponent(parts[1])}?mode=json` }
+  if (['boards.greenhouse.io', 'job-boards.greenhouse.io'].includes(url.hostname) && parts.length === 3 && parts[1] === 'jobs') return { provider: 'greenhouse', id: parts[2], url: `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(parts[0])}/jobs/${encodeURIComponent(parts[2])}` }
+  return null
+}
+async function boundedPageText(response) {
+  const reader = response.body?.getReader()
+  if (!reader) return ''
+  const chunks = []; let size = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.length
+    if (size > 1500000) { await reader.cancel(); throw new Error('Page too large') }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
 
 export function createAvailabilityChecker({ fetcher = fetch, now = Date.now } = {}) {
   const cache = new Map(), pending = new Map()
@@ -68,7 +87,18 @@ export function createAvailabilityChecker({ fetcher = fetch, now = Date.now } = 
       let status = 'unknown', target = url
       try {
         const signal = AbortSignal.timeout(6000)
-        for (let redirects = 0; redirects < 4; redirects++) {
+        const sourceApi = publishedJobApi(url)
+        if (sourceApi) {
+          try {
+            const response = await fetcher(sourceApi.url, { redirect: 'error', signal, headers: { Accept: 'application/json', 'User-Agent': 'Joblink/1.0' } })
+            if ([404, 410].includes(response.status)) { status = 'closed'; await response.body?.cancel() }
+            else if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+              const job = JSON.parse(await boundedPageText(response))
+              if (String(job.id) === sourceApi.id && (sourceApi.provider === 'lever' ? job.text && job.hostedUrl : job.title && job.absolute_url)) status = isClosedListing(job, now()) ? 'closed' : 'open'
+            } else await response.body?.cancel()
+          } catch { /* Fall back to the listing page; failures are not closures. */ }
+        }
+        for (let redirects = 0; status === 'unknown' && redirects < 4; redirects++) {
           const response = await fetcher(target, { redirect: 'manual', signal, headers: { 'User-Agent': 'Joblink/1.0 (job availability check)', Accept: 'text/html' } })
           if ([301, 302, 303, 307, 308].includes(response.status)) {
             const location = response.headers.get('location')
@@ -80,17 +110,7 @@ export function createAvailabilityChecker({ fetcher = fetch, now = Date.now } = 
           }
           if ([404, 410].includes(response.status)) { status = 'closed'; await response.body?.cancel(); break }
           if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) { await response.body?.cancel(); break }
-          const reader = response.body?.getReader()
-          if (!reader) break
-          const chunks = []; let size = 0
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            size += value.length
-            if (size > 1500000) { await reader.cancel(); throw new Error('Page too large') }
-            chunks.push(value)
-          }
-          status = pageAvailability(Buffer.concat(chunks).toString('utf8'), target, now())
+          status = pageAvailability(await boundedPageText(response), target, now())
           break
         }
       } catch { /* Network failures remain unknown, never open or closed. */ }

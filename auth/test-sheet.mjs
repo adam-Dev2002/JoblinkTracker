@@ -140,17 +140,13 @@ try {
   );
   await page.getByRole("button", { name: "Columns", exact: true }).click();
   await page.locator("[data-sheet-search]").fill("Alpha updated");
-  await page.getByLabel('Select all filtered sheet rows across pages').check();
+  await page.getByLabel('Select sheet rows on this page').check();
   await page.locator("[data-sheet-search]").fill("no match");
   assert.match(
     await page.locator("[data-sheet-empty]").innerText(),
     /No rows match/,
   );
-  assert.match(
-    await page.locator("[data-sheet-selected-count]").innerText(),
-    /1 selected outside/,
-  );
-  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
+  assert.equal(await page.locator("[data-sheet-selection-toolbar]").isVisible(), false);
   assert.equal(await page.locator("[data-sheet-bulk]").isDisabled(), true);
   await page.locator("[data-sheet-search]").fill("");
   console.log(
@@ -172,7 +168,8 @@ try {
     .locator("[data-sheet-count]")
     .filter({ hasText: "204 of 204 rows" })
     .waitFor();
-  await page.getByLabel('Select all filtered sheet rows across pages').check();
+  await page.locator('[data-sheet-entries]').selectOption('all');
+  await page.getByLabel('Select sheet rows on this page').check();
   await page.locator("[data-sheet-bulk]").click();
   await page
     .locator("[data-confirm-modal]")

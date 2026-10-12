@@ -12,6 +12,7 @@ type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
 const hiddenSheetColumns = new Set<string>()
 let visibleSheetIds: number[] = []
+let visibleApplicationIds: number[] = []
 let applicationPage = 1
 let selectedApplicationId: number | null = null
 const applicationSelection = new Set<number>()
@@ -39,7 +40,7 @@ const safeUrl = (value: string | undefined) => {
     return ''
   }
 }
-const availabilityKey = (url: string) => safeUrl(url).split('#')[0]!
+const availabilityKey = (url: string) => googleJobListingUrl(url) || safeUrl(url).split('#')[0]!
 let items: Entry[] = []
 let cacheOwner: number | null = null
 let workspaceRevision = 0
@@ -47,6 +48,7 @@ let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
 const googleJobs = new Map<string, Job>()
 let googleResultsHost: HTMLElement | null = null
+let lastGoogleResults: { results: GoogleJobResult[]; host: HTMLElement } | null = null
 let visibleGoogleJobIds: string[] = []
 let googleRenderGeneration = 0
 const findJob = (id: string) => jobs.find((job) => job.id === id) || googleJobs.get(id)
@@ -96,6 +98,14 @@ async function api(path: string, body?: object, signal?: AbortSignal) {
 }
 function owned(kind: Kind) {
   return items.filter((item) => item.kind === kind)
+}
+function entriesPerPage(kind: 'application' | 'sheet' | 'job', count: number) {
+  const value = select<HTMLSelectElement>(`[data-${kind}-entries]`)?.value
+  return value === 'all' ? Math.max(1, count) : Number(value) || (kind === 'job' ? jobsPerPage : workspaceRowsPerPage)
+}
+function togglePageSelection(selection: Set<number>, ids: number[]) {
+  const deselect = ids.length > 0 && ids.every(id => selection.has(id))
+  for (const id of ids) if (deselect) selection.delete(id); else selection.add(id)
 }
 function actionButtons(item: Entry) {
   return `<div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary" data-edit="${item.id}">Edit</button><button class="btn btn-sm btn-outline-danger" data-delete="${item.id}" aria-label="Delete ${htmlEscape(item.payload.title)}">Delete</button></div>`
@@ -197,17 +207,21 @@ function render() {
     const filtered = filteredApplications()
     const sort = select<HTMLSelectElement>('[data-application-sort]').value
     filtered.sort((a, b) => sort === 'oldest' ? (a.payload.date || '').localeCompare(b.payload.date || '') || a.id - b.id : ['title', 'company', 'status'].includes(sort) ? (a.payload[sort] || '').localeCompare(b.payload[sort] || '') : (b.payload.date || '').localeCompare(a.payload.date || ''))
-    for (const id of applicationSelection) if (!apps.some(item => item.id === id)) applicationSelection.delete(id)
-    const visibleSelection = filtered.filter(item => applicationSelection.has(item.id)).length
-    const outside = applicationSelection.size - visibleSelection
+    const perPage = entriesPerPage('application', filtered.length)
+    applicationPage = Math.min(applicationPage, Math.max(1, Math.ceil(filtered.length / perPage)))
+    const pageRows = filtered.slice((applicationPage - 1) * perPage, applicationPage * perPage)
+    visibleApplicationIds = pageRows.map(item => item.id)
+    for (const id of applicationSelection) if (!visibleApplicationIds.includes(id)) applicationSelection.delete(id)
+    const visibleSelection = pageRows.filter(item => applicationSelection.has(item.id)).length
     const all = select<HTMLInputElement>('[data-application-all]')
-    all.disabled = filtered.length === 0 || deletingApplicationRows
-    all.checked = filtered.length > 0 && visibleSelection === filtered.length
-    all.indeterminate = visibleSelection > 0 && visibleSelection < filtered.length
+    all.disabled = pageRows.length === 0 || deletingApplicationRows
+    all.checked = pageRows.length > 0 && visibleSelection === pageRows.length
+    all.indeterminate = visibleSelection > 0 && !all.checked
     select('[data-application-selection-toolbar]').classList.toggle('d-none', applicationSelection.size === 0)
-    select('[data-application-selected-count]').textContent = `${applicationSelection.size} selected${outside ? ` · ${outside} outside current filters` : ''}`
+    select('[data-application-selected-count]').textContent = `${applicationSelection.size} selected`
     select<HTMLButtonElement>('[data-application-select]').disabled = deletingApplicationRows
-    select('[data-application-select-label]').textContent = applicationSelection.size ? 'Deselect all results' : 'Select all results'
+    select('[data-application-select-label]').textContent = all.checked ? 'Deselect this page' : 'Select this page'
+    select<HTMLSelectElement>('[data-application-entries]').disabled = deletingApplicationRows
     select<HTMLButtonElement>('[data-application-bulk]').disabled = applicationSelection.size === 0 || deletingApplicationRows
     select('[data-application-bulk-label]').textContent = 'Delete selected (' + applicationSelection.size + ')'
     select('[data-application-filter-count]').textContent = `${filtered.length} of ${apps.length} jobs`
@@ -215,10 +229,8 @@ function render() {
     const filterBadge = select('[data-application-filter-badge]')
     filterBadge.textContent = String(activeFilters)
     filterBadge.classList.toggle('d-none', activeFilters === 0)
-    applicationPage = Math.min(applicationPage, Math.max(1, Math.ceil(filtered.length / workspaceRowsPerPage)))
-    renderPagination(select('[data-application-pagination]'), filtered.length, applicationPage, 'data-application-page', 'applications', deletingApplicationRows)
-    select('[data-application-rows]').innerHTML = filtered
-      .slice((applicationPage - 1) * workspaceRowsPerPage, applicationPage * workspaceRowsPerPage)
+    renderPagination(select('[data-application-pagination]'), filtered.length, applicationPage, 'data-application-page', 'applications', deletingApplicationRows, perPage)
+    select('[data-application-rows]').innerHTML = pageRows
       .map((i) => {
         const initials = (i.payload.company || i.payload.title).trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase()
         const logo = applicationLogo(i)
@@ -319,28 +331,28 @@ function render() {
         (filter === 'all' || (filter === 'files' && (row.attachments?.length || 0) > 0) || (filter === 'images' && row.attachments?.some((a) => a.mime.startsWith('image/'))) || (filter === 'none' && !row.attachments?.length)),
     )
     rows.sort((a, b) => (sort === 'title' ? a.payload.title.localeCompare(b.payload.title) : sort === 'company' ? a.payload.company.localeCompare(b.payload.company) : sort === 'oldest' ? a.id - b.id : b.id - a.id))
-    visibleSheetIds = rows.map((row) => row.id)
-    sheetPage = Math.min(sheetPage, Math.max(1, Math.ceil(rows.length / workspaceRowsPerPage)))
-    const pageStart = (sheetPage - 1) * workspaceRowsPerPage
-    const pageRows = rows.slice(pageStart, pageStart + workspaceRowsPerPage)
-    renderPagination(select('[data-sheet-pagination]'), rows.length, sheetPage, 'data-sheet-page', 'rows', deletingSheetRows)
-    for (const id of sheetSelection) if (!items.some((row) => row.id === id)) sheetSelection.delete(id)
+    const perPage = entriesPerPage('sheet', rows.length)
+    sheetPage = Math.min(sheetPage, Math.max(1, Math.ceil(rows.length / perPage)))
+    const pageStart = (sheetPage - 1) * perPage
+    const pageRows = rows.slice(pageStart, pageStart + perPage)
+    visibleSheetIds = pageRows.map((row) => row.id)
+    renderPagination(select('[data-sheet-pagination]'), rows.length, sheetPage, 'data-sheet-page', 'rows', deletingSheetRows, perPage)
+    for (const id of sheetSelection) if (!visibleSheetIds.includes(id)) sheetSelection.delete(id)
     select<HTMLButtonElement>('[data-sheet-bulk]').disabled = sheetSelection.size === 0 || deletingSheetRows
     select('[data-sheet-selection-toolbar]').classList.toggle('d-none', sheetSelection.size === 0)
     select<HTMLButtonElement>('[data-sheet-select]').disabled = deletingSheetRows
-    select('[data-sheet-select-label]').textContent = sheetSelection.size ? 'Deselect all results' : 'Select all results'
+    select('[data-sheet-select-label]').textContent = pageRows.length > 0 && pageRows.every(row => sheetSelection.has(row.id)) ? 'Deselect this page' : 'Select this page'
+    select<HTMLSelectElement>('[data-sheet-entries]').disabled = deletingSheetRows
     const filterBadge = select('[data-sheet-filter-badge]')
     const activeFilters = Number(filter !== 'all') + Number(Boolean(activeCompany))
     filterBadge.textContent = String(activeFilters)
     filterBadge.classList.toggle('d-none', activeFilters === 0)
-    const hiddenSelected = Array.from(sheetSelection).filter((id) => !visibleSheetIds.includes(id)).length
-    const otherPages = Array.from(sheetSelection).filter((id) => visibleSheetIds.includes(id) && !pageRows.some((row) => row.id === id)).length
-    select('[data-sheet-selected-count]').textContent = sheetSelection.size ? `${sheetSelection.size} selected${hiddenSelected ? ` · ${hiddenSelected} selected outside current filters` : ''}${otherPages ? ` · ${otherPages} on other pages` : ''}` : ''
+    select('[data-sheet-selected-count]').textContent = sheetSelection.size ? `${sheetSelection.size} selected` : ''
     select('[data-sheet-bulk-label]').textContent = 'Delete selected (' + sheetSelection.size + ')'
     const all = select<HTMLInputElement>('[data-sheet-all]')
-    all.disabled = rows.length === 0 || deletingSheetRows
-    all.checked = rows.length > 0 && rows.every((row) => sheetSelection.has(row.id))
-    all.indeterminate = rows.some((row) => sheetSelection.has(row.id)) && !all.checked
+    all.disabled = pageRows.length === 0 || deletingSheetRows
+    all.checked = pageRows.length > 0 && pageRows.every((row) => sheetSelection.has(row.id))
+    all.indeterminate = pageRows.some((row) => sheetSelection.has(row.id)) && !all.checked
     select('[data-sheet-count]').textContent = rows.length + ' of ' + owned('sheet').length + ' rows'
     select('[data-sheet-rows]').innerHTML = pageRows
       .map(
@@ -570,13 +582,12 @@ async function handleClick(event: Event) {
       render()
     }
     if (target.hasAttribute('data-application-select')) {
-      if (applicationSelection.size) applicationSelection.clear()
-      else filteredApplications().forEach(item => applicationSelection.add(item.id))
+      togglePageSelection(applicationSelection, visibleApplicationIds)
       render()
       select('[data-application-all]').focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-export-selected')) exportCsv('application', owned('application').filter(item => applicationSelection.has(item.id)))
-    if (target.hasAttribute('data-application-bulk') && !deletingApplicationRows && applicationSelection.size && (await confirmDelete('Delete ' + applicationSelection.size + ' selected applications and their attachments, including any hidden by filters? This cannot be undone.'))) {
+    if (target.hasAttribute('data-application-bulk') && !deletingApplicationRows && applicationSelection.size && (await confirmDelete('Delete ' + applicationSelection.size + ' selected applications and their attachments? This cannot be undone.'))) {
       deletingApplicationRows = true
       const selectedIds = Array.from(applicationSelection)
       render()
@@ -591,7 +602,7 @@ async function handleClick(event: Event) {
         render()
       }
     }
-    if (target.dataset.applicationPage) {
+    if (target.dataset.applicationPage && !deletingApplicationRows) {
       applicationPage = Number(target.dataset.applicationPage)
       render()
       select('[data-application-table]').scrollIntoView({ block: 'start' })
@@ -604,7 +615,8 @@ async function handleClick(event: Event) {
       select('[data-sheet-table]').scrollIntoView({ block: 'start' })
       root.querySelector<HTMLButtonElement>(`[data-sheet-page="${sheetPage}"]`)?.focus({ preventScroll: true })
     }
-    if (target.dataset.jobPage && !jobsLoading) {
+    if (target.dataset.jobPage && !jobsLoading && !savingSelectedJobs) {
+      select('[data-job-bulk-status]').classList.add('d-none')
       jobPage = Number(target.dataset.jobPage)
       renderJobs(false)
       select('.job-results-panel').scrollIntoView({ block: 'start' })
@@ -613,6 +625,7 @@ async function handleClick(event: Event) {
     if (target.hasAttribute('data-job-bulk-save')) await saveSelectedJobs()
     if (target.hasAttribute('data-job-bulk-apply')) await saveSelectedJobs('Applied')
     if (target.hasAttribute('data-job-bulk-export')) exportSelectedJobs()
+    if (target.hasAttribute('data-retry-job-availability') && lastGoogleResults?.host.isConnected) await renderGoogleJobs(lastGoogleResults.results, lastGoogleResults.host, true)
     if (target.hasAttribute('data-job-source-website') || target.hasAttribute('data-job-source-listing')) {
       event.preventDefault()
       const url = safeUrl(target.getAttribute('href') || '')
@@ -629,8 +642,7 @@ async function handleClick(event: Event) {
     }
     if (target.hasAttribute('data-application-tracker')) sessionStorage.removeItem('jobify-opened-application')
     if (target.hasAttribute('data-sheet-select')) {
-      if (sheetSelection.size) sheetSelection.clear()
-      else visibleSheetIds.forEach((id) => sheetSelection.add(id))
+      togglePageSelection(sheetSelection, visibleSheetIds)
       render()
     }
     if (target.hasAttribute('data-sheet-export-selected')) {
@@ -644,7 +656,7 @@ async function handleClick(event: Event) {
       select<HTMLSelectElement>('[data-sheet-company]').value = ''
       render()
     }
-    if (target.hasAttribute('data-sheet-bulk') && !deletingSheetRows && sheetSelection.size && (await confirmDelete('Delete ' + sheetSelection.size + ' selected rows and their attachments, including any hidden by filters? This cannot be undone.'))) {
+    if (target.hasAttribute('data-sheet-bulk') && !deletingSheetRows && sheetSelection.size && (await confirmDelete('Delete ' + sheetSelection.size + ' selected rows and their attachments? This cannot be undone.'))) {
       deletingSheetRows = true
       const selectedIds = Array.from(sheetSelection)
       render()
@@ -802,6 +814,13 @@ root.addEventListener('click', (event) => {
 async function handleChange(event: Event) {
   const target = event.target as HTMLInputElement
   try {
+    if (target.matches('[data-entries-control]')) {
+      if (cacheOwner !== null) writePageData('entries:' + view, cacheOwner, target.value)
+      if (view === 'applications') { applicationPage = 1; applicationSelection.clear(); render() }
+      if (view === 'sheet') { await sheetWriteQueue; sheetPage = 1; sheetSelection.clear(); render() }
+      if (view === 'jobs') { jobPage = 1; jobSelection.clear(); select('[data-job-bulk-status]').classList.add('d-none'); renderJobs(false) }
+      return
+    }
     if (target.dataset.applicationPick) {
       const id = Number(target.dataset.applicationPick)
       if (target.checked) applicationSelection.add(id)
@@ -810,9 +829,9 @@ async function handleChange(event: Event) {
       select<HTMLInputElement>(`[data-application-pick="${id}"]`)?.focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-all')) {
-      for (const item of filteredApplications()) {
-        if (target.checked) applicationSelection.add(item.id)
-        else applicationSelection.delete(item.id)
+      for (const id of visibleApplicationIds) {
+        if (target.checked) applicationSelection.add(id)
+        else applicationSelection.delete(id)
       }
       render()
       select('[data-application-all]').focus({ preventScroll: true })
@@ -1061,20 +1080,24 @@ function companyPlaceholder() {
 function updateJobSelection() {
   const busy = savingSelectedJobs || !loaded
   const all = select<HTMLInputElement>('[data-job-select-all]')
-  const visibleIds = [...new Set([...visibleJobIds, ...visibleGoogleJobIds])]
+  const scope = jobsInSelectionScope()
+  const visibleIds = scope.map(job => job.id)
+  for (const id of jobSelection.keys()) if (!visibleIds.includes(id)) jobSelection.delete(id)
   const selectedVisible = visibleIds.filter((id) => jobSelection.has(id)).length
-  const hidden = jobSelection.size - selectedVisible
   const hasSelection = jobSelection.size > 0
-  const hasSelectableJobs = jobsInSelectionScope().length > 0
-  all.checked = hasSelection
-  all.indeterminate = false
-  all.disabled = busy || (!hasSelection && (jobsLoading || !hasSelectableJobs))
-  select('[data-job-selection-label]').textContent = hasSelection ? `Deselect ${jobSelection.size} ${jobSelection.size === 1 ? 'job' : 'jobs'}` : 'Select all results'
+  all.checked = scope.length > 0 && selectedVisible === scope.length
+  all.indeterminate = selectedVisible > 0 && !all.checked
+  all.disabled = busy || jobsLoading || scope.length === 0
+  select('[data-job-selection-label]').textContent = all.checked ? 'Deselect this page' : 'Select this page'
   const googleOnly = select<HTMLSelectElement>('#job-source').value === 'google'
-  select('[data-job-selection-scope]').textContent = hasSelection ? 'All selected jobs, including hidden results' : googleOnly ? 'This Google results page' : visibleGoogleJobIds.length ? 'All feed pages and this Google page' : 'Across all pages'
-  select('[data-job-selected-count]').textContent = `${jobSelection.size} selected${hidden ? ` (${hidden} outside current results)` : ''}`
+  select('[data-job-selection-scope]').textContent = 'Current page only'
+  select('[data-job-selected-count]').textContent = `${jobSelection.size} selected`
+  select('[data-job-entries-control]').classList.toggle('d-none', googleOnly)
+  select<HTMLSelectElement>('[data-job-entries]').disabled = busy || jobsLoading
+  select('[data-job-selection-actions]').classList.toggle('d-none', !hasSelection)
   for (const name of ['bulk-save', 'bulk-apply', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
   select('[data-job-selection-toolbar]').setAttribute('aria-busy', String(savingSelectedJobs))
+  select('[data-job-selection-toolbar]').classList.toggle('d-none', scope.length === 0)
   root.querySelectorAll<HTMLInputElement>('[data-job-pick]').forEach((input) => {
     input.checked = jobSelection.has(input.dataset.jobPick!)
     input.disabled = busy || jobsLoading
@@ -1085,7 +1108,8 @@ function updateJobSelection() {
   })
 }
 function trackedApplication(job: Job) {
-  const matches = owned('application').filter((item) => (job.url && safeUrl(item.payload.url) === safeUrl(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
+  const identity = (url: string) => googleJobListingUrl(url) || safeUrl(url)
+  const matches = owned('application').filter((item) => (job.url && identity(item.payload.url) === identity(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
   return matches.find(isApplied) || matches[0]
 }
 function isApplied(item: Entry) {
@@ -1128,16 +1152,21 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
       <button class="job-details-link" data-job-details="${id}">Read job description &rarr;</button>
       <div class="job-card-metadata mb-3">${metadata}</div>
       <p class="text-secondary small mb-3">${source}</p>
-      <div class="d-flex gap-2 mt-auto job-card-actions">
-        <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
-        <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
+      <div class="job-card-footer">
+        <div class="d-flex gap-2 job-card-actions">
+          <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
+          <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
+        </div>
+        <button type="button" class="btn btn-outline-success" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}">Mark as applied</button>
       </div>
-      <button type="button" class="btn btn-outline-success mt-2" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}">Mark as applied</button>
     </div>
   </article>`
 }
-async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
+async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement, fresh = false) {
   const generation = ++googleRenderGeneration
+  select('[data-job-bulk-status]').classList.add('d-none')
+  lastGoogleResults = { results, host: div }
+  select('[data-retry-job-availability]').classList.add('d-none')
   googleResultsHost = null
   const cachedPreview = select('[data-google-jobs-preview]')
   if (div !== cachedPreview) {
@@ -1177,14 +1206,13 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
     }),
   )
   if (generation !== googleRenderGeneration || select('[data-google-jobs]').classList.contains('d-none')) return
-  const candidates = listings.filter(job => !isClosedListing(job) && !hasApplied(job)).slice(0, jobsPerPage)
+  const candidates = listings.filter(job => !isClosedListing(job)).slice(0, jobsPerPage)
   let verified: { url: string; status: string }[] = []
-  let unavailable = false
   if (candidates.length) {
     try {
-      const response = await api('jobs/availability', { urls: candidates.map(job => job.url) }, AbortSignal.timeout(18000))
+      const response = await api('jobs/availability', { urls: candidates.map(job => job.url), fresh }, AbortSignal.timeout(18000))
       verified = response.jobs || []
-    } catch { unavailable = true }
+    } catch { /* The unverified listings stay hidden and can be retried. */ }
   }
   if (generation !== googleRenderGeneration || !div.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
   for (const job of listings) {
@@ -1192,7 +1220,6 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
     job.availability = isClosedListing(job) || status === 'closed' ? 'closed' : status === 'open' ? 'open' : 'unknown'
     if (job.availability !== 'open') jobSelection.delete(job.id)
   }
-  select('[data-job-availability-message]').textContent = unavailable || candidates.some(job => job.availability === 'unknown') ? 'Some listings could not be confirmed as open and are hidden. Search again to retry.' : ''
   if (div !== cachedPreview) {
     cachedPreview.replaceChildren()
     cachedPreview.classList.add('d-none')
@@ -1206,6 +1233,9 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
 function renderGoogleJobCards() {
   const div = googleResultsHost
   if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
+  const unverified = Array.from(googleJobs.values()).some(job => job.availability === 'unknown' && !hasApplied(job) && !isClosedListing(job))
+  select('[data-job-availability-message]').textContent = unverified ? 'Some job sites could not confirm availability. Those listings are hidden; retry the checks or try another results page.' : ''
+  select('[data-retry-job-availability]').classList.toggle('d-none', !unverified)
   const listings = Array.from(googleJobs.values()).filter(job => job.availability === 'open' && !isClosedListing(job) && !hasApplied(job))
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
@@ -1218,7 +1248,7 @@ function renderGoogleJobCards() {
         return renderJobCard(job, { domain, origin: website.origin, iconUrl })
       })
       .join('') +
-    (listings.length ? '' : '<p class="text-secondary mb-0">No open, unapplied jobs on this Google results page. Try another page or broader keywords.</p>') +
+    (listings.length ? '' : `<p class="text-secondary mb-0">${Array.from(googleJobs.values()).some(job => job.availability === 'unknown' && !hasApplied(job)) ? 'No verified-open listings could be displayed on this page.' : 'No open, unapplied jobs on this Google results page. Try another page or broader keywords.'}</p>`) +
     '</div>'
   div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
   if (select<HTMLSelectElement>('#job-source').value === 'google') select('[data-job-count]').textContent = `${listings.length} results on this page`
@@ -1326,10 +1356,10 @@ function renderPagination(nav: HTMLElement, count: number, page: number, attribu
   nav.innerHTML = `<p class="text-secondary small mb-0 workspace-page-count" role="status">Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}</p>${pages > 1 ? `<ul class="pagination mb-0">${links}</ul>` : ''}`
 }
 function renderJobPagination(count: number) {
-  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', false, jobsPerPage)
+  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', savingSelectedJobs, entriesPerPage('job', count))
 }
 function renderJobs(resetPage = true) {
-  if (resetPage) jobPage = 1
+  if (resetPage) { jobPage = 1; select('[data-job-bulk-status]').classList.add('d-none') }
   if (cacheOwner !== null) writePageData('job-filters', cacheOwner, { values: jobFilterValues(), page: jobPage })
   if (select<HTMLSelectElement>('#job-source').value === 'google') {
     visibleJobIds = []
@@ -1351,13 +1381,14 @@ function renderJobs(resetPage = true) {
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date + 'T00:00:00Z' : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date) ? date.replace(' ', 'T') + 'Z' : date)
     return !isClosedListing(j) && j.availability !== 'unknown' && !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
   })
-  visibleJobIds = list.map((job) => job.id)
-  jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / jobsPerPage)))
+  const perPage = entriesPerPage('job', list.length)
+  jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / perPage)))
+  const pageJobs = list.slice((jobPage - 1) * perPage, jobPage * perPage)
+  visibleJobIds = pageJobs.map(job => job.id)
   renderJobPagination(list.length)
   select('[data-job-count]').textContent = `${list.length} results`
   select('[data-job-results]').innerHTML =
-    list
-      .slice((jobPage - 1) * jobsPerPage, jobPage * jobsPerPage)
+    pageJobs
       .map((job) => `<div class="col-md-6 col-xl-4">${renderJobCard(job)}</div>`)
       .join('') || `<div class="col-12">${empty('No jobs match your search. Try broader keywords or filters.')}</div>`
   root.querySelectorAll<HTMLImageElement>('[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
@@ -1411,6 +1442,7 @@ async function loadJobs(preservePage = false) {
   jobSearchController?.abort()
   jobSearchController = new AbortController()
   jobsLoading = true
+  select('[data-job-bulk-status]').classList.add('d-none')
   visibleJobIds = []
   updateJobSelection()
   clearError()
@@ -1534,6 +1566,7 @@ async function init() {
     root.setAttribute('aria-busy', 'false')
     root.querySelector('[data-workspace-loading]')?.classList.add('d-none')
     root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach(button => { button.disabled = false })
+    root.querySelectorAll<HTMLSelectElement>('[data-entries-control]').forEach(field => { field.disabled = savingSelectedJobs || deletingApplicationRows || deletingSheetRows })
   }
   try {
     const session = await getSession()
@@ -1544,6 +1577,9 @@ async function init() {
       return
     }
     cacheOwner = session.user!.id
+    const entries = select<HTMLSelectElement>('[data-entries-control]')
+    const savedEntries = readPageData<string>('entries:' + view, cacheOwner)
+    if (entries && savedEntries && Array.from(entries.options).some(option => option.value === savedEntries)) entries.value = savedEntries
     const cached = readPageData<Entry[]>('workspace', cacheOwner)
     if (cached) {
       items = cached

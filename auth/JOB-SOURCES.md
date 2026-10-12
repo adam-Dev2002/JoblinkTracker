@@ -2,7 +2,7 @@
 
 ## Live feeds
 
-Explore jobs renders 12 cards per page, with Bootstrap Previous/numbered/Next controls below the results. Filtering returns to page 1; selections persist between pages. **Select all results** selects every loaded match across those pages.
+Explore jobs renders 12 cards per page by default, with Previous/numbered/Next controls below the results. **Show entries** offers 12, 24, 48 and All for imported feeds. **Select this page** affects only currently displayed cards, including saved and opened jobs; moving pages or filtering cards out removes their selection. Bulk actions appear only when cards are selected, and empty results hide the selection toolbar. Google uses its native results pages, with selection limited to the current page. Choosing All for a feed intentionally displays and permits selection of all loaded matches on one page.
 
 The Node feed cache keeps up to 24 public feeds in memory, combines simultaneous reads of the same feed, and stores compressed payloads in the existing database cache. Database cache reads have a two-second limit, writes have a 1.5-second limit, and upstream feed requests have an eight-second limit. A database-cache outage falls back to the public provider. Fresh memory hits require no database request. Existing feed TTLs still apply.
 
@@ -43,7 +43,7 @@ Joblink opens source listings or provider-supplied application links. Clicking A
 
 Data lives in `workspace_items`: applications, tasks, events, links and sheet rows. Calendar dates and times use Manila time. CSV exports escape cell contents and guard against spreadsheet formula execution. Sheets are basic editable records, not a spreadsheet formula engine.
 
-Applications and Sheet use the same Bootstrap pagination as Explore jobs: 12 records per page with Previous, numbered pages, Next, and a visible record range. Search/filter/sort changes return to page 1; edits retain the current page and deletions move to the last valid page when necessary. Sheet selections persist across pages, and **Select all results** covers all rows matching the current filters. Changing a sheet page waits for queued cell saves. CSV export includes records from every page.
+Applications and Sheet show 10 records per page by default, with Previous, numbered pages, Next and a visible range. Their top-left **Show entries** control offers 10, 25, 50, 100 and All. The header checkbox and **Select this page** toggle act only on the displayed rows; selections leaving the page or current filters are cleared. Choosing All permits deliberate selection of all filtered rows on one page. Entry-count choices restore from the account-scoped tab cache. Search/filter/sort and entry-count changes return to page 1; edits retain the current page and deletions clamp it to the last valid page. Changing a sheet page waits for queued cell saves. Selected CSV exports and bulk deletes include only the current selection; the separate Export CSV action still exports the entire workspace table.
 
 ## Main files
 
