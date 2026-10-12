@@ -24,6 +24,10 @@ C:\xampp\php\php.exe auth\init-db.php
 
 Open `/` for the dashboard, `/job-listing` for Find work, `/applications` for the tracker, `/news` for career reading and events, and `/desk/taskboard`, `/desk/calendar`, `/desk/links`, `/desk/sheet` for daily tools. Account settings are at `/settings`.
 
+Workspace pages restore the last loaded data from an account-scoped, five-minute tab cache, then refresh in the background. Successful edits update that cache; an older refresh cannot overwrite a newer edit. Job filters, feed pages, Google result previews, and news stories also survive navigation. Signing out or changing accounts clears the previews. The cache never supplies authentication or CSRF tokens.
+
+First visits show shared placeholders rather than zero counts or empty tables. Failed refreshes retain existing content and offer retry controls. Settings and account menus use the server-verified profile on their first render. Sidebar links use [Astro prefetch](https://docs.astro.build/en/guides/prefetch/) for HTML/assets and warm job/news feeds on hover or keyboard focus. Run `node auth/test-page-loading.mjs` against the local preview to verify delayed responses, navigation, refresh failures, edits, and account isolation without writing to the database.
+
 See [job source setup and API mapping](auth/JOB-SOURCES.md) for live feed details, Philippine search configuration and workspace storage.
 
 ## Folder map

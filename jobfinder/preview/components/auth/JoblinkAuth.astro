@@ -12,7 +12,7 @@ const register = mode === 'register'
   <div class="card-body">
     {mode !== 'login' && <h1 class="h2 text-center mb-4">{mode === 'account' ? 'Your account' : 'Create your account'}</h1>}
     <div class="alert alert-danger d-none" role="alert" data-auth-error></div>
-    <p class="text-secondary small text-center" role="status" data-auth-loading>Checking your session...</p>
+    <p class="visually-hidden" role="status" data-auth-loading>Checking your session...</p>
     <button class="btn btn-sm d-none mb-3" type="button" data-auth-retry>Retry connection</button>
     {
       mode === 'account' ? (

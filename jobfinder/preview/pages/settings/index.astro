@@ -1,36 +1,39 @@
 ---
 import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
 import UserAvatar from '@shared/components/UserAvatar.astro'
+import DataPlaceholder from '@shared/components/DataPlaceholder.astro'
+import type { Session } from '@shared/lib/client-session'
 import { redirectToLogin } from '../../server/page-auth.mjs'
 export const prerender = false
 Astro.response.headers.set('Cache-Control', 'no-store')
 const loginRedirect = await redirectToLogin(Astro.request, Astro.url, Astro.isPrerendered, Astro.locals)
 if (loginRedirect) return loginRedirect
+const initialUser = (Astro.locals as { joblinkSession?: Session }).joblinkSession?.user
 ---
 
 <DefaultLayout title="Account settings">
-  <div class="card settings-card" data-settings>
+  <div class="card settings-card" data-settings aria-busy={initialUser ? 'false' : 'true'}>
     <div class="card-body p-4">
       <div class="alert alert-danger d-none" role="alert" data-error></div>
       <div class="alert alert-success d-none" role="status" data-success></div>
-      <p data-loading>Loading your account...</p>
-      <div class="d-none" data-content>
-        <div class="settings-profile d-flex align-items-center gap-3 mb-4"><UserAvatar large /><div class="settings-profile-copy"><h2 class="mb-1">Your account</h2><span class="text-secondary" data-provider></span></div></div>
-        <form data-profile-form>
-          <div class="mb-3"><label class="form-label" for="settings-name">Display name</label><input class="form-control" id="settings-name" name="name" autocomplete="name" maxlength="100" required /></div>
-          <div class="mb-3"><label class="form-label" for="settings-email">Email address</label><input class="form-control" id="settings-email" type="email" readonly /><div class="form-hint">Your sign-in email stays linked to this account.</div></div>
-          <button class="btn btn-primary" type="submit">Save profile</button>
+      <div class:list={[initialUser && 'd-none']} data-loading><span class="visually-hidden" role="status">Loading your account...</span><DataPlaceholder count={3} /></div>
+      <div class:list={[!initialUser && 'd-none']} data-content>
+        <div class="settings-profile d-flex align-items-center gap-3 mb-4"><UserAvatar large /><div class="settings-profile-copy"><h2 class="mb-1">Your account</h2><span class="text-secondary" data-provider>{initialUser ? initialUser.provider === 'google' ? 'Signed in with Google' : 'Signed in with email' : ''}</span></div></div>
+        <form data-profile-form method="post">
+          <div class="mb-3"><label class="form-label" for="settings-name">Display name</label><input class="form-control" id="settings-name" name="name" value={initialUser?.name} autocomplete="name" maxlength="100" required /></div>
+          <div class="mb-3"><label class="form-label" for="settings-email">Email address</label><input class="form-control" id="settings-email" type="email" value={initialUser?.email} readonly /><div class="form-hint">Your sign-in email stays linked to this account.</div></div>
+          <button class="btn btn-primary" type="submit" disabled>Save profile</button>
         </form>
         <hr class="my-4" />
-        <form data-password-form class="d-none">
+        <form data-password-form method="post" class:list={[(!initialUser || initialUser.provider === 'google') && 'd-none']}>
           <h3>Change password</h3>
           <div class="mb-3"><label class="form-label" for="settings-current">Current password</label><input class="form-control" id="settings-current" name="currentPassword" type="password" autocomplete="current-password" required /></div>
           <div class="mb-3"><label class="form-label" for="settings-new">New password</label><input class="form-control" id="settings-new" name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required /></div>
           <div class="mb-3"><label class="form-label" for="settings-confirm">Confirm new password</label><input class="form-control" id="settings-confirm" name="confirm" type="password" autocomplete="new-password" required /></div>
-          <button class="btn" type="submit">Update password</button>
+          <button class="btn" type="submit" disabled>Update password</button>
         </form>
-        <p class="text-secondary d-none" data-google-note>Your photo and password are managed by your Google account. Your display name can be changed here.</p>
-        <div class="d-flex gap-3 mt-4"><a class="btn" href="/job-listing">Back to jobs</a><button class="btn" type="button" data-settings-logout>Sign out</button></div>
+        <p class:list={['text-secondary', initialUser?.provider !== 'google' && 'd-none']} data-google-note>Your photo and password are managed by your Google account. Your display name can be changed here.</p>
+        <div class="d-flex gap-3 mt-4"><a class="btn" href="/job-listing">Back to jobs</a><button class="btn" type="button" data-settings-logout disabled>Sign out</button></div>
       </div>
     </div>
   </div>
@@ -89,15 +92,18 @@ if (loginRedirect) return loginRedirect
         location.replace('/sign-in?returnTo=%2Fsettings')
         return
       }
-      root.querySelector<HTMLInputElement>('#settings-name')!.value = session.user.name
+      const name = root.querySelector<HTMLInputElement>('#settings-name')!
+      if (name.value === name.defaultValue) name.value = session.user.name
       root.querySelector<HTMLInputElement>('#settings-email')!.value = session.user.email
       root.querySelector<HTMLElement>('[data-provider]')!.textContent = session.user.provider === 'google' ? 'Signed in with Google' : 'Signed in with email'
       root.querySelector(session.user.provider === 'google' ? '[data-google-note]' : '[data-password-form]')!.classList.remove('d-none')
       root.querySelector('[data-content]')!.classList.remove('d-none')
+      root.querySelectorAll<HTMLButtonElement>('button').forEach(button => { button.disabled = false })
     } catch (e) {
       fail(e)
     } finally {
       root.querySelector('[data-loading]')!.classList.add('d-none')
+      root.setAttribute('aria-busy', 'false')
     }
   }
   for (const kind of ['profile', 'password'])

@@ -1,0 +1,32 @@
+---
+interface Props { variant?: 'cards' | 'list' | 'calendar' | 'board'; count?: number }
+const { variant = 'list', count = variant === 'cards' || variant === 'board' ? 3 : variant === 'calendar' ? 35 : 4 } = Astro.props
+---
+<div class:list={['data-placeholder', `data-placeholder-${variant}`]} aria-hidden="true">
+  {Array.from({ length: count }, () => (
+    <div class="data-placeholder-item">
+      <span class="data-placeholder-line data-placeholder-short" />
+      <span class="data-placeholder-line" />
+      {variant !== 'calendar' && <span class="data-placeholder-line data-placeholder-medium" />}
+      {variant === 'cards' && <span class="data-placeholder-line data-placeholder-action" />}
+    </div>
+  ))}
+</div>
+<style is:global>
+  .data-placeholder { display: grid; gap: 1rem; width: 100%; }
+  .data-placeholder-item { padding: 1.25rem; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); background: var(--tblr-bg-surface); min-width: 0; }
+  .data-placeholder-line { display: block; height: .875rem; border-radius: .25rem; background: var(--tblr-bg-surface-secondary); margin-bottom: .875rem; animation: data-placeholder-pulse 1.8s ease-in-out infinite; }
+  .data-placeholder-line:last-child { margin-bottom: 0; }
+  .data-placeholder-short { width: 40%; }
+  .data-placeholder-medium { width: 70%; }
+  .data-placeholder-action { height: 2.5rem; margin-top: auto; }
+  .data-placeholder-cards .data-placeholder-item { display: flex; flex-direction: column; min-height: 22rem; }
+  .data-placeholder-calendar { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; }
+  .data-placeholder-calendar .data-placeholder-item { min-height: 6rem; padding: .75rem; border-radius: 0; }
+  .data-placeholder-board .data-placeholder-item { min-height: 20rem; }
+  @media (min-width: 768px) { .data-placeholder-cards, .data-placeholder-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1200px) { .data-placeholder-cards, .data-placeholder-board { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @keyframes data-placeholder-pulse { 50% { opacity: .45; } }
+  [data-load-failed] .data-placeholder-line { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .data-placeholder-line { animation: none; } }
+</style>

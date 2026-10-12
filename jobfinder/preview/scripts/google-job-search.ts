@@ -79,6 +79,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     clearTimeout(resultTimer)
     panel.setAttribute('aria-busy', 'false')
     setStatus(message, announcementOnly)
+    if (!announcementOnly) root.querySelector('[data-google-jobs-preview] .data-placeholder')?.remove()
   }
   const ready: ReadyCallback = (_name, query, promos, results, div) => {
     div.replaceChildren()
@@ -140,7 +141,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
             starting: (_name, query) => {
               if (active && query === latestQuery) {
                 panel.setAttribute('aria-busy', 'true')
-                setStatus('Searching job listings…')
+                setStatus('Searching job listings…', true)
                 clearTimeout(resultTimer)
                 resultTimer = setTimeout(() => finish('Google results are taking longer than expected. Try searching again or choose a job feed.'), 15000)
               }
@@ -173,7 +174,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       active = true
       panel.classList.remove('d-none')
       panel.setAttribute('aria-busy', 'true')
-      setStatus('Searching job listings…')
+      setStatus('Searching job listings…', true)
       const query = googleJobQuery(filters)
       latestQuery = query
       if (!engineId) {

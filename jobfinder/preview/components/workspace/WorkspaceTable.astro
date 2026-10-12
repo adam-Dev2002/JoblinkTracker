@@ -1,6 +1,7 @@
 ---
 import Icon from '@ui/Icon.astro'
 import WorkspaceRowMenu from './WorkspaceRowMenu.astro'
+import DataPlaceholder from '@shared/components/DataPlaceholder.astro'
 interface Props {
   kind: 'application' | 'sheet'
   title: string
@@ -25,7 +26,9 @@ const application = kind === 'application'
   <div class="table-responsive">
     <table class="table table-vcenter table-hover mb-0 workspace-data-table">
       <thead><tr><slot name="columns" /></tr></thead>
-      <tbody data-application-rows={application ? true : undefined} data-sheet-rows={!application ? true : undefined} />
+      <tbody data-application-rows={application ? true : undefined} data-sheet-rows={!application ? true : undefined}>
+        <tr><td colspan="8"><DataPlaceholder count={5} /></td></tr>
+      </tbody>
     </table>
   </div>
   <div data-application-empty={application ? true : undefined} data-sheet-empty={!application ? true : undefined} />

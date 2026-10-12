@@ -1,5 +1,6 @@
 ---
 import Icon from '@ui/Icon.astro'
+import DataPlaceholder from '@shared/components/DataPlaceholder.astro'
 ---
 
 <div class="news-experience" data-news-experience>
@@ -24,12 +25,13 @@ import Icon from '@ui/Icon.astro'
         }
       </div>
       <div class="d-flex justify-content-between mb-3"><span class="text-secondary small">Stories from DEV Community, with author attribution</span><span class="small text-secondary" data-news-count></span></div>
-      <div data-news-list aria-live="polite"><div class="col-12"><div class="card"><div class="news-skeleton"></div><div class="card-body text-secondary">Finding something worth reading...</div></div></div></div>
+      <p class="visually-hidden" role="status" data-news-status>Loading stories...</p>
+      <div data-news-list aria-live="polite" aria-busy="true"><DataPlaceholder variant="cards" /></div>
       <div class="text-center mt-4"><button class="btn d-none" data-news-more>Load more stories</button></div>
     </div>
     <aside class="news-side-column">
       <div class="card news-events">
-        <div class="card-header d-flex justify-content-between"><h3 class="card-title"><Icon name="calendar-event" /> Your upcoming events</h3><button class="btn btn-sm btn-primary" data-add="event">Add</button></div><div data-event-list></div><div class="card-footer">
+        <div class="card-header d-flex justify-content-between"><h3 class="card-title"><Icon name="calendar-event" /> Your upcoming events</h3><button class="btn btn-sm btn-primary" data-add="event">Add</button></div><div data-event-list><DataPlaceholder count={3} /></div><div class="card-footer">
           <a href="/desk/calendar" class="btn w-100">Open your calendar</a>
         </div>
       </div><div class="card news-resource-tile">
@@ -77,7 +79,9 @@ import Icon from '@ui/Icon.astro'
     display: contents;
   }
   .news-main-column > .d-flex,
-  .news-main-column > .text-center {
+  .news-main-column > .text-center,
+  .news-main-column > [data-news-status],
+  [data-news-list] > .data-placeholder {
     grid-column: 1 / -1;
     margin-bottom: 0 !important;
   }
@@ -275,17 +279,6 @@ import Icon from '@ui/Icon.astro'
   }
   .news-events .card-title {
     font-size: 15px;
-  }
-  .news-skeleton {
-    height: 230px;
-    background: linear-gradient(90deg, #edf1f7, #f8fafc, #edf1f7);
-    background-size: 200% 100%;
-    animation: news-shimmer 1.5s infinite;
-  }
-  @keyframes news-shimmer {
-    to {
-      background-position: -200% 0;
-    }
   }
   .news-reader {
     position: fixed;

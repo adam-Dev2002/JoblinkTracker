@@ -1,10 +1,11 @@
-export {}
+import { readPageData, writePageData } from '@shared/lib/page-data-cache'
 type Story = { id: number; title: string; url: string; source: string; author: string; date: string; image: string; description: string; minutes: number; tags: string[]; body?: string }
 const root = document.querySelector<HTMLElement>('[data-news-experience]')!
 const el = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!
 const escapeHtml = (value: string | number) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 const placeholder = '/static/photos/a-woman-works-at-a-desk-with-a-laptop-and-a-cup-of-coffee.jpg'
 let stories: Story[] = []
+let newsLoaded = false
 let topic = 'all'
 let visibleCount = 9
 let selected: Story | null = null
@@ -20,12 +21,18 @@ const url = (value: string) => {
   }
 }
 async function fetchNews(path: string) {
+  if (path.startsWith('article?')) {
+    const cached = readPageData<{ article: Story }>('news:' + path, 'public')
+    if (cached) return cached
+  }
   const response = await fetch('/api/jobs/' + path, { signal: AbortSignal.timeout(30000) })
   const data = await response.json()
   if (!response.ok) throw new Error(data.error || 'Unable to load the story.')
+  if (path.startsWith('article?')) writePageData('news:' + path, 'public', data)
   return data
 }
 function renderStories() {
+  if (!newsLoaded) return
   const query = el<HTMLInputElement>('[data-news-search]').value.toLowerCase()
   const filtered = stories.filter((s) => (topic === 'all' || s.tags.includes(topic)) && [s.title, s.author, s.description, ...s.tags].join(' ').toLowerCase().includes(query))
   el('[data-news-count]').textContent = `Showing ${Math.min(visibleCount, filtered.length)} of ${filtered.length} stories`
@@ -206,17 +213,32 @@ el('[data-news-more]').addEventListener('click', () => {
 async function load() {
   const button = el<HTMLButtonElement>('[data-news-refresh]')
   button.disabled = true
+  el('[data-news-list]').setAttribute('aria-busy', 'true')
+  el('[data-news-status]').classList.add('visually-hidden')
+  el('[data-news-status]').textContent = newsLoaded ? 'Updating stories…' : 'Loading stories…'
   try {
     const data = await fetchNews('news')
+    const changed = !newsLoaded || JSON.stringify(stories) !== JSON.stringify(data.articles)
     stories = data.articles
-    renderStories()
+    newsLoaded = true
+    writePageData('news', 'public', stories)
+    if (changed) renderStories()
   } catch (error) {
-    el('[data-news-list]').innerHTML = `<div class="col-12"><div class="card card-body text-secondary">${escapeHtml(error instanceof Error ? error.message : 'News is unavailable.')}</div></div>`
+    el('[data-news-status]').textContent = newsLoaded ? 'Could not refresh stories. Showing the last loaded stories.' : error instanceof Error ? error.message : 'News is unavailable. Use Refresh to try again.'
+    el('[data-news-status]').classList.remove('visually-hidden')
+    if (!newsLoaded) el('[data-news-list]').replaceChildren()
   } finally {
     button.disabled = false
+    el('[data-news-list]').setAttribute('aria-busy', 'false')
   }
 }
 el('[data-news-refresh]').addEventListener('click', () => {
   void load()
 })
+const cached = readPageData<Story[]>('news', 'public')
+if (cached) {
+  stories = cached
+  newsLoaded = true
+  renderStories()
+}
 void load()

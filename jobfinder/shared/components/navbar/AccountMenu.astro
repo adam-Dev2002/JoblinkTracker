@@ -1,21 +1,23 @@
 ---
 import Icon from '@ui/Icon.astro'
 import UserAvatar from '@shared/components/UserAvatar.astro'
+import type { Session } from '@shared/lib/client-session'
+const initialUser = (Astro.locals as { joblinkSession?: Session }).joblinkSession?.user
 ---
 
 <div class="dropdown" data-account-menu>
-  <button type="button" class="account-trigger d-flex align-items-center gap-2 text-body" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Open account menu"><UserAvatar /><span class="d-none d-md-inline" data-jobify-user-name>Account</span><Icon name="chevron-down" /></button>
+  <button type="button" class="account-trigger d-flex align-items-center gap-2 text-body" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Open account menu"><UserAvatar /><span class="d-none d-md-inline" data-jobify-user-name>{initialUser?.name || 'Account'}</span><Icon name="chevron-down" /></button>
   <div class="dropdown-menu dropdown-menu-end mt-2" style="min-width:220px">
-    <div class="px-3 py-2"><strong data-jobify-user-name>Account</strong><div class="small text-secondary" data-jobify-user-provider>Your Joblink account</div></div>
+    <div class="px-3 py-2"><strong data-jobify-user-name>{initialUser?.name || 'Account'}</strong><div class="small text-secondary" data-jobify-user-provider>{initialUser ? initialUser.provider === 'google' ? 'Google account' : 'Email account' : 'Your Joblink account'}</div></div>
     <div class="dropdown-divider"></div>
-    <div class="d-none" data-account-private>
+    <div class:list={[!initialUser && 'd-none']} data-account-private>
       <a class="dropdown-item" href="/settings" data-jobify-account-link><Icon name="settings" class="dropdown-item-icon" />Account settings</a><a class="dropdown-item" href="/applications"><Icon name="briefcase" class="dropdown-item-icon" />My applications</a><div class="dropdown-divider"></div><button
         class="dropdown-item text-danger"
         type="button"
         data-account-signout><Icon name="logout" class="dropdown-item-icon" />Sign out</button
       >
     </div>
-    <div data-account-guest><a class="dropdown-item" href="/sign-in">Sign in</a><a class="dropdown-item" href="/sign-up">Create account</a></div>
+    <div class:list={[initialUser && 'd-none']} data-account-guest><a class="dropdown-item" href="/sign-in">Sign in</a><a class="dropdown-item" href="/sign-up">Create account</a></div>
     <div class="text-danger small px-3 py-2 d-none" role="alert" data-account-error></div>
   </div>
 </div>

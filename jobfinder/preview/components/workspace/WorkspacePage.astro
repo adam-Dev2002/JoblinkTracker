@@ -3,6 +3,7 @@ import DefaultLayout from '@shared/layouts/DefaultLayout.astro'
 import Icon from '@ui/Icon.astro'
 import NewsExperience from '../news/NewsExperience.astro'
 import WorkspaceTable from './WorkspaceTable.astro'
+import DataPlaceholder from '@shared/components/DataPlaceholder.astro'
 import { site } from '@shared/lib/site'
 import { classifications } from '../../scripts/google-job-query'
 interface Props {
@@ -23,8 +24,9 @@ const desk = [
 
 <DefaultLayout title={title} description={description}>
   <div data-workspace-view={view} data-google-engine-id={view === 'jobs' ? googleEngineId : undefined} aria-busy="true">
-    <p class="text-secondary small" role="status" data-workspace-loading>Loading your workspace...</p>
+    <p class="visually-hidden" role="status" data-workspace-loading>Loading your workspace...</p>
     <div class="alert alert-danger d-none workspace-error" role="alert" data-workspace-error></div>
+    <button class="btn d-none mb-3" type="button" data-workspace-retry>Try again</button>
     {
       desk.some(([tool]) => tool === view) && (
         <div class="workspace-tabs">
@@ -92,7 +94,7 @@ const desk = [
                         <a href="/applications">View tracker</a>
                       </>
                     </div>
-                    <div data-dashboard-applications />
+                    <div data-dashboard-applications><DataPlaceholder /></div>
                   </>
                 </div>
               </div>
@@ -102,7 +104,7 @@ const desk = [
                     <div class="card-header">
                       <h3 class="card-title">Your next steps</h3>
                     </div>
-                    <div class="card-body" data-dashboard-tasks />
+                    <div class="card-body" data-dashboard-tasks><DataPlaceholder count={3} /></div>
                   </>
                 </div>
               </div>
@@ -288,10 +290,12 @@ const desk = [
                 </div>
                 <div class="card-footer small d-none" data-job-bulk-status role="status" aria-live="polite" />
               </div>
-              <div class="row g-3" data-job-results />
+              <div class="row g-3" data-job-results><div class="col-12"><DataPlaceholder variant="cards" /></div></div>
+              <template data-job-placeholder><DataPlaceholder variant="cards" /></template>
               <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
               <div class="d-none google-jobs-results" data-google-jobs aria-busy="false">
                 <p class="text-secondary small" data-google-jobs-status role="status" aria-live="polite" />
+                <div class="d-none" data-google-jobs-preview />
                 <div data-google-jobs-host />
               </div>
             </section>
@@ -315,7 +319,7 @@ const desk = [
                   <div class="card-body">
                     <div class="text-secondary small mb-2">{label}</div>
                     <div class="stat-value" data-application-stat={key}>
-                      0
+                      <span class="placeholder col-4" aria-label="Loading" />
                     </div>
                   </div>
                 </div>
@@ -387,7 +391,7 @@ const desk = [
                 <span class="badge bg-primary-lt">Your personal workspace</span>
               </>
             </div>
-            <div class="task-board" data-task-board />
+            <div class="task-board" data-task-board><DataPlaceholder variant="board" /></div>
           </>
         </div>
       )
@@ -425,7 +429,7 @@ const desk = [
                     <span>{day}</span>
                   ))}
                 </div>
-                <div class="calendar-grid" data-calendar />
+                <div class="calendar-grid" data-calendar><DataPlaceholder variant="calendar" /></div>
               </>
             </div>
             <p class="text-secondary small mt-2">Event dates and times are shown in Manila time.</p>
@@ -434,7 +438,7 @@ const desk = [
                 <div class="card-header">
                   <h3 class="card-title">Upcoming events</h3>
                 </div>
-                <div data-event-list />
+                <div data-event-list><DataPlaceholder /></div>
               </>
             </div>
           </>
@@ -454,7 +458,7 @@ const desk = [
                 </button>
               </>
             </div>
-            <div class="row g-3" data-link-list />
+            <div class="row g-3" data-link-list><div class="col-12"><DataPlaceholder variant="cards" /></div></div>
           </>
         </>
       )
@@ -896,6 +900,17 @@ const desk = [
   .job-results-panel {
     container: job-results / inline-size;
     scroll-margin-top: 6rem;
+  }
+  .calendar-grid > .data-placeholder { grid-column: 1 / -1; }
+  .task-board > .data-placeholder { flex: 1 1 100%; }
+  @container job-results (min-width: 640px) {
+    .job-results-panel .data-placeholder-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container job-results (min-width: 1000px) {
+    .job-results-panel .data-placeholder-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @container job-results (max-width: 639px) {
+    .job-results-panel .data-placeholder-cards { grid-template-columns: minmax(0, 1fr); }
   }
   .workspace-pagination {
     display: grid;

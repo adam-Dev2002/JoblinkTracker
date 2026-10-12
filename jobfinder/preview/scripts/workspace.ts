@@ -3,6 +3,7 @@ import { attachTrackedJobSearch } from './application-tracker'
 import { attachTableActions } from './table-actions'
 import { companyLogo, validCompanyLogo } from '../server/company-logo.mjs'
 import { getSession } from '@shared/lib/client-session'
+import { readPageData, writePageData } from '@shared/lib/page-data-cache'
 import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './google-job-search'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
@@ -36,6 +37,8 @@ const safeUrl = (value: string | undefined) => {
   }
 }
 let items: Entry[] = []
+let cacheOwner: number | null = null
+let workspaceRevision = 0
 let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
 const maxSelectedJobs = 50
@@ -83,6 +86,7 @@ async function api(path: string, body?: object, signal?: AbortSignal) {
   const response = await fetch('/api/' + path, { credentials: 'same-origin', signal: signal ?? null, ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) } : {}) })
   const data = await response.json()
   if (!response.ok) throw new Error(data.error || 'Unable to load your workspace.')
+  if (body && path.startsWith('workspace/')) workspaceRevision++
   return data
 }
 function owned(kind: Kind) {
@@ -123,6 +127,9 @@ async function restoreDashboardLogos() {
   }))
 }
 function render() {
+  // Never confuse a pending or failed request with a genuinely empty workspace.
+  if (!loaded) return
+  if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
   taskStatuses = ['To do', 'In progress', 'Done', ...owned('task_status').map((item) => item.payload.title)]
   const apps = owned('application'),
     tasks = owned('task'),
@@ -367,6 +374,7 @@ async function save(kind: Kind, payload: Record<string, string>, id = 0, renderA
     data.item.attachments = items[index]?.attachments || []
     items[index] = data.item
   } else items.unshift(data.item)
+  if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
   if (renderAfter) {
     if (!id && kind === 'application') applicationPage = 1
     if (!id && kind === 'sheet') sheetPage = 1
@@ -655,6 +663,7 @@ async function handleClick(event: Event) {
         const index = items.findIndex((i) => i.id === item.id)
         if (index >= 0) items[index] = item
         else items.unshift(item)
+        if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
         popup.location.href = safeUrl(job.applyUrl || job.url)
         sessionStorage.setItem('jobify-opened-application', String(item.id))
         closeJobDetails()
@@ -1087,6 +1096,12 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
     }),
   )
   if (generation !== googleRenderGeneration || select('[data-google-jobs]').classList.contains('d-none')) return
+  const cachedPreview = select('[data-google-jobs-preview]')
+  if (div !== cachedPreview) {
+    cachedPreview.replaceChildren()
+    cachedPreview.classList.add('d-none')
+    if (cacheOwner !== null) writePageData(googleCacheKey(), cacheOwner, results)
+  }
   googleJobs.clear()
   for (const job of listings) googleJobs.set(job.id, job)
   visibleGoogleJobIds = listings.map((job) => job.id)
@@ -1184,6 +1199,7 @@ function renderJobPagination(count: number) {
 }
 function renderJobs(resetPage = true) {
   if (resetPage) jobPage = 1
+  if (cacheOwner !== null) writePageData('job-filters', cacheOwner, { values: jobFilterValues(), page: jobPage })
   if (select<HTMLSelectElement>('#job-source').value === 'google') {
     visibleJobIds = []
     select('[data-job-results]').innerHTML = ''
@@ -1223,8 +1239,16 @@ async function searchJobFeed(q: string, source: string, signal?: AbortSignal) {
   if (cached && Date.now() - cached.time < 300000) return cached.data
   const data = (await api('jobs/search?' + key, undefined, signal)) as JobFeed
   jobFeedCache.set(key, { time: Date.now(), data })
+  if (cacheOwner !== null) writePageData('jobs:' + key, cacheOwner, data)
   if (jobFeedCache.size > 12) jobFeedCache.delete(jobFeedCache.keys().next().value!)
   return data
+}
+const jobFilterIds = ['job-query', 'job-source', 'job-location', 'job-employment', 'job-listing-time', 'job-classification']
+function jobFilterValues() {
+  return jobFilterIds.map(id => select<HTMLInputElement | HTMLSelectElement>('#' + id).value)
+}
+function googleCacheKey() {
+  return 'google:' + root.dataset.googleEngineId + ':' + JSON.stringify(jobFilterValues())
 }
 function searchGoogleJobs() {
   const source = select<HTMLSelectElement>('#job-source').value
@@ -1238,10 +1262,20 @@ function searchGoogleJobs() {
   }
   googleRenderGeneration++
   visibleGoogleJobIds = []
-  if (source === 'google' || (source === 'all' && filters.keyword.trim())) void googleJobSearch?.search(filters)
-  else googleJobSearch?.hide()
+  if (source === 'google' || (source === 'all' && filters.keyword.trim())) {
+    void googleJobSearch?.search(filters)
+    const preview = select('[data-google-jobs-preview]')
+    const cached = cacheOwner === null ? null : readPageData<GoogleJobResult[]>(googleCacheKey(), cacheOwner)
+    if (cached && !select('[data-google-jobs-host]').querySelector('.google-job-card')) {
+      preview.classList.remove('d-none')
+      void renderGoogleJobs(cached, preview)
+    } else if (!select('[data-google-jobs]').querySelector('.google-job-card') && select('[data-google-jobs]').getAttribute('aria-busy') === 'true') {
+      preview.innerHTML = select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML
+      preview.classList.remove('d-none')
+    }
+  } else googleJobSearch?.hide()
 }
-async function loadJobs() {
+async function loadJobs(preservePage = false) {
   const request = ++jobRequest
   jobSearchController?.abort()
   jobSearchController = new AbortController()
@@ -1251,36 +1285,45 @@ async function loadJobs() {
   clearError()
   searchGoogleJobs()
   select('[data-job-pagination]').classList.add('d-none')
-  if (!jobs.length)
-    select('[data-job-results]').innerHTML = Array.from(
-      { length: 3 },
-      () => '<div class="col-md-6 col-xl-4"><div class="card card-body placeholder-glow" aria-hidden="true"><span class="placeholder col-6 mb-3"></span><span class="placeholder col-10 mb-2"></span><span class="placeholder col-8 mb-4"></span><span class="placeholder col-12"></span></div></div>',
-    ).join('')
-  select('[data-feed-message]').textContent = 'Loading the job feed '
+  const q = select<HTMLInputElement>('#job-query').value,
+    source = select<HTMLSelectElement>('#job-source').value
+  const cached = cacheOwner === null ? null : readPageData<JobFeed>('jobs:' + new URLSearchParams({ q, source }).toString(), cacheOwner)
+  if (cached && source !== 'google') {
+    jobs = cached.jobs
+    select('[data-feed-message]').textContent = cached.message
+    renderJobs(!preservePage)
+    preservePage = true
+    jobsLoading = false
+    updateJobSelection()
+  } else if (!jobs.length) {
+    select('[data-job-results]').innerHTML = '<div class="col-12">' + select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML + '</div>'
+    select('[data-feed-message]').textContent = 'Loading job listings…'
+  }
   const form = select<HTMLFormElement>('[data-job-search]')
   form.setAttribute('aria-busy', 'true')
   try {
-    const q = select<HTMLInputElement>('#job-query').value,
-      source = select<HTMLSelectElement>('#job-source').value
     if (source === 'google') {
       jobs = []
       select('[data-feed-message]').textContent = 'Google searches indexed job-detail pages. Review each original listing before applying.'
-      renderJobs()
+      renderJobs(!preservePage)
       return
     }
     const data = await searchJobFeed(q, source, AbortSignal.any([jobSearchController.signal, AbortSignal.timeout(15000)]))
     if (request !== jobRequest) return
     jobs = [...data.jobs]
     select('[data-feed-message]').textContent = data.message
-    renderJobs()
+    if (!cached || JSON.stringify(cached.jobs) !== JSON.stringify(data.jobs) || cached.message !== data.message) renderJobs(!preservePage)
     if (data.mode === 'external' && safeUrl(data.searchUrl))
       select('[data-job-results]').innerHTML =
         `<div class="col-12"><div class="card card-body text-center"><h3>Search ${htmlEscape(data.source)} directly</h3><p class="text-secondary">${htmlEscape(data.message)}</p><a class="btn btn-primary align-self-center" href="${htmlEscape(safeUrl(data.searchUrl))}" target="_blank" rel="noopener noreferrer">Open official search &nearr;</a></div></div>`
   } catch (e) {
     if (request !== jobRequest) return
-    jobs = []
-    renderJobs()
-    select('[data-feed-message]').textContent = 'The feed is currently unavailable. Try another feed or search again later.'
+    if (jobs.length) {
+      select('[data-feed-message]').textContent = 'Could not refresh the feed. Showing the last loaded listings.'
+    } else {
+      select('[data-job-results]').innerHTML = '<div class="col-12">' + empty('Job listings could not load. Try another feed or search again.') + '</div>'
+      select('[data-feed-message]').textContent = 'The feed is currently unavailable. Try another feed or search again later.'
+    }
     error(e instanceof Error && e.name === 'TimeoutError' ? 'This feed took too long to respond. Please try another feed or search again later.' : e instanceof Error ? e.message : 'Unable to search.')
   } finally {
     if (request === jobRequest) {
@@ -1291,13 +1334,27 @@ async function loadJobs() {
   }
 }
 window.addEventListener('jobify-session', (event) => {
-  if (!(event as CustomEvent<{ id: number } | null>).detail && loaded) {
-    signedIn = false
+  const user = (event as CustomEvent<{ id: number } | null>).detail
+  if (loaded && (!user || user.id !== cacheOwner)) {
+    signedIn = Boolean(user)
+    loaded = false
+    cacheOwner = null
     items = []
-    location.replace(loginUrl())
+    root.hidden = true
+    if (user) location.reload()
+    else location.replace(loginUrl())
   }
 })
 function initJobSearch() {
+  const previous = cacheOwner === null ? null : readPageData<{ values: string[]; page: number }>('job-filters', cacheOwner)
+  if (previous) {
+    jobFilterIds.forEach((id, index) => {
+      const field = select<HTMLInputElement | HTMLSelectElement>('#' + id)
+      const value = previous.values[index]
+      if (typeof value === 'string' && (!(field instanceof HTMLSelectElement) || Array.from(field.options).some(option => option.value === value))) field.value = value
+    })
+    jobPage = Math.max(1, previous.page || 1)
+  }
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   const searchNow = () => {
     clearTimeout(searchTimer)
@@ -1332,11 +1389,20 @@ function initJobSearch() {
       searchGoogleJobs()
     },
   )
-  return loadJobs()
+  return loadJobs(true)
 }
 async function init() {
-  // Paint static controls immediately while data is still being fetched.
-  const initialJobs = view === 'jobs' ? initJobSearch() : null
+  const revision = workspaceRevision
+  // Start independent reads together, then reconcile the account-scoped preview.
+  const workspaceRequest = api('workspace/items').then(data => ({ data, error: null }), (error: unknown) => ({ data: null, error }))
+  let initialJobs: Promise<void> | null = null
+  const markReady = () => {
+    loaded = true
+    root.dataset.ready = 'true'
+    root.setAttribute('aria-busy', 'false')
+    root.querySelector('[data-workspace-loading]')?.classList.add('d-none')
+    root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach(button => { button.disabled = false })
+  }
   try {
     const session = await getSession()
     signedIn = Boolean(session.user)
@@ -1345,16 +1411,30 @@ async function init() {
       location.replace(loginUrl())
       return
     }
-    items = (await api('workspace/items')).items
-    loaded = true
-    root.dataset.ready = 'true'
-    root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
-      button.disabled = false
-    })
-    render()
+    cacheOwner = session.user!.id
+    const cached = readPageData<Entry[]>('workspace', cacheOwner)
+    if (cached) {
+      items = cached
+      markReady()
+      render()
+    }
+    initialJobs = view === 'jobs' ? initJobSearch() : null
+    const result = await workspaceRequest
+    if (!signedIn || cacheOwner === null) return
+    if (result.error) throw result.error
+    if (revision === workspaceRevision) {
+      const fresh = result.data.items as Entry[]
+      const changed = !loaded || JSON.stringify(items) !== JSON.stringify(fresh)
+      items = fresh
+      markReady()
+      if (changed) render()
+      else writePageData('workspace', cacheOwner, items)
+    }
     if (view === 'dashboard') void restoreDashboardLogos()
   } catch (e) {
-    error(e instanceof Error ? e.message : 'Unable to load workspace.')
+    error(loaded ? 'Could not refresh your workspace. Showing your last loaded data.' : e instanceof Error ? e.message : 'Unable to load workspace.')
+    select('[data-workspace-retry]').classList.remove('d-none')
+    if (!loaded) root.dataset.loadFailed = 'true'
   } finally {
     root.setAttribute('aria-busy', 'false')
     root.querySelector('[data-workspace-loading]')?.classList.add('d-none')
@@ -1379,6 +1459,6 @@ async function init() {
     }
   }
 
-  if (!loaded) render()
 }
+select('[data-workspace-retry]').addEventListener('click', () => location.reload())
 void init()

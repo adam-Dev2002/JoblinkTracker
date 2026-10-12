@@ -1,3 +1,4 @@
+import { clearPageData } from './page-data-cache'
 export type SessionUser = { id: number; name: string; email: string; provider: string; avatarUrl: string | null; emailVerified: boolean }
 export type Session = { user: SessionUser | null; csrf: string; googleEnabled: boolean }
 let pending: Promise<Session> | null = null
@@ -10,13 +11,17 @@ try {
 } catch {
   /* Fall back to a server check if the snapshot is unavailable. */
 }
-export function cachedProfile(): SessionUser | null {
+let verifiedProfile: SessionUser | null | undefined = initialSession?.user
+function storedProfile(): SessionUser | null {
   try {
     const cache = JSON.parse(sessionStorage.getItem(cacheKey) || 'null') as { user: SessionUser; time: number } | null
     return cache && Date.now() - cache.time < 300000 ? cache.user : null
   } catch {
     return null
   }
+}
+export function cachedProfile(): SessionUser | null {
+  return verifiedProfile === undefined ? storedProfile() : verifiedProfile
 }
 export function getSession(force = false): Promise<Session> {
   if (pending && !force && Date.now() - checkedAt < 60000) return pending
@@ -32,11 +37,14 @@ export function getSession(force = false): Promise<Session> {
     })
   pending = read.then((session) => {
     try {
+      const previous = storedProfile()
+      if (!session.user || (previous && previous.id !== session.user.id)) clearPageData()
       if (session.user) sessionStorage.setItem(cacheKey, JSON.stringify({ user: session.user, time: Date.now() }))
       else sessionStorage.removeItem(cacheKey)
     } catch {
       /* Preview caching is optional. */
     }
+    verifiedProfile = session.user
     window.dispatchEvent(new CustomEvent('jobify-session', { detail: session.user }))
     return session
   })
@@ -47,8 +55,10 @@ export function getSession(force = false): Promise<Session> {
   return pending
 }
 export function clearProfile() {
+  clearPageData()
   pending = null
   initialSession = null
+  verifiedProfile = null
   try {
     sessionStorage.removeItem(cacheKey)
   } catch {
@@ -61,7 +71,9 @@ export function clearProfile() {
 }
 const channel = new BroadcastChannel('jobify-session')
 channel.addEventListener('message', () => {
+  clearPageData()
   pending = null
+  verifiedProfile = null
   try {
     sessionStorage.removeItem(cacheKey)
   } catch {
