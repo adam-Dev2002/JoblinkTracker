@@ -15,7 +15,7 @@ try {
     executablePath: process.env.JOBLINK_BROWSER_PATH || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : undefined),
     headless: true,
   });
-  const context = await browser.newContext({ baseURL: process.env.JOBLINK_BASE_URL || 'http://127.0.0.1:3000', viewport: { width: 1530, height: 1000 } });
+  const context = await browser.newContext({ baseURL: process.env.JOBLINK_BASE_URL || 'http://127.0.0.1:3000', viewport: { width: 1530, height: 1000 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   const errors = [];
@@ -31,16 +31,30 @@ try {
   await context.route('https://www.google.com/s2/favicons?*', route => route.abort());
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body: `
     let resultDiv, host;
-    window.drawGoogleCards = count => {
+    window.drawGoogleCards = (count, noCursor = false, invalid = false) => {
       const query = window.layoutQuery;
       const results = Array.from({length:count}, (_,index) => ({title:index%2?'Medical Billing, Coding & Arbitration Specialist (Remote | US Client)':'Cashier',url:'https://www.onlinejobs.ph/jobseekers/job/layout-'+index,content:index%2?'Longer summary with additional job details. '.repeat(9):index===2?'':'Short summary.'}));
+      if (invalid) results.push({title:'Advice article',url:'https://www.onlinejobs.ph/blog/advice',content:'Not a job-detail page'});
       window.__gcse.searchCallbacks.web.starting('joblink-google-jobs',query);
       window.__gcse.searchCallbacks.web.ready('joblink-google-jobs',query,[],results,resultDiv);
       window.__gcse.searchCallbacks.web.rendered();
+      // Google creates its native footer AFTER the rendered callback.
+      host.querySelector('.gsc-cursor-box')?.remove();
+      if (!noCursor) {
+        const footer = document.createElement('div');
+        footer.className = 'gsc-cursor-box';
+        footer.innerHTML='<div class="gsc-cursor">'+[1,2].map(number=>'<div role="button" tabindex="0" class="gsc-cursor-page '+(window.layoutPage===number?'gsc-cursor-current-page':'')+'">'+number+'</div>').join('')+'</div>';
+        host.querySelector('.gsc-results').insertBefore(footer, host.querySelector('.gcsc-more-maybe-branding-root'));
+        footer.querySelectorAll('.gsc-cursor-page').forEach(control => control.onclick=()=>{
+          window.layoutPage=Number(control.textContent);
+          window.drawGoogleCards(window.layoutPage===2?1:window.layoutPageSize);
+        });
+      }
     };
-    const element={execute(query){window.layoutQuery=query;window.drawGoogleCards(10)},clearAllResults(){}};
+    const element={execute(query){window.layoutQuery=query;window.layoutPage=1;window.drawGoogleCards(window.layoutPageSize)},clearAllResults(){}};
     window.google={search:{cse:{element:{render(config){
       host=config.div;
+      window.layoutPageSize=Number(config.attributes.webSearchResultSetSize)||10;
       // Emulate provider styles being added after the app's stylesheet.
       const style=document.createElement('style');
       style.textContent='.gsc-control-cse{font-family:Arial;font-size:13px;border:1px solid white;padding:1em;background:white}.gsc-control-cse .gsc-results{width:528px}.gsc-results .gsc-cursor-box .gsc-cursor-page{margin-right:8px;cursor:pointer;color:black;text-decoration:underline;background:white}.gsc-results .gsc-cursor-box .gsc-cursor-current-page{font-weight:bold;color:black;background:white}.gsc-results .gsc-cursor-box{margin:10px}';
@@ -94,6 +108,9 @@ try {
   await page.locator('#job-query').fill('developer');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await page.locator('.google-job-grid').waitFor();
+  await checkLayout('.google-job-grid', 12);
+  await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 12 entries on page 1');
+  assert.equal(await page.evaluate(() => window.layoutPageSize), 12, 'Google requests the same twelve-card page as feeds');
   const pairs = ['.job-card','.card-body','.avatar','.job-title','.job-title-link','.job-details-link','.job-card-identity .small','.job-card-metadata','.job-tag','.job-card-actions .btn-primary','.job-card-actions button'];
   for (const selector of pairs) {
     const feed = await page.locator('[data-job-results]').locator(selector).first().evaluate(metrics);
@@ -115,17 +132,31 @@ try {
   await page.locator('#job-source').selectOption('google');
   for (const width of [320, 390, 768, 1024, 1530]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const count of [1, 2, 4, 5, 7, 8, 10]) {
+    for (const count of [1, 2, 4, 5, 7, 8, 10, 12]) {
       await page.evaluate(count => window.drawGoogleCards(count), count);
       await checkLayout('.google-job-grid', count);
+      await page.waitForFunction(count => document.querySelector('[data-google-page-count]')?.textContent === 'Showing '+count+' '+(count===1?'entry':'entries')+' on page 1', count);
     }
+    const footer = await page.locator('.gsc-cursor-box').evaluate(nav => {
+      const rect = nav.getBoundingClientRect();
+      const count = nav.querySelector('[data-google-page-count]').getBoundingClientRect();
+      const pages = nav.querySelector('.pagination').getBoundingClientRect();
+      return { left: count.left - rect.left, center: (pages.left + pages.right - rect.left - rect.right) / 2, alongside: Math.abs((pages.top + pages.bottom - count.top - count.bottom) / 2), below: count.top >= pages.bottom, overflow: nav.scrollWidth > nav.clientWidth };
+    });
+    assert.ok(Math.abs(footer.left) < 2, 'Google count starts at the bottom-left of the results');
+    assert.ok(Math.abs(footer.center) < 2, 'Google page controls stay centered');
+    assert.equal(footer.overflow, false);
+    if (width < 768) assert.equal(footer.below, true);
+    else assert.ok(footer.alongside < 2, 'Google count is alongside the paginator');
     console.log('PASS layout width', width);
   }
   await page.locator('.gsc-cursor-page').nth(1).click();
   await checkLayout('.google-job-grid', 1);
+  await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 1 entry on page 2');
   assert.equal(await page.locator('.gsc-cursor-page').nth(1).getAttribute('aria-current'), 'page');
   await page.locator('.gsc-cursor').getByRole('button', { name: 'Previous page', exact: true }).click();
-  await checkLayout('.google-job-grid', 10);
+  await checkLayout('.google-job-grid', 12);
+  await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 12 entries on page 1');
   assert.equal(await page.locator('.gsc-cursor').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   await page.locator('.google-job-card [data-job-details]').first().click();
   await page.locator('[data-job-details-modal]').waitFor({ state: 'visible' });
@@ -134,6 +165,15 @@ try {
   await page.locator('.google-job-card [data-job-pick]').first().check();
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /1 selected/);
   await page.locator('[data-job-clear-selection]').click();
+  await page.evaluate(() => window.drawGoogleCards(2, false, true));
+  await checkLayout('.google-job-grid', 2);
+  await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 2 entries on page 1');
+  await page.evaluate(() => window.drawGoogleCards(1, true));
+  await checkLayout('.google-job-grid', 1);
+  await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 1 entry on page 1');
+  assert.equal(await page.locator('.gsc-cursor').count(), 0, 'A single Google page still has an entry count');
+  await page.evaluate(() => window.drawGoogleCards(0, true));
+  await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 0 entries on page 1');
   await page.locator('#job-source').selectOption('jobicy');
   await page.locator('[data-google-jobs]').waitFor({ state: 'hidden' });
   await checkLayout('[data-job-results]', 12);

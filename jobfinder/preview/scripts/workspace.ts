@@ -3,7 +3,7 @@ import { attachTrackedJobSearch } from './application-tracker'
 import { attachTableActions } from './table-actions'
 import { companyLogo, validCompanyLogo } from '../server/company-logo.mjs'
 import { getSession } from '@shared/lib/client-session'
-import { createGoogleJobSearch, type GoogleJobResult } from './google-job-search'
+import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './google-job-search'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
@@ -53,7 +53,6 @@ let visibleJobIds: string[] = []
 let savingSelectedJobs = false
 let jobsLoading = false
 let jobPage = 1
-const jobsPerPage = 12
 let jobSearchController: AbortController | null = null
 type JobFeed = { jobs: Job[]; message: string; source?: string; mode?: string; searchUrl?: string; nextPage?: number | null; total?: number | null }
 const jobFeedCache = new Map<string, { time: number; data: JobFeed }>()

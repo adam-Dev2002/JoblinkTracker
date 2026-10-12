@@ -1,5 +1,6 @@
 import { googleJobQuery, googleJobListingUrl, type GoogleJobFilters } from './google-job-query'
 
+export const jobsPerPage = 12
 export type GoogleJobResult = { url: string; listingUrl?: string; title: string; content?: string; visibleUrl?: string }
 type GoogleElement = { execute: (query: string) => void; clearAllResults: () => void }
 type ReadyCallback = (name: string, query: string, promos: GoogleJobResult[], results: GoogleJobResult[], div: HTMLElement) => boolean
@@ -17,7 +18,59 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   let initialization: Promise<void> | null = null
   let latestQuery = ''
   let active = false
+  let resultCount = 0
   let resultTimer: ReturnType<typeof setTimeout> | undefined
+  const updatePagination = () => {
+    if (!active) return
+    const results = host.querySelector<HTMLElement>('.gsc-results.gsc-webResult')
+    if (!results) return
+    let footer = results.querySelector<HTMLElement>('.gsc-cursor-box')
+    if (!footer) {
+      footer = document.createElement('div')
+      footer.className = 'gsc-cursor-box'
+      const branding = results.querySelector('.gcsc-more-maybe-branding-root, .gcsc-branding')
+      if (branding?.parentElement === results) results.insertBefore(footer, branding)
+      else results.append(footer)
+    }
+    footer.classList.add('workspace-pagination')
+    const cursor = footer.querySelector<HTMLElement>('.gsc-cursor')
+    const pages = Array.from(cursor?.querySelectorAll<HTMLElement>('.gsc-cursor-page') || [])
+    const current = Math.max(0, pages.findIndex((page) => page.classList.contains('gsc-cursor-current-page')))
+    const pageNumber = Number(pages[current]?.textContent?.trim()) || 1
+    let count = footer.querySelector<HTMLElement>('[data-google-page-count]')
+    if (!count) {
+      count = document.createElement('p')
+      count.className = 'text-secondary small mb-0 workspace-page-count'
+      count.dataset.googlePageCount = ''
+      count.setAttribute('role', 'status')
+      footer.prepend(count)
+    }
+    // Google does not provide an exact total of validated job-detail pages.
+    count.textContent = `Showing ${resultCount} ${resultCount === 1 ? 'entry' : 'entries'} on page ${pageNumber}`
+    if (!cursor) return
+    cursor.classList.add('pagination')
+    cursor.querySelectorAll<HTMLElement>('.gsc-cursor-nav').forEach((nav) => nav.remove())
+    const navButton = (label: string, target: number) => {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'gsc-cursor-nav page-link'
+      button.textContent = label
+      button.setAttribute('aria-label', label + ' page')
+      if (target < 0 || target >= pages.length) button.disabled = true
+      else button.addEventListener('click', () => pages[target]?.click())
+      return button
+    }
+    if (current > 0) cursor.prepend(navButton('Previous', current - 1))
+    cursor.append(navButton('Next', current + 1))
+    for (const page of pages) {
+      const selected = page.classList.contains('gsc-cursor-current-page')
+      page.classList.add('page-link')
+      page.classList.toggle('active', selected)
+      page.setAttribute('aria-label', 'Page ' + page.textContent?.trim())
+      if (selected) page.setAttribute('aria-current', 'page')
+      else page.removeAttribute('aria-current')
+    }
+  }
   const setStatus = (message: string, announcementOnly = false) => {
     status.textContent = message
     status.classList.toggle('visually-hidden', announcementOnly)
@@ -47,6 +100,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       }
     }
     const listings = (results || []).map((result) => ({ ...result, listingUrl: googleJobListingUrl(result.url) })).filter((result) => result.listingUrl)
+    resultCount = listings.length
     const organic = document.createElement('div')
     div.append(organic)
     renderResults(listings, organic)
@@ -76,7 +130,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
             failed('Google search could not initialize. Try again.')
             return
           }
-          api.render({ div: host, tag: 'searchresults-only', gname: name, attributes: { autoSearchOnLoad: false, enableHistory: false, enableImageSearch: false, webSearchResultSetSize: 'filtered_cse', linkTarget: '_blank' } })
+          api.render({ div: host, tag: 'searchresults-only', gname: name, attributes: { autoSearchOnLoad: false, enableHistory: false, enableImageSearch: false, webSearchResultSetSize: jobsPerPage, linkTarget: '_blank' } })
           settled = true
           clearTimeout(timer)
           resolve()
@@ -94,34 +148,9 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
             },
             ready,
             rendered: () => {
-              // Reuse the workspace pagination theme on Google's own controls.
-              // Keep the original nodes and handlers so Google still owns paging.
-              host.querySelectorAll<HTMLElement>('.gsc-cursor').forEach((cursor) => {
-                cursor.classList.add('pagination')
-                cursor.querySelectorAll<HTMLElement>('.gsc-cursor-nav').forEach((nav) => nav.remove())
-                const pages = Array.from(cursor.querySelectorAll<HTMLElement>('.gsc-cursor-page'))
-                const current = Math.max(0, pages.findIndex((page) => page.classList.contains('gsc-cursor-current-page')))
-                const navButton = (label: string, target: number) => {
-                  const button = document.createElement('button')
-                  button.type = 'button'
-                  button.className = 'gsc-cursor-nav page-link'
-                  button.textContent = label
-                  button.setAttribute('aria-label', label + ' page')
-                  if (target < 0 || target >= pages.length) button.disabled = true
-                  else button.addEventListener('click', () => pages[target]?.click())
-                  return button
-                }
-                if (current > 0) cursor.insertAdjacentElement('afterbegin', navButton('Previous', current - 1))
-                cursor.append(navButton('Next', current + 1))
-              })
-              host.querySelectorAll<HTMLElement>('.gsc-cursor-page').forEach((page) => {
-                const current = page.classList.contains('gsc-cursor-current-page')
-                page.classList.add('page-link')
-                page.classList.toggle('active', current)
-                page.setAttribute('aria-label', 'Page ' + page.textContent?.trim())
-                if (current) page.setAttribute('aria-current', 'page')
-                else page.removeAttribute('aria-current')
-              })
+              // Google adds its footer after this callback; theme the new nodes.
+              // Preserve Google's native page controls and click handlers.
+              requestAnimationFrame(updatePagination)
             },
           },
         },
