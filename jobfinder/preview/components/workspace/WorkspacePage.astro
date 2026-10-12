@@ -31,7 +31,7 @@ const desk = [
       desk.some(([tool]) => tool === view) && (
         <div class="workspace-tabs">
           {desk.map(([tool, label]) => (
-            <a class:list={[view === tool && 'active']} href={'/desk/' + tool}>
+            <a data-astro-prefetch class:list={[view === tool && 'active']} href={'/desk/' + tool}>
               {label}
             </a>
           ))}

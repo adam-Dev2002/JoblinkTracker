@@ -4,6 +4,7 @@ import { attachTableActions } from './table-actions'
 import { companyLogo, validCompanyLogo } from '../server/company-logo.mjs'
 import { getSession } from '@shared/lib/client-session'
 import { readPageData, writePageData } from '@shared/lib/page-data-cache'
+import { wasPrerendered, whenPageActive } from '@shared/lib/page-activation'
 import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './google-job-search'
 import { googleJobListingUrl } from './google-job-query'
 import { isClosedListing } from './job-availability.mjs'
@@ -93,7 +94,10 @@ async function api(path: string, body?: object, signal?: AbortSignal) {
   const response = await fetch('/api/' + path, { credentials: 'same-origin', signal: signal ?? null, ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) } : {}) })
   const data = await response.json()
   if (!response.ok) throw new Error(data.error || 'Unable to load your workspace.')
-  if (body && path.startsWith('workspace/')) workspaceRevision++
+  if (body && path.startsWith('workspace/')) {
+    workspaceRevision++
+    window.dispatchEvent(new Event('joblink-workspace-changed'))
+  }
   return data
 }
 function owned(kind: Kind) {
@@ -1610,6 +1614,7 @@ async function init() {
   if (view === 'jobs') {
     await initialJobs
     updateJobSelection()
+    await whenPageActive()
     const opened = items.find((i) => i.id === Number(sessionStorage.getItem('jobify-opened-application')))
     if (opened) showApplicationModal(opened)
     const pending = sessionStorage.getItem('jobify-pending-application')
@@ -1630,3 +1635,21 @@ async function init() {
 }
 select('[data-workspace-retry]').addEventListener('click', () => location.reload())
 void init()
+if (wasPrerendered) void whenPageActive().then(async () => {
+  // Reconcile edits made after preparation without blocking display or
+  // resetting the user's filters and page selection.
+  const revision = workspaceRevision
+  try {
+    const session = await getSession(true)
+    if (!loaded || session.user?.id !== cacheOwner) return
+    csrf = session.csrf
+    const data = await api('workspace/items')
+    if (revision !== workspaceRevision || !signedIn) return
+    if (JSON.stringify(items) !== JSON.stringify(data.items)) {
+      items = data.items
+      render()
+    }
+  } catch {
+    if (loaded) error('Could not refresh your workspace. Showing your last loaded data.')
+  }
+})
