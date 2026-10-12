@@ -164,6 +164,11 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     return initialization
   }
   return {
+    updateResultCount(count: number) {
+      resultCount = count
+      if (active) setStatus(`${count} job ${count === 1 ? 'listing' : 'listings'} on this page.`, true)
+      updatePagination()
+    },
     hide() {
       active = false
       clearTimeout(resultTimer)

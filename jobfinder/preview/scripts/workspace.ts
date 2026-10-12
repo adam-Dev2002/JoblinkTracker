@@ -43,6 +43,7 @@ let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
 const maxSelectedJobs = 50
 const googleJobs = new Map<string, Job>()
+let googleResultsHost: HTMLElement | null = null
 let visibleGoogleJobIds: string[] = []
 let googleRenderGeneration = 0
 const findJob = (id: string) => jobs.find((job) => job.id === id) || googleJobs.get(id)
@@ -55,6 +56,7 @@ const googleJobSearch =
 let visibleJobIds: string[] = []
 let savingSelectedJobs = false
 let jobsLoading = false
+let jobSearchInitialized = false
 let jobPage = 1
 let jobSearchController: AbortController | null = null
 type JobFeed = { jobs: Job[]; message: string; source?: string; mode?: string; searchUrl?: string; nextPage?: number | null; total?: number | null }
@@ -107,17 +109,28 @@ function filteredApplications() {
 }
 const dashboardCompanyLogos = new Map<string, string>()
 const companyKey = (company: string) => company.trim().toLowerCase()
-function applicationLogo(item: Entry) {
+function storedApplicationLogo(item: Entry) {
   return companyLogo(item.payload.company || '', item.payload.logo || '') || dashboardCompanyLogos.get(companyKey(item.payload.company || '')) || ''
+}
+function applicationLogo(item: Entry) {
+  const stored = storedApplicationLogo(item)
+  if (stored) return stored
+  // Fall back to the listing site's favicon, like the source icon on job cards.
+  try {
+    const url = new URL(safeUrl(item.payload.url) || '')
+    return ['https:', 'http:'].includes(url.protocol) ? 'https://www.google.com/s2/favicons?' + new URLSearchParams({ domain: url.hostname.replace(/^www\./, ''), sz: '64' }) : ''
+  } catch {
+    return ''
+  }
 }
 async function restoreDashboardLogos() {
   const recent = owned('application').sort((a, b) => b.id - a.id).slice(0, recentApplicationLimit)
   const sourceFor = (item: Entry) => (item.payload.source || /^Source:\s*(Remotive|Jobicy|Arbeitnow)\b/i.exec(item.payload.notes || '')?.[1] || '').toLowerCase()
-  const sources = new Set(recent.filter(item => item.payload.company && !applicationLogo(item)).map(sourceFor).filter(source => ['remotive', 'jobicy', 'arbeitnow'].includes(source)))
+  const sources = new Set(recent.filter(item => item.payload.company && !storedApplicationLogo(item)).map(sourceFor).filter(source => ['remotive', 'jobicy', 'arbeitnow'].includes(source)))
   await Promise.allSettled(Array.from(sources, async source => {
     const feed = await searchJobFeed('', source, AbortSignal.timeout(15000))
     let changed = false
-    for (const item of recent.filter(item => sourceFor(item) === source && !applicationLogo(item))) {
+    for (const item of recent.filter(item => sourceFor(item) === source && !storedApplicationLogo(item))) {
       const matches = feed.jobs.filter(job => companyKey(job.company) === companyKey(item.payload.company))
       const job = matches.find(job => safeUrl(job.url) === safeUrl(item.payload.url) || job.id === item.payload.jobId) || matches[0]
       const logo = validCompanyLogo(job?.logo)
@@ -130,6 +143,11 @@ function render() {
   // Never confuse a pending or failed request with a genuinely empty workspace.
   if (!loaded) return
   if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
+  if (view === 'jobs' && jobSearchInitialized) {
+    for (const [id, job] of jobSelection) if (hasApplied(job)) jobSelection.delete(id)
+    renderGoogleJobCards()
+    if (jobs.length || !jobsLoading) renderJobs(false)
+  }
   taskStatuses = ['To do', 'In progress', 'Done', ...owned('task_status').map((item) => item.payload.title)]
   const apps = owned('application'),
     tasks = owned('task'),
@@ -194,11 +212,13 @@ function render() {
     renderPagination(select('[data-application-pagination]'), filtered.length, applicationPage, 'data-application-page', 'applications')
     select('[data-application-rows]').innerHTML = filtered
       .slice((applicationPage - 1) * workspaceRowsPerPage, applicationPage * workspaceRowsPerPage)
-      .map(
-        (i) =>
-          `<tr class="${applicationSelection.has(i.id) ? 'table-active' : ''}"><td><input type="checkbox" class="form-check-input m-0" data-application-pick="${i.id}" aria-label="Select ${htmlEscape(i.payload.title)} at ${htmlEscape(i.payload.company || 'unspecified company')}" ${applicationSelection.has(i.id) ? 'checked' : ''} /></td><td class="text-nowrap text-secondary">${htmlEscape(i.payload.date)}</td><td><strong>${htmlEscape(i.payload.title)}</strong>${safeUrl(i.payload.url) ? `<div><a href="${htmlEscape(safeUrl(i.payload.url))}" target="_blank" rel="noopener noreferrer" class="small">Original listing &nearr;</a></div>` : ''}</td><td>${htmlEscape(i.payload.company)}</td><td class="text-secondary">${htmlEscape(i.payload.salary || '—')}</td><td>${statusSelect(i, appStatuses)}</td><td class="text-secondary" style="min-width:160px">${htmlEscape(i.payload.notes || '—')}</td><td class="text-end"><button type="button" class="btn workspace-row-actions" data-application-actions="${i.id}" aria-label="Actions for ${htmlEscape(i.payload.title)}" aria-haspopup="menu" aria-controls="workspace-row-menu" aria-expanded="false">Actions ${tableActionArrow}</button></td></tr>`,
-      )
+      .map((i) => {
+        const initials = (i.payload.company || i.payload.title).trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase()
+        const logo = applicationLogo(i)
+        return `<tr class="${applicationSelection.has(i.id) ? 'table-active' : ''}"><td><input type="checkbox" class="form-check-input m-0" data-application-pick="${i.id}" aria-label="Select ${htmlEscape(i.payload.title)} at ${htmlEscape(i.payload.company || 'unspecified company')}" ${applicationSelection.has(i.id) ? 'checked' : ''} /></td><td class="text-nowrap text-secondary">${htmlEscape(i.payload.date)}</td><td><strong>${htmlEscape(i.payload.title)}</strong>${safeUrl(i.payload.url) ? `<div><a href="${htmlEscape(safeUrl(i.payload.url))}" target="_blank" rel="noopener noreferrer" class="small">Original listing &nearr;</a></div>` : ''}</td><td><div class="d-flex align-items-center gap-2"><span class="avatar avatar-sm bg-secondary-lt rounded-3 position-relative flex-shrink-0"><span aria-hidden="true">${htmlEscape(initials)}</span>${logo ? `<img class="company-logo-fill" data-company-logo src="${htmlEscape(logo)}" alt="${htmlEscape(i.payload.company)} logo" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ''}</span><span>${htmlEscape(i.payload.company || '—')}</span></div></td><td class="text-secondary">${htmlEscape(i.payload.salary || '—')}</td><td>${statusSelect(i, appStatuses)}</td><td class="text-secondary" style="min-width:160px">${htmlEscape(i.payload.notes || '—')}</td><td class="text-end"><button type="button" class="btn workspace-row-actions" data-application-actions="${i.id}" aria-label="Actions for ${htmlEscape(i.payload.title)}" aria-haspopup="menu" aria-controls="workspace-row-menu" aria-expanded="false">Actions ${tableActionArrow}</button></td></tr>`
+      })
       .join('')
+    root.querySelectorAll<HTMLImageElement>('[data-application-rows] img[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
     select('[data-application-empty]').innerHTML = filtered.length ? '' : empty(apps.length ? 'No tracked jobs match your search. Clear the search or choose another status.' : 'No applications yet. Add one or save a job from Find work.')
   }
   if (view === 'taskboard') {
@@ -667,6 +687,7 @@ async function handleClick(event: Event) {
         popup.location.href = safeUrl(job.applyUrl || job.url)
         sessionStorage.setItem('jobify-opened-application', String(item.id))
         closeJobDetails()
+        render()
         showApplicationModal(item)
       } catch (e) {
         popup.close()
@@ -864,10 +885,10 @@ root.addEventListener(
         input.checked = !input.checked
         void handleChange(event)
       }
-    } else if (target.hasAttribute('data-track') || (target.tagName === 'A' && event.key === 'Enter')) {
+    } else if (target.hasAttribute('data-track') || target.hasAttribute('data-confirm-application') || (target.tagName === 'A' && event.key === 'Enter')) {
       event.preventDefault()
       event.stopPropagation()
-      void handleClick(event)
+      if (!(target instanceof HTMLButtonElement) || !target.disabled) void handleClick(event)
     }
   },
   true,
@@ -985,7 +1006,7 @@ function updateApplicationModal(item: Entry) {
   const opened = item.payload.status === 'Application opened'
   select('#application-follow-up-title').textContent = opened ? 'Did you submit your application?' : 'Application tracked'
   select('[data-application-title]').textContent = item.payload.title
-  select('[data-application-message]').textContent = opened ? 'Complete the application on the source website. If you have submitted it, mark it as Applied here. Otherwise, you can do this later from your tracker.' : `This application is tracked as ${item.payload.status}.`
+  select('[data-application-message]').textContent = opened ? 'Complete the application on the source website. If you have submitted it, mark it as Applied here. Otherwise, you can do this later from the job card or your tracker.' : `This application is tracked as ${item.payload.status}.`
   select<HTMLAnchorElement>('[data-application-source]').href = safeUrl(item.payload.url)
   const submit = select<HTMLButtonElement>('[data-application-submit]')
   submit.dataset.confirmApplication = String(item.id)
@@ -1031,11 +1052,20 @@ function updateJobSelection() {
   })
 }
 function trackedApplication(job: Job) {
-  return owned('application').find((item) => (job.url && safeUrl(item.payload.url) === safeUrl(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
+  const matches = owned('application').filter((item) => (job.url && safeUrl(item.payload.url) === safeUrl(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
+  return matches.find(isApplied) || matches[0]
+}
+function isApplied(item: Entry) {
+  return ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].includes(item.payload.status)
+}
+function hasApplied(job: Job) {
+  const item = trackedApplication(job)
+  return Boolean(item && isApplied(item))
 }
 function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string }) {
   const id = htmlEscape(job.id)
   const title = htmlEscape(job.title)
+  const application = trackedApplication(job)
   const logo = google
     ? `${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(google.iconUrl)}" alt="${htmlEscape(google.domain)} source icon" loading="lazy" referrerpolicy="no-referrer" />`
     : `<span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(job.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(job.logo))}" alt="${htmlEscape(job.company)} logo" loading="lazy" referrerpolicy="no-referrer" />` : ''}`
@@ -1061,6 +1091,7 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
         <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
         <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
       </div>
+      ${application?.payload.status === 'Application opened' ? `<button type="button" class="btn btn-outline-success mt-2" data-confirm-application="${application.id}" aria-label="Mark as applied: ${title}">Mark as applied</button>` : ''}
     </div>
   </article>`
 }
@@ -1104,6 +1135,13 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
   }
   googleJobs.clear()
   for (const job of listings) googleJobs.set(job.id, job)
+  googleResultsHost = div
+  renderGoogleJobCards()
+}
+function renderGoogleJobCards() {
+  const div = googleResultsHost
+  if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
+  const listings = Array.from(googleJobs.values()).filter(job => !hasApplied(job))
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
     '<div class="google-job-grid">' +
@@ -1115,10 +1153,11 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
         return renderJobCard(job, { domain, origin: website.origin, iconUrl })
       })
       .join('') +
-    (listings.length ? '' : '<p class="text-secondary mb-0">No matching job-detail pages on this Google results page. Try another page or broader keywords.</p>') +
+    (listings.length ? '' : '<p class="text-secondary mb-0">No unapplied jobs on this Google results page. Try another page or broader keywords.</p>') +
     '</div>'
   div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
   if (select<HTMLSelectElement>('#job-source').value === 'google') select('[data-job-count]').textContent = `${listings.length} results on this page`
+  googleJobSearch?.updateResultCount(listings.length)
   updateJobSelection()
 }
 function jobBulkStatus(message: string) {
@@ -1218,7 +1257,7 @@ function renderJobs(resetPage = true) {
     // Feed timestamps without an offset are interpreted in UTC on every device.
     const date = (j.date || '').trim()
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date + 'T00:00:00Z' : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date) ? date.replace(' ', 'T') + 'Z' : date)
-    return (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
+    return !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
   })
   visibleJobIds = list.map((job) => job.id)
   jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / jobsPerPage)))
@@ -1355,6 +1394,7 @@ function initJobSearch() {
     })
     jobPage = Math.max(1, previous.page || 1)
   }
+  jobSearchInitialized = true
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   const searchNow = () => {
     clearTimeout(searchTimer)

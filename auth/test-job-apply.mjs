@@ -114,7 +114,7 @@ try {
     "Official application form",
   );
   await popup.close();
-  await p.locator("[data-confirm-application]").waitFor();
+  await p.locator("[data-application-submit]").waitFor();
   let rows = (await (await c.request.get("/api/workspace/items")).json()).items;
   assert.equal(rows.length, 1);
   assert.equal(rows[0].payload.status, "Application opened");
@@ -156,6 +156,7 @@ try {
   );
   await p.getByRole("button", { name: "Mark as applied", exact: true }).click();
   await p.locator("[data-application-success]").waitFor({ state: "visible" });
+  assert.equal(await p.locator('[data-job-card="apply-test-1"]').count(), 0);
   await p
     .locator("[data-application-modal]")
     .getByRole("link", { name: "View tracker", exact: true })
@@ -208,14 +209,23 @@ try {
   await p.goto("/job-listing");
   await p.locator("[data-apply-job]").first().waitFor();
   await p.locator('[data-ready="true"]').waitFor();
+  await p.locator('[data-job-card="apply-test-1"]').waitFor({ state: 'detached' });
+  assert.equal(await p.locator('.job-card').count(), 1);
+  await p.locator('[data-track="apply-test-2"]').click();
+  await p.locator('[data-entry-modal]').waitFor({ state: 'visible' });
+  await p.locator('[data-entry-form] button[type=submit]').click();
+  await p.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
+  const bookmarked = (await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.payload.jobId === jobs[1].id);
+  assert.equal(bookmarked.payload.logo, jobs[1].logo, 'Saving through the job card preserves its logo');
+  assert.equal(bookmarked.payload.source, jobs[1].source);
   await p.setViewportSize({ width: 390, height: 844 });
   const mobilePopupPromise = p.waitForEvent("popup");
-  await p.getByRole("link", { name: "Apply on company site" }).click();
+  await p.getByRole("link", { name: "Apply via source" }).click();
   const mobilePopup = await mobilePopupPromise;
-  await mobilePopup.waitForURL("https://example.com/careers/apply");
+  await mobilePopup.waitForURL(jobs[1].url);
   await mobilePopup.close();
   await p.locator("[data-application-modal]").waitFor({ state: "visible" });
-  assert.equal(await p.locator("[data-application-submit]").isVisible(), false);
+  assert.equal(await p.locator("[data-application-submit]").isVisible(), true);
   const modalBounds = await p
     .locator("[data-application-modal] .modal-content")
     .boundingBox();
@@ -226,13 +236,9 @@ try {
     false,
   );
   await p.locator('[data-application-modal]').waitFor({ state: 'hidden' });
-  await p.locator('[data-track="apply-test-2"]').click();
-  await p.locator('[data-entry-modal]').waitFor({ state: 'visible' });
-  await p.locator('[data-entry-form] button[type=submit]').click();
-  await p.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
-  const bookmarked = (await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.payload.jobId === jobs[1].id);
-  assert.equal(bookmarked.payload.logo, jobs[1].logo, 'Saving through the job card preserves its logo');
-  assert.equal(bookmarked.payload.source, jobs[1].source);
+  await p.locator('[data-job-card="apply-test-2"] [data-confirm-application]').click();
+  await p.locator('[data-job-card="apply-test-2"]').waitFor({ state: 'detached' });
+  assert.equal((await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.id === bookmarked.id).payload.status, 'Applied');
   assert.deepEqual(errors, []);
   console.log(
     "PASS: Bootstrap application modal, Not yet, failed-save retry, Applied persistence, duplicate prevention, status preservation, CSRF and mobile layout.",

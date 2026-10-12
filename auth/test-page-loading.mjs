@@ -39,7 +39,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   let items = ['application', 'task', 'event', 'link', 'sheet'].map((kind, index) => ({
     id: index + 1, kind, attachments: [], payload: {
       title: `Saved ${kind}`, company: 'Example company', status: kind === 'task' ? 'To do' : 'Saved',
-      date: eventDate, time: '09:00', url: 'https://example.com/jobs/1', salary: '', value: '123', notes: 'Saved notes',
+      date: eventDate, time: '09:00', url: 'https://example.com/jobs/tracked', salary: '', value: '123', notes: 'Saved notes',
     },
   }));
   const jobs = Array.from({ length: 13 }, (_, index) => ({
