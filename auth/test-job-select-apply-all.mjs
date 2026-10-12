@@ -19,8 +19,11 @@ try {
   const errors = [], writes = [];
   page.on('pageerror', error => errors.push(error.message));
   const jobs = Array.from({ length: 218 }, (_, index) => ({ id: `all-${index}`, title: `Assistant ${index}`, company: 'Acme', location: index % 2 ? 'USA' : 'Manila', employmentType: 'Full-time', role: 'Virtual assistance', url: `https://example.com/jobs/${index}`, source: 'Test feed', availability: 'open', salary: '', date: '', logo: 'https://example.com/logo.svg', workMode: 'Remote / WFH', description: 'Assistant job', direct: false }));
+  const google = Array.from({ length: 12 }, (_, index) => ({ title: `Google Assistant ${index + 1}`, url: `https://www.onlinejobs.ph/jobseekers/job/new-assistant-${index + 1}`, content: 'Assistant job' }));
   const entry = (index, status) => ({ id: index + 1, kind: 'application', payload: { ...jobs[index], jobId: jobs[index].id, status, date: '2026-10-12', notes: `Personal note ${index}` } });
-  const items = [entry(0, 'Saved'), entry(1, 'Application opened'), entry(2, 'Saved'), entry(217, 'Applied')];
+  const items = [entry(0, 'Saved'), entry(1, 'Application opened'), entry(2, 'Saved'), entry(217, 'Applied'),
+    ...google.map((job, index) => ({ id: 900 + index, kind: 'application', payload: { ...job, company: '', salary: '', date: '2026-10-12', notes: `Google note ${index}`, jobId: `previously-tracked-google-${index}`, source: 'Google · www.onlinejobs.ph', status: index % 2 ? 'Saved' : 'Application opened' } })),
+  ];
   let failOnce = true, release;
   const hold = new Promise(resolve => { release = resolve; });
   let held = false;
@@ -44,14 +47,17 @@ try {
   });
   await context.route('https://example.com/logo.svg', route => route.abort());
   await context.route('https://www.google.com/s2/favicons?*', route => route.abort());
-  const google = [1, 2].map(index => ({ title: `Google Assistant ${index}`, url: `https://www.onlinejobs.ph/jobseekers/job/new-assistant-${index}`, content: 'Assistant job' }));
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body: `
     let organic;
     const element = { execute(query) {
       window.__gcse.searchCallbacks.web.ready('joblink-google-jobs', query, [], ${JSON.stringify(google)}, organic);
       window.__gcse.searchCallbacks.web.rendered();
     }, clearAllResults() {} };
-    window.google = { search: { cse: { element: { render(config) { config.div.innerHTML='<div data-organic></div>'; organic=config.div.firstElementChild; }, getElement() { return element; } } } } };
+    window.google = { search: { cse: { element: { render(config) {
+      config.div.innerHTML='<div data-organic></div>'; organic=config.div.firstElementChild;
+      config.div.addEventListener('click', event => event.stopPropagation());
+      config.div.addEventListener('change', event => event.stopPropagation());
+    }, getElement() { return element; } } } } };
     window.__gcse.initializationCallback();
   ` }));
   await page.goto('/playground-select-apply-all');
@@ -94,7 +100,7 @@ try {
   release();
   await page.locator('[data-job-bulk-status]').filter({ hasText: '216 jobs marked as applied' }).waitFor({ timeout: 60000 });
   assert.equal(writes.length, 217, 'The action attempts every selected job');
-  assert.equal(items.length, 218, 'Existing saved and opened records are updated without duplicates');
+  assert.equal(items.length, 230, 'Existing saved and opened records are updated without duplicates');
   assert.equal(items.find(item => item.id === 1).payload.notes, 'Personal note 0');
   assert.equal(items.find(item => item.id === 2).payload.logo, jobs[1].logo);
   assert.equal(items.find(item => item.id === 3).payload.status, 'Saved');
@@ -103,24 +109,38 @@ try {
   await page.locator('[data-job-bulk-apply]').click();
   await page.locator('[data-job-bulk-status]').filter({ hasText: '1 job marked as applied' }).waitFor();
   assert.equal(writes.length, 218);
-  assert.equal(items.length, 218);
-  assert.equal(items.every(item => item.payload.status === 'Applied'), true);
+  assert.equal(items.length, 230);
+  assert.equal(items.filter(item => !item.payload.url.includes('onlinejobs.ph')).every(item => item.payload.status === 'Applied'), true);
   assert.equal(await page.locator('.job-card').count(), 0);
   await page.reload();
   await page.locator('[data-ready=true]').waitFor();
   await page.locator('[data-job-count]').filter({ hasText: /^0 results$/ }).waitFor();
-  // Google cards also support direct confirmation without opening a source tab.
+  // Reproduce the screenshot: the previously opened card must be included with
+  // all other Google results, regardless of its tracker ID or existing status.
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-job-count]').filter({ hasText: /^2 results on this page$/ }).waitFor();
-  await page.locator('.google-job-card [data-mark-applied-job]').first().press('Space');
-  await page.locator('[data-job-count]').filter({ hasText: /^1 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^12 results on this page$/ }).waitFor();
+  assert.equal(await page.locator('.google-job-card [data-mark-applied-job]').count(), 12);
+  assert.equal(await bulk.isEnabled(), true, 'Select all remains available when every Google card is already saved or opened');
   await bulk.check();
+  assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 12, 'Bulk selection includes the previously opened and saved Google cards');
+  assert.equal(await page.locator('[data-job-selection-label]').innerText(), 'Deselect 12 jobs');
+  await bulk.uncheck();
+  assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 0);
+  await page.locator('.google-job-card [data-mark-applied-job]').first().press('Space');
+  await page.locator('[data-job-count]').filter({ hasText: /^11 results on this page$/ }).waitFor();
+  assert.equal(items.find(item => item.id === 900).payload.status, 'Applied');
+  assert.equal(items.find(item => item.id === 900).payload.notes, 'Google note 0');
+  assert.equal(items.filter(item => item.payload.url === google[0].url).length, 1);
+  await bulk.check();
+  assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 11);
   await page.locator('[data-job-bulk-apply]').click();
   await page.locator('[data-job-count]').filter({ hasText: /^0 results on this page$/ }).waitFor();
-  assert.equal(items.length, 220);
+  assert.equal(items.length, 230);
+  assert.equal(items.find(item => item.id === 901).payload.status, 'Applied');
+  assert.equal(items.find(item => item.id === 901).payload.notes, 'Google note 1');
   assert.equal(items.every(item => item.payload.status === 'Applied'), true);
   assert.deepEqual(errors, []);
-  console.log('PASS: select/deselect all 217 jobs across pages and filters, saved/opened/new eligibility, full export, bulk Applied updates, preserved notes/logos, failed-row retry, persistence, Google card/bulk confirmation and mobile.');
+  console.log('PASS: select/deselect all 217 feed jobs and all 12 Google cards including previously opened/saved cards, full export, bulk Applied, preserved notes/logos, failed-row retry, persistence, keyboard confirmation and mobile.');
 } finally {
   await browser?.close();
   await unlink(preview);
