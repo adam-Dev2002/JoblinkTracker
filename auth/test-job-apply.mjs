@@ -17,7 +17,7 @@ const b = await chromium.launch({
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   headless: true,
 });
-const c = await b.newContext({ baseURL: "http://127.0.0.1:3000" }),
+const c = await b.newContext({ baseURL: process.env.JOBLINK_BASE_URL || "http://127.0.0.1:3000" }),
   p = await c.newPage();
 p.setDefaultNavigationTimeout(90000);
 const errors = [];
@@ -240,7 +240,7 @@ try {
     false,
   );
   await p.locator('[data-application-modal]').waitFor({ state: 'hidden' });
-  await p.locator('[data-job-card="apply-test-2"] [data-confirm-application]').click();
+  await p.locator('[data-job-card="apply-test-2"] [data-mark-applied-job]').click();
   await p.locator('[data-job-card="apply-test-2"]').waitFor({ state: 'detached' });
   assert.equal((await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.id === bookmarked.id).payload.status, 'Applied');
   assert.deepEqual(errors, []);

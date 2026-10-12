@@ -90,7 +90,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   assert.equal(await page.locator('.job-card').count(), 10);
   for (let index = 0; index < 5; index++) assert.equal(await card(index).count(), 0);
   assert.equal(await card(5).getByRole('button', { name: 'Mark as applied' }).count(), 1);
-  assert.equal(await card(6).locator('[data-confirm-application]').count(), 0);
+  assert.equal(await card(6).locator('[data-mark-applied-job]').count(), 1, 'Saved jobs also have direct confirmation');
   await card(5).locator('[data-job-pick]').check();
   failSave = true;
   await card(5).getByRole('button', { name: 'Mark as applied' }).click();
@@ -111,9 +111,9 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await page.locator('[data-application-modal]').waitFor({ state: 'visible' });
   await page.locator('[data-application-later]').click();
   await page.locator('[data-application-modal]').waitFor({ state: 'hidden' });
-  await card(7).locator('[data-confirm-application]').waitFor();
+  await card(7).locator('[data-mark-applied-job]').waitFor();
   await visit('jobs');
-  await card(7).locator('[data-confirm-application]').waitFor();
+  await card(7).locator('[data-mark-applied-job]').waitFor();
   assert.equal(await card(5).count(), 0, 'Applied stays hidden when returning to a cached feed');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -150,7 +150,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await page.locator('[data-application-later]').click();
   await page.locator('[data-application-modal]').waitFor({ state: 'hidden' });
   // Google's widget can swallow keyboard events; the card handles confirmation.
-  await page.locator('.google-job-card [data-confirm-application]').press('Enter');
+  await page.locator('.google-job-card [data-mark-applied-job]').press('Enter');
   await page.locator('.google-job-card').waitFor({ state: 'detached' });
   assert.equal(await page.locator('.google-job-card').count(), 0);
   assert.match(await page.locator('[data-job-count]').innerText(), /^0 results on this page$/);

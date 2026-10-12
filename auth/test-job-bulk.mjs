@@ -19,7 +19,7 @@ const browser = await chromium.launch({
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   headless: true,
 });
-const context = await browser.newContext({ baseURL: "http://127.0.0.1:3000" });
+const context = await browser.newContext({ baseURL: process.env.JOBLINK_BASE_URL || "http://127.0.0.1:3000" });
 const page = await context.newPage();
 await mockOpenAvailability(context);
 const errors = [];
@@ -263,7 +263,7 @@ try {
   await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /50 selected/,
+    /209 selected/,
   );
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(
@@ -340,7 +340,7 @@ try {
   await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /50 selected/,
+    /109 selected/,
   );
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(
@@ -405,12 +405,12 @@ try {
     null,
     { timeout: 90000 },
   );
-  assert.equal(items.length, 50);
+  assert.equal(items.length, 218);
   assert.equal(items[0].payload.status, "Applied");
-  assert.equal(writes.length, 50);
+  assert.equal(writes.length, 218);
   assert.match(
     await page.locator("[data-job-bulk-status]").innerText(),
-    /49 jobs saved.*1 could not be saved/,
+    /217 jobs saved.*1 could not be saved/,
   );
   assert.equal(
     await page.locator('[data-job-pick="bulk-2"]').isChecked(),
@@ -422,8 +422,8 @@ try {
       .querySelector("[data-job-selected-count]")
       .textContent.startsWith("0 selected"),
   );
-  assert.equal(items.length, 51);
-  assert.equal(writes.length, 51);
+  assert.equal(items.length, 219);
+  assert.equal(writes.length, 219);
   await page.locator('[data-job-pick="bulk-1"]').check();
   await page.locator("[data-job-bulk-save]").click();
   await page.waitForFunction(() =>
@@ -431,28 +431,28 @@ try {
       .querySelector("[data-job-bulk-status]")
       .textContent.includes("1 already in your tracker"),
   );
-  assert.equal(writes.length, 51);
+  assert.equal(writes.length, 219);
   await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /50 selected/,
+    /218 selected/,
   );
   assert.equal(
     await page.locator('[data-job-pick="bulk-1"]').isChecked(),
-    false,
+    true,
   );
   assert.equal(
     await page.locator('[data-job-pick="bulk-1"]').isEnabled(),
-    false,
+    true,
   );
   await page.locator("[data-job-bulk-save]").click();
   await page.waitForFunction(() =>
     document
       .querySelector("[data-job-bulk-status]")
-      .textContent.includes("50 jobs saved"),
+      .textContent.includes("218 already in your tracker"),
   );
-  assert.equal(items.length, 101);
-  assert.equal(writes.length, 101);
+  assert.equal(items.length, 219);
+  assert.equal(writes.length, 219);
   await page.reload();
   await page.locator("[data-ready=true]").waitFor();
   await page.locator('[data-job-pick="bulk-1"]').check();
@@ -462,7 +462,7 @@ try {
       .querySelector("[data-job-bulk-status]")
       .textContent.includes("1 already in your tracker"),
   );
-  assert.equal(writes.length, 101);
+  assert.equal(writes.length, 219);
   await page.getByLabel("Role or keyword").fill("Developer 217");
   await page.waitForFunction(
     () =>
@@ -568,7 +568,7 @@ try {
       .querySelector("[data-job-bulk-status]")
       .textContent.includes("2 jobs saved"),
   );
-  assert.equal(items.length, 103);
+  assert.equal(items.length, 221);
   assert.ok(
     items.some(
       (item) =>

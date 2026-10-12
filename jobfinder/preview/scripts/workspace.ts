@@ -38,13 +38,12 @@ const safeUrl = (value: string | undefined) => {
     return ''
   }
 }
-let items: Entry[] = []
 const availabilityKey = (url: string) => safeUrl(url).split('#')[0]!
+let items: Entry[] = []
 let cacheOwner: number | null = null
 let workspaceRevision = 0
 let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
-const maxSelectedJobs = 50
 const googleJobs = new Map<string, Job>()
 let googleResultsHost: HTMLElement | null = null
 let visibleGoogleJobIds: string[] = []
@@ -590,6 +589,7 @@ async function handleClick(event: Event) {
       root.querySelector<HTMLButtonElement>(`[data-job-page="${jobPage}"]`)?.focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-job-bulk-save')) await saveSelectedJobs()
+    if (target.hasAttribute('data-job-bulk-apply')) await saveSelectedJobs('Applied')
     if (target.hasAttribute('data-job-bulk-export')) exportSelectedJobs()
     if (target.hasAttribute('data-job-source-website') || target.hasAttribute('data-job-source-listing')) {
       event.preventDefault()
@@ -674,6 +674,16 @@ async function handleClick(event: Event) {
       popup.opener = null
       target.setAttribute('aria-disabled', 'true')
       try {
+        if (googleJobListingUrl(job.url)) {
+          const availability = await api('jobs/availability', { urls: [job.url], fresh: true }, AbortSignal.timeout(18000))
+          const status = availability.jobs?.find((result: { url: string; status: string }) => availabilityKey(result.url) === availabilityKey(job.url))?.status
+          if (status !== 'open') {
+            job.availability = status === 'closed' ? 'closed' : 'unknown'
+            jobSelection.delete(job.id)
+            render()
+            throw new Error(status === 'closed' ? 'This job is closed or filled and has been removed from the results.' : 'This job could not be confirmed as open. Try another listing or search again.')
+          }
+        }
         const data = await api('workspace/items', {
           action: 'open-application',
           kind: 'application',
@@ -690,20 +700,18 @@ async function handleClick(event: Event) {
         render()
         showApplicationModal(item)
       } catch (e) {
-        if (googleJobListingUrl(job.url)) {
-          const availability = await api('jobs/availability', { urls: [job.url], fresh: true }, AbortSignal.timeout(18000))
-          const status = availability.jobs?.find((result: { url: string; status: string }) => availabilityKey(result.url) === availabilityKey(job.url))?.status
-          if (status !== 'open') {
-            job.availability = status === 'closed' ? 'closed' : 'unknown'
-            jobSelection.delete(job.id)
-            render()
-            throw new Error(status === 'closed' ? 'This job is closed or filled and has been removed from the results.' : 'This job could not be confirmed as open. Try another listing or search again.')
-          }
-        }
         popup.close()
         throw e
       } finally {
         target.removeAttribute('aria-disabled')
+      }
+    }
+    if (target.dataset.markAppliedJob && !savingSelectedJobs && loaded) {
+      const job = findJob(target.dataset.markAppliedJob)
+      const button = target as HTMLButtonElement
+      if (job) {
+        button.disabled = true
+        try { await markJobApplied(job) } finally { button.disabled = false }
       }
     }
     if (target.dataset.confirmApplication) {
@@ -793,8 +801,7 @@ async function handleChange(event: Event) {
     if (target.dataset.jobPick && !savingSelectedJobs) {
       select('[data-job-bulk-status]').classList.add('d-none')
       const job = findJob(target.dataset.jobPick)
-      if (job && target.checked && (jobSelection.has(job.id) || jobSelection.size < maxSelectedJobs)) jobSelection.set(job.id, job)
-      else if (job && target.checked) jobBulkStatus(`You can select up to ${maxSelectedJobs} jobs at a time. Save or deselect your batch before selecting more.`)
+      if (job && target.checked && !isClosedListing(job) && !hasApplied(job)) jobSelection.set(job.id, job)
       else jobSelection.delete(target.dataset.jobPick)
       updateJobSelection()
     }
@@ -804,12 +811,9 @@ async function handleChange(event: Event) {
       else {
         for (const job of [...jobs, ...googleJobs.values()].filter((job) => [...visibleJobIds, ...visibleGoogleJobIds].includes(job.id))) {
           if (jobSelection.has(job.id)) continue
-          if (jobSelection.size >= maxSelectedJobs) break
-          if (!trackedApplication(job) && !isClosedListing(job)) jobSelection.set(job.id, job)
+          if (!isClosedListing(job) && !hasApplied(job)) jobSelection.set(job.id, job)
         }
       }
-      if (target.checked && jobSelection.size === maxSelectedJobs) jobBulkStatus(`Selected ${maxSelectedJobs} jobs. Save or deselect this batch before selecting more.`)
-      else if (target.checked && jobSelection.size === 0) jobBulkStatus('These matching jobs are already in your tracker.')
       updateJobSelection()
     }
     if (target.hasAttribute('data-sheet-column-toggle')) {
@@ -896,7 +900,7 @@ root.addEventListener(
         input.checked = !input.checked
         void handleChange(event)
       }
-    } else if (target.hasAttribute('data-track') || target.hasAttribute('data-confirm-application') || (target.tagName === 'A' && event.key === 'Enter')) {
+    } else if (target.hasAttribute('data-track') || target.hasAttribute('data-confirm-application') || target.hasAttribute('data-mark-applied-job') || (target.tagName === 'A' && event.key === 'Enter')) {
       event.preventDefault()
       event.stopPropagation()
       if (!(target instanceof HTMLButtonElement) || !target.disabled) void handleClick(event)
@@ -1045,22 +1049,22 @@ function updateJobSelection() {
   const selectedVisible = visibleIds.filter((id) => jobSelection.has(id)).length
   const hidden = jobSelection.size - selectedVisible
   const hasSelection = jobSelection.size > 0
-  const hasNewJobs = visibleIds.some(id => { const job = findJob(id); return job && !trackedApplication(job) && !isClosedListing(job) })
+  const hasSelectableJobs = visibleIds.some(id => { const job = findJob(id); return job && !isClosedListing(job) && !hasApplied(job) })
   all.checked = hasSelection
   all.indeterminate = false
-  all.disabled = busy || (!hasSelection && (jobsLoading || !hasNewJobs))
-  select('[data-job-selection-label]').textContent = hasSelection ? `Deselect ${jobSelection.size} ${jobSelection.size === 1 ? 'job' : 'jobs'}` : 'Select up to 50 new jobs'
+  all.disabled = busy || (!hasSelection && (jobsLoading || !hasSelectableJobs))
+  select('[data-job-selection-label]').textContent = hasSelection ? `Deselect ${jobSelection.size} ${jobSelection.size === 1 ? 'job' : 'jobs'}` : 'Select all results'
   const googleOnly = select<HTMLSelectElement>('#job-source').value === 'google'
-  select('[data-job-selection-scope]').textContent = googleOnly ? 'This Google results page' : visibleGoogleJobIds.length ? 'All feed pages and this Google page' : 'Across all pages'
-  select('[data-job-selected-count]').textContent = `${jobSelection.size} selected · Max ${maxSelectedJobs}${hidden ? ` (${hidden} outside current results)` : ''}`
-  for (const name of ['bulk-save', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
+  select('[data-job-selection-scope]').textContent = hasSelection ? 'All selected jobs, including hidden results' : googleOnly ? 'This Google results page' : visibleGoogleJobIds.length ? 'All feed pages and this Google page' : 'Across all pages'
+  select('[data-job-selected-count]').textContent = `${jobSelection.size} selected${hidden ? ` (${hidden} outside current results)` : ''}`
+  for (const name of ['bulk-save', 'bulk-apply', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
   select('[data-job-selection-toolbar]').setAttribute('aria-busy', String(savingSelectedJobs))
   root.querySelectorAll<HTMLInputElement>('[data-job-pick]').forEach((input) => {
     input.checked = jobSelection.has(input.dataset.jobPick!)
-    input.disabled = busy || jobsLoading || (jobSelection.size >= maxSelectedJobs && !input.checked)
+    input.disabled = busy || jobsLoading
     input.closest('[data-job-card]')?.classList.toggle('border-primary', input.checked)
   })
-  root.querySelectorAll<HTMLButtonElement>('[data-track]').forEach((button) => {
+  root.querySelectorAll<HTMLButtonElement>('[data-track],[data-mark-applied-job]').forEach((button) => {
     button.disabled = busy
   })
 }
@@ -1078,7 +1082,6 @@ function hasApplied(job: Job) {
 function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string }) {
   const id = htmlEscape(job.id)
   const title = htmlEscape(job.title)
-  const application = trackedApplication(job)
   const logo = google
     ? `${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(google.iconUrl)}" alt="${htmlEscape(google.domain)} source icon" loading="lazy" referrerpolicy="no-referrer" />`
     : `<span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(job.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(job.logo))}" alt="${htmlEscape(job.company)} logo" loading="lazy" referrerpolicy="no-referrer" />` : ''}`
@@ -1104,12 +1107,21 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
         <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
         <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
       </div>
-      ${application?.payload.status === 'Application opened' ? `<button type="button" class="btn btn-outline-success mt-2" data-confirm-application="${application.id}" aria-label="Mark as applied: ${title}">Mark as applied</button>` : ''}
+      <button type="button" class="btn btn-outline-success mt-2" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}">Mark as applied</button>
     </div>
   </article>`
 }
 async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
   const generation = ++googleRenderGeneration
+  googleResultsHost = null
+  const cachedPreview = select('[data-google-jobs-preview]')
+  if (div !== cachedPreview) {
+    cachedPreview.replaceChildren()
+    cachedPreview.classList.add('d-none')
+  }
+  visibleGoogleJobIds = []
+  updateJobSelection()
+  div.innerHTML = '<p class="text-secondary" role="status">Checking which jobs are still open…</p>'
   const text = (value: string) => new DOMParser().parseFromString(value, 'text/html').body.textContent?.trim() || ''
   const listings = await Promise.all(
     results.map(async (result) => {
@@ -1126,15 +1138,6 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
         company: '',
         location: '',
         role: '',
-  googleResultsHost = null
-  const cachedPreview = select('[data-google-jobs-preview]')
-  if (div !== cachedPreview) {
-    cachedPreview.replaceChildren()
-    cachedPreview.classList.add('d-none')
-  }
-  visibleGoogleJobIds = []
-  updateJobSelection()
-  div.innerHTML = '<p class="text-secondary" role="status">Checking which jobs are still open…</p>'
         url,
         applyUrl: safeUrl(result.url),
         source: 'Google · ' + new URL(url).hostname,
@@ -1202,7 +1205,15 @@ function jobBulkStatus(message: string) {
   status.textContent = message
   status.classList.remove('d-none')
 }
-async function saveSelectedJobs() {
+function jobApplicationPayload(job: Job, status: string) {
+  return { title: job.title, company: job.company, url: job.url, salary: job.salary || '', status, date: today(), jobId: job.id, source: job.source, location: job.location, logo: validCompanyLogo(job.logo), notes: 'Source: ' + job.source }
+}
+async function markJobApplied(job: Job, renderAfter = true) {
+  const existing = trackedApplication(job)
+  if (existing && isApplied(existing)) { if (renderAfter) render(); return existing }
+  return save('application', existing ? { ...existing.payload, status: 'Applied', date: today() } : jobApplicationPayload(job, 'Applied'), existing?.id || 0, renderAfter)
+}
+async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
   if (savingSelectedJobs || !loaded || !jobSelection.size) return
   if (!signedIn) {
     location.assign(loginUrl())
@@ -1210,29 +1221,13 @@ async function saveSelectedJobs() {
   }
   savingSelectedJobs = true
   updateJobSelection()
-  const selectedJobs = Array.from(jobSelection.values()).slice(0, maxSelectedJobs)
+  const selectedJobs = Array.from(jobSelection.values())
   let saved = 0,
     skipped = 0,
     failed = 0
   let failureMessage = ''
   try {
-    for (const job of selectedJobs) {
-      jobBulkStatus(`Saving selected jobs… ${saved + skipped + failed} of ${selectedJobs.length}`)
-      const existing = trackedApplication(job)
-      if (existing) {
-        skipped++
-        jobSelection.delete(job.id)
-        continue
-      }
-      try {
-        await save('application', { title: job.title, company: job.company, url: job.url, salary: job.salary || '', status: 'Saved', date: today(), jobId: job.id, source: job.source, location: job.location, logo: validCompanyLogo(job.logo), notes: 'Source: ' + job.source }, 0, false)
-        saved++
-        jobSelection.delete(job.id)
-      } catch (e) {
-        failed++
-        failureMessage = e instanceof Error ? e.message : 'Unable to save.'
-      }
-    const toCheck = selectedJobs.filter(job => googleJobListingUrl(job.url))
+    const toCheck = status === 'Saved' ? selectedJobs.filter(job => googleJobListingUrl(job.url)) : []
     const availability = new Map<string, string>()
     for (let offset = 0; offset < toCheck.length; offset += jobsPerPage) {
       const batch = toCheck.slice(offset, offset + jobsPerPage)
@@ -1242,18 +1237,36 @@ async function saveSelectedJobs() {
         for (const result of response.jobs || []) availability.set(availabilityKey(result.url), result.status)
       } catch { /* Unverified jobs are skipped below. */ }
     }
-    }
-    const unavailable = selectedJobs.filter(job => job.availability === 'closed' || job.availability === 'unknown').length
-    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} saved.${skipped > unavailable ? ` ${skipped - unavailable} already in your tracker.` : ''}${unavailable ? ` ${unavailable} closed or unverified listings skipped.` : ''}${failed ? ` ${failed} could not be saved and remain selected. Try Save selected again.` : ''}`)
-      if (isClosedListing(job) || (googleJobListingUrl(job.url) && availability.get(availabilityKey(job.url)) !== 'open')) {
+    for (const job of selectedJobs) {
+      jobBulkStatus(`${status === 'Applied' ? 'Marking selected jobs as applied' : 'Saving selected jobs'}… ${saved + skipped + failed} of ${selectedJobs.length}`)
+      if (status === 'Saved' && (isClosedListing(job) || (googleJobListingUrl(job.url) && availability.get(availabilityKey(job.url)) !== 'open'))) {
         job.availability = isClosedListing(job) || availability.get(availabilityKey(job.url)) === 'closed' ? 'closed' : 'unknown'
         jobSelection.delete(job.id)
         skipped++
         continue
       }
+      const existing = trackedApplication(job)
+      if (existing && (status === 'Saved' || isApplied(existing))) {
+        skipped++
+        jobSelection.delete(job.id)
+        continue
+      }
+      try {
+        if (status === 'Applied') await markJobApplied(job, false)
+        else await save('application', jobApplicationPayload(job, 'Saved'), 0, false)
+        saved++
+        jobSelection.delete(job.id)
+      } catch (e) {
+        failed++
+        failureMessage = e instanceof Error ? e.message : 'Unable to save.'
+      }
+    }
+    const unavailable = status === 'Saved' ? selectedJobs.filter(job => job.availability === 'closed' || job.availability === 'unknown').length : 0
+    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} ${status === 'Applied' ? 'marked as applied' : 'saved'}.${skipped > unavailable ? ` ${skipped - unavailable} already ${status === 'Applied' ? 'applied' : 'in your tracker'}.` : ''}${unavailable ? ` ${unavailable} closed or unverified listings skipped.` : ''}${failed ? ` ${failed} could not be ${status === 'Applied' ? 'marked as applied' : 'saved'} and remain selected. Try ${status === 'Applied' ? 'Mark selected as applied' : 'Save selected'} again.` : ''}`)
     if (failed) error(failureMessage)
   } finally {
     savingSelectedJobs = false
+    render()
     updateJobSelection()
   }
 }
@@ -1270,7 +1283,6 @@ function exportSelectedJobs() {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage) {
-    render()
   const pages = Math.ceil(count / perPage)
   nav.classList.toggle('d-none', count === 0)
   if (count === 0) {

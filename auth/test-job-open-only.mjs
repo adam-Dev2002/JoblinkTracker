@@ -11,7 +11,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
 let browser;
 try {
   browser = await chromium.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
-  const context = await browser.newContext({ baseURL: 'http://127.0.0.1:3000', reducedMotion: 'reduce' });
+  const context = await browser.newContext({ baseURL: process.env.JOBLINK_BASE_URL || 'http://127.0.0.1:3000', reducedMotion: 'reduce' });
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   const errors = [], checks = [], writes = [];
