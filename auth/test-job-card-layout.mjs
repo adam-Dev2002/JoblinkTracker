@@ -88,12 +88,13 @@ try {
   await page.goto('/playground-job-card-layout');
   await page.locator('[data-ready=true]').waitFor();
   await checkLayout('[data-job-results]', 12);
-  const feedPagination = await page.locator('[data-job-pagination] .page-link').nth(2).evaluate(metrics);
+  const feedPagination = await page.locator('[data-job-pagination]').getByRole('button', { name: 'Page 2', exact: true }).evaluate(metrics);
   const feedCurrent = await page.locator('[data-job-pagination] [aria-current=page]').evaluate(metrics);
+  assert.equal(await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   await page.locator('#job-query').fill('developer');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await page.locator('.google-job-grid').waitFor();
-  const pairs = ['.job-card','.card-body','.avatar','.job-title','.job-title-link','.job-details-link','.job-card-identity .small','.job-card-actions .btn-primary','.job-card-actions button'];
+  const pairs = ['.job-card','.card-body','.avatar','.job-title','.job-title-link','.job-details-link','.job-card-identity .small','.job-card-metadata','.job-tag','.job-card-actions .btn-primary','.job-card-actions button'];
   for (const selector of pairs) {
     const feed = await page.locator('[data-job-results]').locator(selector).first().evaluate(metrics);
     const google = await page.locator('.google-job-grid').locator(selector).first().evaluate(metrics);
@@ -101,6 +102,16 @@ try {
   }
   assert.deepEqual(await page.locator('.gsc-cursor-page').nth(1).evaluate(metrics), feedPagination, 'Inactive page controls match');
   assert.deepEqual(await page.locator('.gsc-cursor-current-page').evaluate(metrics), feedCurrent, 'Active page controls match');
+  const geometry = card => {
+    const rect = card.getBoundingClientRect();
+    return Object.fromEntries(['.avatar', '.job-title', '.job-details-link', '.job-card-metadata', '.job-card-actions'].map(selector => {
+      const box = card.querySelector(selector).getBoundingClientRect();
+      return [selector, { left: box.left - rect.left, top: box.top - rect.top, height: box.height }];
+    }));
+  };
+  assert.deepEqual(await page.locator('.google-job-card').first().evaluate(geometry), await page.locator('[data-job-results] .job-card').first().evaluate(geometry), 'Google uses the same card sections and positions as feed cards');
+  assert.equal(await page.locator('.google-job-card .google-job-preview').count(), 0);
+  assert.equal(await page.locator('.gsc-cursor').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   await page.locator('#job-source').selectOption('google');
   for (const width of [320, 390, 768, 1024, 1530]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -113,10 +124,12 @@ try {
   await page.locator('.gsc-cursor-page').nth(1).click();
   await checkLayout('.google-job-grid', 1);
   assert.equal(await page.locator('.gsc-cursor-page').nth(1).getAttribute('aria-current'), 'page');
-  await page.locator('.gsc-cursor-page').first().click();
+  await page.locator('.gsc-cursor').getByRole('button', { name: 'Previous page', exact: true }).click();
   await checkLayout('.google-job-grid', 10);
+  assert.equal(await page.locator('.gsc-cursor').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   await page.locator('.google-job-card [data-job-details]').first().click();
   await page.locator('[data-job-details-modal]').waitFor({ state: 'visible' });
+  assert.match(await page.locator('[data-details-description]').innerText(), /Short summary/);
   await page.getByRole('button', { name: 'Close job details', exact: true }).click();
   await page.locator('.google-job-card [data-job-pick]').first().check();
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /1 selected/);
@@ -130,6 +143,9 @@ try {
   }
   await page.getByRole('button', { name: 'Page 2', exact: true }).click();
   await checkLayout('[data-job-results]', 1);
+  await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).click();
+  await checkLayout('[data-job-results]', 12);
+  assert.equal(await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   assert.deepEqual(errors, [], 'No browser errors');
   console.log('PASS: shared card typography, logos, controls and pagination; source switching; details; selection; native Google paging; responsive grids and incomplete rows.');
 } finally {

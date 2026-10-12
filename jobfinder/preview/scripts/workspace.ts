@@ -1025,7 +1025,7 @@ function updateJobSelection() {
 function trackedApplication(job: Job) {
   return owned('application').find((item) => (job.url && safeUrl(item.payload.url) === safeUrl(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
 }
-function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string; preview: string }) {
+function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string }) {
   const id = htmlEscape(job.id)
   const title = htmlEscape(job.title)
   const logo = google
@@ -1034,9 +1034,7 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
   const identity = google
     ? `<a class="google-job-source fw-semibold" data-job-source-website href="${htmlEscape(google.origin)}" target="_blank" rel="noopener noreferrer" aria-label="Visit ${htmlEscape(google.domain)} website">${htmlEscape(google.domain)} &nearr;</a><span class="text-secondary small">Found on Google</span>`
     : `<div class="fw-semibold">${htmlEscape(job.company)}</div><span class="text-secondary small" data-job-location>${htmlEscape(job.location)}</span>`
-  const metadata = google
-    ? `<p class="google-job-preview text-secondary small mb-0">${htmlEscape(google.preview)}</p>`
-    : `<div class="d-flex flex-wrap gap-2"><span class="job-tag">${htmlEscape(job.role)}</span><span class="job-tag">${htmlEscape(job.workMode)}</span><span class="job-tag">${htmlEscape(job.employmentType || 'Not specified')}</span>${job.salary ? `<span class="job-tag">${htmlEscape(job.salary)}</span>` : ''}</div>`
+  const metadata = `<div class="d-flex flex-wrap gap-2"><span class="job-tag">${htmlEscape(job.role || 'Job listing')}</span><span class="job-tag">${htmlEscape(job.workMode || 'Check listing')}</span><span class="job-tag">${htmlEscape(job.employmentType || 'Not specified')}</span>${job.salary ? `<span class="job-tag">${htmlEscape(job.salary)}</span>` : ''}</div>`
   const source = google
     ? `Source: Google &middot; <a data-job-source-listing href="${htmlEscape(job.url)}" target="_blank" rel="noopener noreferrer">Original listing &nearr;</a>`
     : `Source: <a href="${htmlEscape(safeUrl(job.url))}" target="_blank" rel="noopener noreferrer">${htmlEscape(job.source)}</a>${job.date ? ' | ' + htmlEscape(job.date.slice(0, 10)) : ''}`
@@ -1099,9 +1097,8 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
       .map((job) => {
         const website = new URL(job.url)
         const domain = website.hostname.replace(/^www\./, '')
-        const preview = text(results.find((result) => safeUrl(result.listingUrl || result.url) === job.url)?.content || '')
         const iconUrl = 'https://www.google.com/s2/favicons?' + new URLSearchParams({ domain: website.hostname, sz: '64' })
-        return renderJobCard(job, { domain, origin: website.origin, iconUrl, preview })
+        return renderJobCard(job, { domain, origin: website.origin, iconUrl })
       })
       .join('') +
     (listings.length ? '' : '<p class="text-secondary mb-0">No matching job-detail pages on this Google results page. Try another page or broader keywords.</p>') +
@@ -1167,21 +1164,21 @@ function exportSelectedJobs() {
 }
 function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage) {
   const pages = Math.ceil(count / perPage)
-  nav.classList.toggle('d-none', pages <= 1)
-  if (pages <= 1) {
+  nav.classList.toggle('d-none', count === 0)
+  if (count === 0) {
     nav.innerHTML = ''
     return
   }
   const button = (targetPage: number, label: string, disabled = false) =>
     `<li class="page-item ${targetPage === page && /^\d+$/.test(label) ? 'active' : ''}"><button type="button" class="page-link" ${attribute}="${targetPage}" ${disabled || busy ? 'disabled' : ''} ${targetPage === page && /^\d+$/.test(label) ? 'aria-current="page"' : ''} aria-label="${/^\d+$/.test(label) ? 'Page ' + label : label + ' page'}">${label}</button></li>`
   const window = [...new Set([1, ...Array.from({ length: 5 }, (_, i) => page - 2 + i), pages])].filter((page) => page > 0 && page <= pages).sort((a, b) => a - b)
-  let links = button(page - 1, 'Previous', page === 1)
+  let links = page > 1 ? button(page - 1, 'Previous') : ''
   window.forEach((page, index) => {
     if (index > 0 && page - window[index - 1]! > 1) links += '<li class="page-item disabled"><span class="page-link" aria-hidden="true">…</span></li>'
     links += button(page, String(page))
   })
   links += button(page + 1, 'Next', page === pages)
-  nav.innerHTML = `<p class="text-secondary small text-center mb-2" role="status">Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}</p><ul class="pagination mb-0">${links}</ul>`
+  nav.innerHTML = `<p class="text-secondary small mb-0 workspace-page-count" role="status">Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}</p>${pages > 1 ? `<ul class="pagination mb-0">${links}</ul>` : ''}`
 }
 function renderJobPagination(count: number) {
   renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', false, jobsPerPage)

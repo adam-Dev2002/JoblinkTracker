@@ -186,7 +186,9 @@ try {
   assert.equal(readRequests, readsBeforePages);
   await page.getByLabel("Search applications").fill("Application 22");
   assert.equal(await page.locator("[data-application-rows] tr").count(), 1);
-  assert.equal(await pager().isVisible(), false);
+  assert.equal(await pager().isVisible(), true);
+  assert.equal(await pager().locator('.pagination').count(), 0);
+  assert.match(await pager().innerText(), /Showing 1–1 of 1 applications/);
   await page.getByLabel("Search applications").fill("");
   assert.equal(await pager().locator("[aria-current=page]").innerText(), "1");
   await filterApplicationStatus('Saved');
@@ -440,7 +442,9 @@ try {
   await page.reload();
   await page.locator('[data-ready=true]').waitFor();
   assert.equal(await page.locator('[data-sheet-rows] tr').count(), 10);
-  assert.equal(await pager().isVisible(), false, 'Exactly 10 rows fit on one page');
+  assert.equal(await pager().isVisible(), true, 'The row count remains visible for one page');
+  assert.equal(await pager().locator('.pagination').count(), 0, 'Exactly 10 rows need no page controls');
+  assert.match(await pager().innerText(), /Showing 1–10 of 10 rows/);
   assert.deepEqual(errors, []);
   console.log(
     "PASS: latest seven dashboard applications without pagination/count details; 10-row table pagination, filters/sort, selection, queued saves, CSV and mobile layout.",

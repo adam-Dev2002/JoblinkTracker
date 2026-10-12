@@ -96,7 +96,24 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
             rendered: () => {
               // Reuse the workspace pagination theme on Google's own controls.
               // Keep the original nodes and handlers so Google still owns paging.
-              host.querySelectorAll<HTMLElement>('.gsc-cursor').forEach((cursor) => cursor.classList.add('pagination'))
+              host.querySelectorAll<HTMLElement>('.gsc-cursor').forEach((cursor) => {
+                cursor.classList.add('pagination')
+                cursor.querySelectorAll<HTMLElement>('.gsc-cursor-nav').forEach((nav) => nav.remove())
+                const pages = Array.from(cursor.querySelectorAll<HTMLElement>('.gsc-cursor-page'))
+                const current = Math.max(0, pages.findIndex((page) => page.classList.contains('gsc-cursor-current-page')))
+                const navButton = (label: string, target: number) => {
+                  const button = document.createElement('button')
+                  button.type = 'button'
+                  button.className = 'gsc-cursor-nav page-link'
+                  button.textContent = label
+                  button.setAttribute('aria-label', label + ' page')
+                  if (target < 0 || target >= pages.length) button.disabled = true
+                  else button.addEventListener('click', () => pages[target]?.click())
+                  return button
+                }
+                if (current > 0) cursor.insertAdjacentElement('afterbegin', navButton('Previous', current - 1))
+                cursor.append(navButton('Next', current + 1))
+              })
               host.querySelectorAll<HTMLElement>('.gsc-cursor-page').forEach((page) => {
                 const current = page.classList.contains('gsc-cursor-current-page')
                 page.classList.add('page-link')

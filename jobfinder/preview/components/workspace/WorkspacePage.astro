@@ -744,8 +744,31 @@ const desk = [
     font-weight: var(--tblr-font-weight-normal);
     text-decoration: none;
   }
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: var(--tblr-pagination-padding-y) var(--tblr-pagination-padding-x);
+    border: var(--tblr-pagination-border-width) solid var(--tblr-pagination-border-color);
+    border-radius: var(--tblr-pagination-border-radius);
+    background: var(--tblr-pagination-bg);
+    color: var(--tblr-pagination-color);
+    font-family: var(--tblr-body-font-family);
+    font-size: var(--tblr-pagination-font-size);
+    font-weight: var(--tblr-font-weight-normal);
+    line-height: var(--tblr-body-line-height);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
   .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:hover,
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:focus-visible {
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav:hover:not(:disabled),
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:focus-visible,
+  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav:focus-visible {
     background: var(--tblr-pagination-hover-bg);
     color: var(--tblr-pagination-hover-color);
     border-color: var(--tblr-pagination-hover-border-color);
@@ -856,14 +879,6 @@ const desk = [
     max-width: 100%;
     overflow-wrap: anywhere;
   }
-  .google-job-preview {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    line-height: 1.6;
-    min-height: 3.2em;
-  }
   .job-card [data-source-icon],
   .job-card [data-company-logo] {
     position: absolute;
@@ -882,12 +897,28 @@ const desk = [
     container: job-results / inline-size;
     scroll-margin-top: 6rem;
   }
+  .workspace-pagination {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+  }
+  .workspace-page-count {
+    grid-column: 1;
+    text-align: left;
+  }
   .workspace-pagination .pagination {
     display: flex;
-    width: 100%;
+    grid-column: 2;
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.25rem;
+  }
+  @media (max-width: 767px) {
+    .workspace-pagination { grid-template-columns: minmax(0, 1fr); }
+    .workspace-pagination .pagination { grid-column: 1; grid-row: 1; }
+    .workspace-page-count { grid-row: 2; }
+    .workspace-page-count:only-child { grid-row: 1; }
   }
   [data-application-table],
   [data-sheet-table] {
