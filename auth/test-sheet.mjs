@@ -150,10 +150,7 @@ try {
     await page.locator("[data-sheet-selected-count]").innerText(),
     /1 selected outside/,
   );
-  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
-  await page
-    .getByRole("button", { name: "Clear selection", exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
   assert.equal(await page.locator("[data-sheet-bulk]").isDisabled(), true);
   await page.locator("[data-sheet-search]").fill("");
   console.log(
@@ -176,7 +173,6 @@ try {
     .filter({ hasText: "204 of 204 rows" })
     .waitFor();
   await page.getByLabel('Select all filtered sheet rows across pages').check();
-  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
   await page.locator("[data-sheet-bulk]").click();
   await page
     .locator("[data-confirm-modal]")
@@ -188,7 +184,6 @@ try {
     ).items.filter((row) => row.kind === "sheet").length,
     204,
   );
-  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
   await page.locator("[data-sheet-bulk]").click();
   await page.locator("[data-confirm-accept]").click();
   await page

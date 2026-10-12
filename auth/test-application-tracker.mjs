@@ -96,7 +96,7 @@ try {
   await setFilter('Filter application company', '');
   await page.getByLabel('Select all filtered applications across pages').check();
   assert.equal(await page.locator('[data-application-selected-count]').innerText(), '26 selected');
-  await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
   assert.equal(await page.locator('[data-application-selection-toolbar]').isVisible(), false);
   assert.equal(await page.locator('[data-application-pick]:checked').count(), 0);
   assert.equal(await page.locator('[data-application-all]').isChecked(), false);
@@ -106,12 +106,12 @@ try {
   await page.locator('[data-application-pick="13"]').check();
   await setFilter('Filter application company', 'Acme');
   assert.match(await page.locator('[data-application-selected-count]').innerText(), /1 outside current filters/);
-  await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
-  assert.equal(await page.locator('[data-application-selection-toolbar]').isVisible(), false, 'Clear works repeatedly with hidden selections');
+  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
+  assert.equal(await page.locator('[data-application-selection-toolbar]').isVisible(), false, 'Deselect works repeatedly with hidden selections');
   await setFilter('Filter application company', '');
   await page.locator('[data-application-pick="1"]').check();
-  await page.locator('[data-application-clear-selection] svg').click();
-  assert.equal(await page.locator('[data-application-selection-toolbar]').isVisible(), false, 'Clicking the clear icon also clears selection');
+  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
+  assert.equal(await page.locator('[data-application-selection-toolbar]').isVisible(), false, 'The select/deselect toggle also clears selection');
   await setSort('oldest');
   assert.equal(await page.locator('[data-application-pick]').first().getAttribute('data-application-pick'), '26');
   await setSort('title');
@@ -252,8 +252,8 @@ try {
     if (width === 390) await page.screenshot({ path: 'auth/runtime/tracker-actions-mobile.png' });
     await page.keyboard.press('Escape');
     await page.locator('[data-application-pick="10"]').check();
-    await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
-    assert.equal(await page.locator('[data-application-pick]:checked').count(), 0, 'Clear selection works on mobile');
+    await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
+    assert.equal(await page.locator('[data-application-pick]:checked').count(), 0, 'Deselect works on mobile');
   }
   assert.equal(writes.filter(write => write.action === 'delete').length, 1);
   assert.deepEqual(errors, []);

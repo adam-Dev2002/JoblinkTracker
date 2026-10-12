@@ -15,6 +15,7 @@ let visibleSheetIds: number[] = []
 let applicationPage = 1
 let selectedApplicationId: number | null = null
 const applicationSelection = new Set<number>()
+let deletingApplicationRows = false
 let sheetPage = 1
 const workspaceRowsPerPage = 10
 const recentApplicationLimit = 7
@@ -200,18 +201,22 @@ function render() {
     const visibleSelection = filtered.filter(item => applicationSelection.has(item.id)).length
     const outside = applicationSelection.size - visibleSelection
     const all = select<HTMLInputElement>('[data-application-all]')
-    all.disabled = filtered.length === 0
+    all.disabled = filtered.length === 0 || deletingApplicationRows
     all.checked = filtered.length > 0 && visibleSelection === filtered.length
     all.indeterminate = visibleSelection > 0 && visibleSelection < filtered.length
     select('[data-application-selection-toolbar]').classList.toggle('d-none', applicationSelection.size === 0)
     select('[data-application-selected-count]').textContent = `${applicationSelection.size} selected${outside ? ` · ${outside} outside current filters` : ''}`
+    select<HTMLButtonElement>('[data-application-select]').disabled = deletingApplicationRows
+    select('[data-application-select-label]').textContent = applicationSelection.size ? 'Deselect all results' : 'Select all results'
+    select<HTMLButtonElement>('[data-application-bulk]').disabled = applicationSelection.size === 0 || deletingApplicationRows
+    select('[data-application-bulk-label]').textContent = 'Delete selected (' + applicationSelection.size + ')'
     select('[data-application-filter-count]').textContent = `${filtered.length} of ${apps.length} jobs`
     const activeFilters = Number(Boolean(select<HTMLSelectElement>('[data-status-filter]').value)) + Number(Boolean(companyFilter.value))
     const filterBadge = select('[data-application-filter-badge]')
     filterBadge.textContent = String(activeFilters)
     filterBadge.classList.toggle('d-none', activeFilters === 0)
     applicationPage = Math.min(applicationPage, Math.max(1, Math.ceil(filtered.length / workspaceRowsPerPage)))
-    renderPagination(select('[data-application-pagination]'), filtered.length, applicationPage, 'data-application-page', 'applications')
+    renderPagination(select('[data-application-pagination]'), filtered.length, applicationPage, 'data-application-page', 'applications', deletingApplicationRows)
     select('[data-application-rows]').innerHTML = filtered
       .slice((applicationPage - 1) * workspaceRowsPerPage, applicationPage * workspaceRowsPerPage)
       .map((i) => {
@@ -321,8 +326,9 @@ function render() {
     renderPagination(select('[data-sheet-pagination]'), rows.length, sheetPage, 'data-sheet-page', 'rows', deletingSheetRows)
     for (const id of sheetSelection) if (!items.some((row) => row.id === id)) sheetSelection.delete(id)
     select<HTMLButtonElement>('[data-sheet-bulk]').disabled = sheetSelection.size === 0 || deletingSheetRows
-    select<HTMLButtonElement>('[data-sheet-clear-selection]').disabled = sheetSelection.size === 0 || deletingSheetRows
     select('[data-sheet-selection-toolbar]').classList.toggle('d-none', sheetSelection.size === 0)
+    select<HTMLButtonElement>('[data-sheet-select]').disabled = deletingSheetRows
+    select('[data-sheet-select-label]').textContent = sheetSelection.size ? 'Deselect all results' : 'Select all results'
     const filterBadge = select('[data-sheet-filter-badge]')
     const activeFilters = Number(filter !== 'all') + Number(Boolean(activeCompany))
     filterBadge.textContent = String(activeFilters)
@@ -563,12 +569,28 @@ async function handleClick(event: Event) {
       applicationSearch?.close()
       render()
     }
-    if (target.hasAttribute('data-application-clear-selection')) {
-      applicationSelection.clear()
+    if (target.hasAttribute('data-application-select')) {
+      if (applicationSelection.size) applicationSelection.clear()
+      else filteredApplications().forEach(item => applicationSelection.add(item.id))
       render()
       select('[data-application-all]').focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-export-selected')) exportCsv('application', owned('application').filter(item => applicationSelection.has(item.id)))
+    if (target.hasAttribute('data-application-bulk') && !deletingApplicationRows && applicationSelection.size && (await confirmDelete('Delete ' + applicationSelection.size + ' selected applications and their attachments, including any hidden by filters? This cannot be undone.'))) {
+      deletingApplicationRows = true
+      const selectedIds = Array.from(applicationSelection)
+      render()
+      try {
+        for (let offset = 0; offset < selectedIds.length; offset += 200) {
+          const data = await api('workspace/items', { action: 'bulk-delete', ids: selectedIds.slice(offset, offset + 200) })
+          items = items.filter((row) => !data.deleted.includes(row.id))
+          data.deleted.forEach((id: number) => applicationSelection.delete(id))
+        }
+      } finally {
+        deletingApplicationRows = false
+        render()
+      }
+    }
     if (target.dataset.applicationPage) {
       applicationPage = Number(target.dataset.applicationPage)
       render()
@@ -607,16 +629,13 @@ async function handleClick(event: Event) {
     }
     if (target.hasAttribute('data-application-tracker')) sessionStorage.removeItem('jobify-opened-application')
     if (target.hasAttribute('data-sheet-select')) {
-      visibleSheetIds.forEach((id) => sheetSelection.add(id))
+      if (sheetSelection.size) sheetSelection.clear()
+      else visibleSheetIds.forEach((id) => sheetSelection.add(id))
       render()
     }
     if (target.hasAttribute('data-sheet-export-selected')) {
       await sheetWriteQueue
       exportCsv('sheet', owned('sheet').filter(item => sheetSelection.has(item.id)))
-    }
-    if (target.hasAttribute('data-sheet-clear-selection')) {
-      sheetSelection.clear()
-      render()
     }
     if (target.hasAttribute('data-sheet-clear-filters')) {
       sheetPage = 1
@@ -801,7 +820,7 @@ async function handleChange(event: Event) {
     if (target.dataset.jobPick && !savingSelectedJobs) {
       select('[data-job-bulk-status]').classList.add('d-none')
       const job = findJob(target.dataset.jobPick)
-      if (job && target.checked && !isClosedListing(job) && !hasApplied(job)) jobSelection.set(job.id, job)
+      if (job && target.checked && selectableJob(job)) jobSelection.set(job.id, job)
       else jobSelection.delete(target.dataset.jobPick)
       updateJobSelection()
     }
@@ -809,10 +828,7 @@ async function handleChange(event: Event) {
       select('[data-job-bulk-status]').classList.add('d-none')
       if (!target.checked) jobSelection.clear()
       else {
-        for (const job of [...jobs, ...googleJobs.values()].filter((job) => [...visibleJobIds, ...visibleGoogleJobIds].includes(job.id))) {
-          if (jobSelection.has(job.id)) continue
-          if (!isClosedListing(job) && !hasApplied(job)) jobSelection.set(job.id, job)
-        }
+        for (const job of jobsInSelectionScope()) jobSelection.set(job.id, job)
       }
       updateJobSelection()
     }
@@ -1049,7 +1065,7 @@ function updateJobSelection() {
   const selectedVisible = visibleIds.filter((id) => jobSelection.has(id)).length
   const hidden = jobSelection.size - selectedVisible
   const hasSelection = jobSelection.size > 0
-  const hasSelectableJobs = visibleIds.some(id => { const job = findJob(id); return job && !isClosedListing(job) && !hasApplied(job) })
+  const hasSelectableJobs = jobsInSelectionScope().length > 0
   all.checked = hasSelection
   all.indeterminate = false
   all.disabled = busy || (!hasSelection && (jobsLoading || !hasSelectableJobs))
@@ -1078,6 +1094,15 @@ function isApplied(item: Entry) {
 function hasApplied(job: Job) {
   const item = trackedApplication(job)
   return Boolean(item && isApplied(item))
+}
+function selectableJob(job: Job) {
+  // Saving or opening a listing never makes its card ineligible for selection.
+  return !isClosedListing(job) && job.availability !== 'unknown' && !hasApplied(job)
+}
+function jobsInSelectionScope() {
+  return [...new Set([...visibleJobIds, ...visibleGoogleJobIds])]
+    .map(findJob)
+    .filter((job): job is Job => Boolean(job && selectableJob(job)))
 }
 function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string }) {
   const id = htmlEscape(job.id)

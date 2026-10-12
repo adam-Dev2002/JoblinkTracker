@@ -146,7 +146,8 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-dashboard-application="19"] img')?.naturalWidth > 0);
   await page.waitForFunction(() => document.querySelector('[data-dashboard-application="18"] img')?.naturalWidth > 0);
   assert.equal(await page.locator('[data-dashboard-application="21"] img').count(), 0, 'Broken logos fall back to initials');
-  assert.equal(await page.locator('[data-dashboard-application="20"] img').count(), 0, 'Unsafe logo URLs are not rendered');
+  assert.equal(await page.locator('[data-dashboard-application="20"] img[src="javascript:alert(1)"]').count(), 0, 'Unsafe logo URLs are not rendered');
+  assert.match(await page.locator('[data-dashboard-application="20"] img').getAttribute('src'), /s2\/favicons/, 'Unsafe logo URLs fall back to the listing favicon');
   assert.equal(await page.locator('[data-dashboard-application="22"] img').getAttribute('alt'), 'Test company logo');
   assert.deepEqual(await page.locator('[data-dashboard-application]').evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('data-dashboard-application')))), [22, 21, 20, 19, 18, 17, 16], 'Only the seven latest applications appear');
   assert.equal(await page.locator('[data-dashboard-application-panel] .pagination, [data-dashboard-pagination]').count(), 0, 'Recent applications have no paginator');
@@ -281,10 +282,9 @@ try {
     await page.locator("[data-sheet-selected-count]").innerText(),
     /2 selected.*1 on other pages/,
   );
-  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
-  assert.equal(await page.getByRole('button', { name: 'Selected actions', exact: true }).locator('svg.workspace-action-chevron').count(), 1);
   const bulkDelete = page.locator('[data-sheet-bulk]');
   await bulkDelete.hover();
+  await page.waitForTimeout(250);
   const bulkColors = await bulkDelete.evaluate(node => {
     const sample = document.createElement('span');
     sample.style.backgroundColor = 'var(--tblr-danger)';
@@ -373,16 +373,10 @@ try {
     .getByRole("button", { name: "Clear filters", exact: true })
     .click();
   await page.getByRole("button", { name: "Filter", exact: true }).click();
-  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
-  await page
-    .getByRole("button", { name: "Clear selection", exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
   await page.getByLabel('Select all filtered sheet rows across pages').check();
   assert.match(await page.locator("[data-sheet-bulk]").innerText(), /21/);
-  await page.getByRole('button', { name: 'Selected actions', exact: true }).click();
-  await page
-    .getByRole("button", { name: "Clear selection", exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Deselect all results', exact: true }).click();
   await choosePage(3);
   const sheetActions = page.locator('[data-sheet-actions]').first();
   const sheetId = await sheetActions.getAttribute('data-sheet-actions');

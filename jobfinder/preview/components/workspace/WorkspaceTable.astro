@@ -78,6 +78,12 @@ const application = kind === 'application'
     border-bottom: 1px solid var(--tblr-border-color);
     background: var(--tblr-bg-surface-secondary);
   }
+  .workspace-table-selection .btn.text-danger:hover,
+  .workspace-table-selection .btn.text-danger:focus-visible {
+    background: var(--tblr-danger);
+    border-color: var(--tblr-danger);
+    color: #fff;
+  }
   .workspace-data-table {
     width: 100%;
     min-width: 1280px;
