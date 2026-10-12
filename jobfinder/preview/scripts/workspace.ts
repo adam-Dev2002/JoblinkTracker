@@ -41,7 +41,6 @@ const safeUrl = (value: string | undefined) => {
     return ''
   }
 }
-const availabilityKey = (url: string) => googleJobListingUrl(url) || safeUrl(url).split('#')[0]!
 let items: Entry[] = []
 let cacheOwner: number | null = null
 let workspaceRevision = 0
@@ -49,7 +48,6 @@ let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
 const googleJobs = new Map<string, Job>()
 let googleResultsHost: HTMLElement | null = null
-let lastGoogleResults: { results: GoogleJobResult[]; host: HTMLElement } | null = null
 let visibleGoogleJobIds: string[] = []
 let googleRenderGeneration = 0
 const findJob = (id: string) => jobs.find((job) => job.id === id) || googleJobs.get(id)
@@ -629,7 +627,10 @@ async function handleClick(event: Event) {
     if (target.hasAttribute('data-job-bulk-save')) await saveSelectedJobs()
     if (target.hasAttribute('data-job-bulk-apply')) await saveSelectedJobs('Applied')
     if (target.hasAttribute('data-job-bulk-export')) exportSelectedJobs()
-    if (target.hasAttribute('data-retry-job-availability') && lastGoogleResults?.host.isConnected) await renderGoogleJobs(lastGoogleResults.results, lastGoogleResults.host, true)
+    if (target.hasAttribute('data-job-deselect') && !savingSelectedJobs) {
+      jobSelection.clear()
+      updateJobSelection()
+    }
     if (target.hasAttribute('data-job-source-website') || target.hasAttribute('data-job-source-listing')) {
       event.preventDefault()
       const url = safeUrl(target.getAttribute('href') || '')
@@ -709,16 +710,6 @@ async function handleClick(event: Event) {
       popup.opener = null
       target.setAttribute('aria-disabled', 'true')
       try {
-        if (googleJobListingUrl(job.url)) {
-          const availability = await api('jobs/availability', { urls: [job.url], fresh: true }, AbortSignal.timeout(18000))
-          const status = availability.jobs?.find((result: { url: string; status: string }) => availabilityKey(result.url) === availabilityKey(job.url))?.status
-          if (status !== 'open') {
-            job.availability = status === 'closed' ? 'closed' : 'unknown'
-            jobSelection.delete(job.id)
-            render()
-            throw new Error(status === 'closed' ? 'This job is closed or filled and has been removed from the results.' : 'This job could not be confirmed as open. Try another listing or search again.')
-          }
-        }
         const data = await api('workspace/items', {
           action: 'open-application',
           kind: 'application',
@@ -1099,7 +1090,7 @@ function updateJobSelection() {
   select('[data-job-entries-control]').classList.toggle('d-none', googleOnly)
   select<HTMLSelectElement>('[data-job-entries]').disabled = busy || jobsLoading
   select('[data-job-selection-actions]').classList.toggle('d-none', !hasSelection)
-  for (const name of ['bulk-save', 'bulk-apply', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
+  for (const name of ['deselect', 'bulk-save', 'bulk-apply', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
   select('[data-job-selection-toolbar]').setAttribute('aria-busy', String(savingSelectedJobs))
   select('[data-job-selection-toolbar]').classList.toggle('d-none', scope.length === 0)
   root.querySelectorAll<HTMLInputElement>('[data-job-pick]').forEach((input) => {
@@ -1125,7 +1116,7 @@ function hasApplied(job: Job) {
 }
 function selectableJob(job: Job) {
   // Saving or opening a listing never makes its card ineligible for selection.
-  return !isClosedListing(job) && job.availability !== 'unknown' && !hasApplied(job)
+  return !isClosedListing(job) && !hasApplied(job)
 }
 function jobsInSelectionScope() {
   return [...new Set([...visibleJobIds, ...visibleGoogleJobIds])]
@@ -1166,11 +1157,9 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
     </div>
   </article>`
 }
-async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement, fresh = false) {
+async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
   const generation = ++googleRenderGeneration
   select('[data-job-bulk-status]').classList.add('d-none')
-  lastGoogleResults = { results, host: div }
-  select('[data-retry-job-availability]').classList.add('d-none')
   googleResultsHost = null
   const cachedPreview = select('[data-google-jobs-preview]')
   if (div !== cachedPreview) {
@@ -1179,7 +1168,6 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement, fr
   }
   visibleGoogleJobIds = []
   updateJobSelection()
-  div.innerHTML = '<p class="text-secondary" role="status">Checking which jobs are still open…</p>'
   const text = (value: string) => new DOMParser().parseFromString(value, 'text/html').body.textContent?.trim() || ''
   const listings = await Promise.all(
     results.map(async (result) => {
@@ -1209,21 +1197,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement, fr
       } as Job
     }),
   )
-  if (generation !== googleRenderGeneration || select('[data-google-jobs]').classList.contains('d-none')) return
-  const candidates = listings.filter(job => !isClosedListing(job)).slice(0, jobsPerPage)
-  let verified: { url: string; status: string }[] = []
-  if (candidates.length) {
-    try {
-      const response = await api('jobs/availability', { urls: candidates.map(job => job.url), fresh }, AbortSignal.timeout(18000))
-      verified = response.jobs || []
-    } catch { /* The unverified listings stay hidden and can be retried. */ }
-  }
   if (generation !== googleRenderGeneration || !div.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
-  for (const job of listings) {
-    const status = verified.find(result => availabilityKey(result.url) === availabilityKey(job.url))?.status
-    job.availability = isClosedListing(job) || status === 'closed' ? 'closed' : status === 'open' ? 'open' : 'unknown'
-    if (job.availability !== 'open') jobSelection.delete(job.id)
-  }
   if (div !== cachedPreview) {
     cachedPreview.replaceChildren()
     cachedPreview.classList.add('d-none')
@@ -1237,10 +1211,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement, fr
 function renderGoogleJobCards() {
   const div = googleResultsHost
   if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
-  const unverified = Array.from(googleJobs.values()).some(job => job.availability === 'unknown' && !hasApplied(job) && !isClosedListing(job))
-  select('[data-job-availability-message]').textContent = unverified ? 'Some job sites could not confirm availability. Those listings are hidden; retry the checks or try another results page.' : ''
-  select('[data-retry-job-availability]').classList.toggle('d-none', !unverified)
-  const listings = Array.from(googleJobs.values()).filter(job => job.availability === 'open' && !isClosedListing(job) && !hasApplied(job))
+  const listings = Array.from(googleJobs.values()).filter(job => !isClosedListing(job) && !hasApplied(job))
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
     '<div class="google-job-grid">' +
@@ -1252,7 +1223,7 @@ function renderGoogleJobCards() {
         return renderJobCard(job, { domain, origin: website.origin, iconUrl })
       })
       .join('') +
-    (listings.length ? '' : `<p class="text-secondary mb-0">${Array.from(googleJobs.values()).some(job => job.availability === 'unknown' && !hasApplied(job)) ? 'No verified-open listings could be displayed on this page.' : 'No open, unapplied jobs on this Google results page. Try another page or broader keywords.'}</p>`) +
+    (listings.length ? '' : '<p class="text-secondary mb-0">No unapplied jobs on this Google results page. Try another page or broader keywords.</p>') +
     '</div>'
   div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
   if (select<HTMLSelectElement>('#job-source').value === 'google') select('[data-job-count]').textContent = `${listings.length} results on this page`
@@ -1286,24 +1257,8 @@ async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
     failed = 0
   let failureMessage = ''
   try {
-    const toCheck = status === 'Saved' ? selectedJobs.filter(job => googleJobListingUrl(job.url)) : []
-    const availability = new Map<string, string>()
-    for (let offset = 0; offset < toCheck.length; offset += jobsPerPage) {
-      const batch = toCheck.slice(offset, offset + jobsPerPage)
-      jobBulkStatus('Checking selected jobs are still open…')
-      try {
-        const response = await api('jobs/availability', { urls: batch.map(job => job.url), fresh: true }, AbortSignal.timeout(18000))
-        for (const result of response.jobs || []) availability.set(availabilityKey(result.url), result.status)
-      } catch { /* Unverified jobs are skipped below. */ }
-    }
     for (const job of selectedJobs) {
       jobBulkStatus(`${status === 'Applied' ? 'Marking selected jobs as applied' : 'Saving selected jobs'}… ${saved + skipped + failed} of ${selectedJobs.length}`)
-      if (status === 'Saved' && (isClosedListing(job) || (googleJobListingUrl(job.url) && availability.get(availabilityKey(job.url)) !== 'open'))) {
-        job.availability = isClosedListing(job) || availability.get(availabilityKey(job.url)) === 'closed' ? 'closed' : 'unknown'
-        jobSelection.delete(job.id)
-        skipped++
-        continue
-      }
       const existing = trackedApplication(job)
       if (existing && (status === 'Saved' || isApplied(existing))) {
         skipped++
@@ -1320,8 +1275,7 @@ async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
         failureMessage = e instanceof Error ? e.message : 'Unable to save.'
       }
     }
-    const unavailable = status === 'Saved' ? selectedJobs.filter(job => job.availability === 'closed' || job.availability === 'unknown').length : 0
-    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} ${status === 'Applied' ? 'marked as applied' : 'saved'}.${skipped > unavailable ? ` ${skipped - unavailable} already ${status === 'Applied' ? 'applied' : 'in your tracker'}.` : ''}${unavailable ? ` ${unavailable} closed or unverified listings skipped.` : ''}${failed ? ` ${failed} could not be ${status === 'Applied' ? 'marked as applied' : 'saved'} and remain selected. Try ${status === 'Applied' ? 'Mark selected as applied' : 'Save selected'} again.` : ''}`)
+    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} ${status === 'Applied' ? 'marked as applied' : 'saved'}.${skipped ? ` ${skipped} already ${status === 'Applied' ? 'applied' : 'in your tracker'}.` : ''}${failed ? ` ${failed} could not be ${status === 'Applied' ? 'marked as applied' : 'saved'} and remain selected. Try ${status === 'Applied' ? 'Mark selected as applied' : 'Save selected'} again.` : ''}`)
     if (failed) error(failureMessage)
   } finally {
     savingSelectedJobs = false
@@ -1383,7 +1337,7 @@ function renderJobs(resetPage = true) {
     // Feed timestamps without an offset are interpreted in UTC on every device.
     const date = (j.date || '').trim()
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date + 'T00:00:00Z' : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date) ? date.replace(' ', 'T') + 'Z' : date)
-    return !isClosedListing(j) && j.availability !== 'unknown' && !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
+    return !isClosedListing(j) && !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
   })
   const perPage = entriesPerPage('job', list.length)
   jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / perPage)))

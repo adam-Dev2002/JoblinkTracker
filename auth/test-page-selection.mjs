@@ -27,12 +27,11 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await context.route('**/api/workspace/items', route => route.fulfill({ json: { items } }));
   await context.route('**/api/jobs/search*', route => route.fulfill({ json: { jobs, message: 'Test feed', configured: true } }));
   await context.route('https://www.google.com/s2/favicons?*', route => route.abort());
-  let availability = 'unknown';
   const checks = [];
   await context.route('**/api/jobs/availability', route => {
     const input = route.request().postDataJSON();
     checks.push(input);
-    return route.fulfill({ json: { jobs: input.urls.map(url => ({ url, status: availability })) } });
+    return route.fulfill({ status: 503, json: { error: 'Availability scans are removed.' } });
   });
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body: `
     let organic;
@@ -96,6 +95,11 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await bulk.check();
   assert.equal(await page.locator('[data-job-pick]:checked').count(), 12, 'Saved and opened jobs are included only on the current page');
   assert.equal(await actions.isVisible(), true);
+  await page.locator('[data-job-deselect]').click();
+  assert.equal(await page.locator('[data-job-pick]:checked').count(), 0);
+  assert.equal(await actions.isVisible(), false, 'Clearing selection hides the separate action row');
+  await bulk.check();
+  await page.screenshot({ path: 'auth/runtime/explore-toolbar-desktop.png' });
   await page.getByRole('button', { name: 'Page 2', exact: true }).click();
   assert.equal(await actions.isVisible(), false);
   assert.equal(await page.locator('[data-job-pick]:checked').count(), 0);
@@ -111,18 +115,17 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   assert.equal(await toolbar.isVisible(), false);
   assert.equal(await actions.isVisible(), false);
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-retry-job-availability]').waitFor({ state: 'visible' });
-  assert.equal(await page.locator('.google-job-card').count(), 0);
-  assert.equal(await toolbar.isVisible(), false);
-  assert.match(await page.locator('[data-job-availability-message]').innerText(), /could not confirm/);
-  availability = 'open';
-  await page.locator('[data-retry-job-availability]').click();
   await page.waitForFunction(() => document.querySelectorAll('.google-job-card').length === 4);
-  assert.equal(checks.at(-1).fresh, true);
-  assert.equal(checks.at(-1).urls.every(url => url.startsWith('https://')), true, 'HTTP search links are normalized before validating the batch');
+  assert.equal(await page.locator('[data-retry-job-availability]').count(), 0);
+  assert.deepEqual(checks, [], 'Google cards render without availability requests');
+  assert.equal(await page.locator('.google-job-card [data-job-source-listing]').first().getAttribute('href'), 'https://www.onlinejobs.ph/jobseekers/job/automation-0');
   assert.equal(await actions.isVisible(), false);
   await bulk.check();
   assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 4);
+  await page.locator('[data-job-deselect]').click();
+  assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 0);
+  assert.equal(await actions.isVisible(), false);
+  await bulk.check();
   await page.evaluate(() => window.drawSelectionGoogle(false, 'outdated query'));
   assert.equal(await page.locator('.google-job-card').count(), 4, 'An old Google callback cannot clear the current cards');
   assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 4);
@@ -130,17 +133,18 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await page.locator('[data-job-count]').filter({ hasText: /^0 results on this page$/ }).waitFor();
   assert.equal(await toolbar.isVisible(), false);
   assert.equal(await actions.isVisible(), false);
-  assert.equal(await page.locator('[data-retry-job-availability]').isVisible(), false);
+  assert.equal(await page.locator('[data-retry-job-availability]').count(), 0);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     if (width < 768) await page.locator('.sidebar-close').evaluate(button => button.click());
     await page.evaluate(() => window.drawSelectionGoogle());
     await page.waitForFunction(() => document.querySelectorAll('.google-job-card').length === 4);
+    await bulk.check();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: `auth/runtime/page-selection-google-${width}.png` });
   }
   assert.deepEqual(errors, []);
-  console.log('PASS: current-page bulk selection for jobs/applications/sheet, Show entries and All, exports, preference restore, hidden actions and empty toolbars, confirmed-open retry, Google empty transitions and responsive layout.');
+  console.log('PASS: current-page bulk selection for jobs/applications/sheet, Show entries and All, exports, preference restore, hidden actions and empty toolbars, scan-free Google rendering, Google empty transitions and responsive layout.');
 } finally {
   await browser?.close();
   await Promise.all(created.map(file => unlink(file)));

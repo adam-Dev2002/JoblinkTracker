@@ -6,7 +6,7 @@ const preview = new URL('../jobfinder/preview/pages/playground-open-jobs-test.as
 await writeFile(preview, `---
 import WorkspacePage from '../components/workspace/WorkspacePage.astro'
 ---
-<WorkspacePage view="jobs" title="Open jobs" description="Only open listings" />
+<WorkspacePage view="jobs" title="Open jobs" description="Listings without scans" />
 `, { flag: 'wx' });
 let browser;
 try {
@@ -26,15 +26,11 @@ try {
   });
   await context.route('**/api/jobs/search*', route => route.fulfill({ json: { jobs, message: 'Test feed', configured: true } }));
   const google = [10, 11, 12, 13, 14].map(index => ({ title: index === 14 ? '[Closed] Old job' : `Google Assistant ${index}`, url: job(index).url, content: 'Assistant job' }));
-  const statuses = new Map(google.map((result, index) => [result.url, index < 2 ? 'open' : index === 2 ? 'closed' : 'unknown']));
-  let hold = null, release;
-  await context.route('**/api/jobs/availability', async route => {
-    const input = route.request().postDataJSON();
-    checks.push(input);
-    const snapshot = input.urls.map(url => ({ url, status: statuses.get(url) || 'open' }));
-    if (hold) await hold;
-    return route.fulfill({ json: { jobs: snapshot } });
+  await context.route('**/api/jobs/availability', route => {
+    checks.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { error: 'Scanner unavailable' } });
   });
+  await context.route('https://www.onlinejobs.ph/jobseekers/job/*', route => route.fulfill({ contentType: 'text/html', body: '<h1>Original listing</h1>' }));
   await context.route('https://www.google.com/s2/favicons?*', route => route.abort());
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body: `
     let organic;
@@ -50,55 +46,46 @@ try {
   ` }));
   await page.goto('/playground-open-jobs-test');
   await page.locator('[data-ready=true]').waitFor();
-  await page.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
-  assert.equal(await page.locator('.job-card').count(), 2);
+  await page.locator('[data-job-count]').filter({ hasText: /^3 results$/ }).waitFor();
+  assert.equal(await page.locator('.job-card').count(), 3);
   await page.locator('[data-job-select-all]').check();
-  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^2 selected/);
+  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^3 selected/);
   await page.locator('[data-job-select-all]').uncheck();
-  hold = new Promise(resolve => { release = resolve; });
   await page.locator('#job-source').selectOption('google');
-  await page.getByText('Checking which jobs are still open…', { exact: true }).first().waitFor();
-  assert.equal(await page.locator('.google-job-card').count(), 0, 'Unchecked Google listings never appear as open cards');
-  release(); hold = null;
-  await page.locator('[data-job-count]').filter({ hasText: /^2 results on this page$/ }).waitFor();
-  assert.equal(await page.locator('.google-job-card').count(), 2);
-  assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 2 entries/);
-  assert.match(await page.locator('[data-job-availability-message]').innerText(), /could not confirm/);
-  assert.equal(checks[0].urls.includes(job(14).url), false, 'Known-closed search snippets are discarded before network checks');
-  // A listing that fills after display is checked again before opening/tracking.
-  statuses.set(job(10).url, 'closed');
+  await page.locator('[data-job-count]').filter({ hasText: /^4 results on this page$/ }).waitFor();
+  assert.equal(await page.locator('.google-job-card').count(), 4);
+  assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 4 entries/);
+  assert.equal(await page.locator('[data-job-availability-message], [data-retry-job-availability]').count(), 0);
+  assert.deepEqual(checks, [], 'Results display without network availability checks');
+  await page.reload();
+  await page.locator('[data-ready=true]').waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^4 results on this page$/ }).waitFor();
+  assert.deepEqual(checks, [], 'Cached Google previews never trigger a scan');
   const popupPromise = page.waitForEvent('popup');
   await page.locator('.google-job-card').filter({ hasText: 'Google Assistant 10' }).locator('[data-apply-job]').click();
   const popup = await popupPromise;
-  await page.locator('[data-workspace-error]').filter({ hasText: 'closed or filled' }).waitFor();
-  assert.equal(popup.isClosed(), true);
-  assert.equal(writes.length, 0);
-  assert.equal(await page.locator('.google-job-card').count(), 1);
-  assert.equal(checks.at(-1).fresh, true);
-  await page.locator('.google-job-card [data-job-pick]').check();
-  statuses.set(job(11).url, 'closed');
+  await popup.waitForURL(job(10).url);
+  assert.equal(writes[0].action, 'open-application');
+  assert.deepEqual(checks, [], 'Apply opens without a scan');
+  await popup.close();
+  await page.locator('[data-application-modal] .btn-close').click();
+  await page.locator('[data-application-modal]').waitFor({ state: 'hidden' });
+  await page.locator('[data-job-select-all]').check();
   await page.locator('[data-job-bulk-save]').click();
-  await page.locator('[data-job-bulk-status]').filter({ hasText: '1 closed or unverified listings skipped' }).waitFor();
-  assert.equal(writes.length, 0, 'Bulk save does not track a newly closed listing');
-  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/);
-  assert.equal(await page.locator('.google-job-card').count(), 0);
-  // A late response cannot repaint a different source's results.
-  statuses.set(job(10).url, 'open');
-  hold = new Promise(resolve => { release = resolve; });
-  await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
-  await page.getByText('Checking which jobs are still open…', { exact: true }).first().waitFor();
+  await page.locator('[data-job-bulk-status]').filter({ hasText: '3 jobs saved. 1 already in your tracker.' }).waitFor();
+  assert.equal(writes.length, 4);
+  assert.deepEqual(checks, [], 'Bulk Save never scans listings');
   await page.locator('#job-source').selectOption('all');
-  release(); hold = null;
-  await page.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^3 results$/ }).waitFor();
   assert.equal(await page.locator('[data-google-jobs]').isVisible(), false);
   await page.reload();
   await page.locator('[data-ready=true]').waitFor();
-  await page.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
-  assert.equal(await page.locator('.job-card').count(), 2, 'Cached feeds retain closure and expiry filtering');
+  await page.locator('[data-job-count]').filter({ hasText: /^3 results$/ }).waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.deepEqual(errors, []);
-  console.log('PASS: feed closure/expiry filtering, Google checks before display, hidden unknown pages, accurate counts, fresh Apply/bulk checks, selection pruning, late-response safety, cache and mobile.');
+  assert.deepEqual(checks, []);
+  console.log('PASS: scan-free Google display, cached previews, Apply, bulk Save, local closure filtering, unknown feed visibility, selection, counts and mobile.');
 } finally {
   await browser?.close();
   await unlink(preview);

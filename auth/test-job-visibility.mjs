@@ -156,7 +156,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   assert.match(await page.locator('[data-job-count]').innerText(), /^0 results on this page$/);
   assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 0 entries/);
   await page.evaluate(() => window.redrawVisibilityGoogle());
-  await page.locator('.google-job-grid').getByText('No open, unapplied jobs', { exact: false }).waitFor();
+  await page.locator('.google-job-grid').getByText('No unapplied jobs', { exact: false }).waitFor();
   assert.equal(await page.locator('.google-job-card').count(), 0, 'Provider redraw also filters applied jobs');
 
   // Tracker edits are reconciled on navigation, including a slow fresh response.
@@ -177,7 +177,7 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   release();
   workspaceGate = null;
   await card(6).waitFor({ state: 'detached' });
-  // A cached Applied status must not prevent availability checks from running.
+  // A cached Applied status must not prevent Google results from loading.
   // A delayed fresh tracker response may restore the same job to Saved.
   await page.locator('#job-source').selectOption('google');
   await page.locator('[data-google-jobs-host] .google-job-grid').waitFor();

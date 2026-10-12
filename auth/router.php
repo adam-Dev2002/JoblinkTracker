@@ -49,7 +49,6 @@ try {
     if ($configError) respond(['error' => 'Account configuration is invalid. Check auth/config.local.php and save the file.'], 503);
     if (str_starts_with($path, '/api/assistant/')) { require __DIR__ . '/assistant.php'; assistantRequest($path, $method); }
     if (str_starts_with($path, '/api/jobs/')) {
-        if ($path === '/api/jobs/availability') { require __DIR__ . '/job-availability.php'; jobAvailabilityRequest(); }
         if ($method !== 'GET') respond(['error' => 'Method not allowed'], 405);
         if (($path !== '/api/jobs/search') || !in_array($_GET['source'] ?? 'remotive', ['jsearch','indeed','jobstreet','onlinejobs','linkedin'], true)) session_write_close();
         require __DIR__ . '/jobs.php'; jobsRequest($path);
