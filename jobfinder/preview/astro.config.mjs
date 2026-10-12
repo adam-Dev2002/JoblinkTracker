@@ -25,6 +25,10 @@ const cloudBackend = process.env.JOBLINK_BACKEND === 'supabase'
 /** @param {string} p */
 const path = (p) => fileURLToPath(new URL(p, import.meta.url))
 
+// Vercel's generated function tree contains thousands of files with no source
+// edits to watch. Keep public watched so Vite discovers newly copied assets.
+const generatedWatchDir = path('./.vercel').replaceAll('\\', '/')
+
 /**
  * After build, format page HTML with prettier (users copy it 1:1).
  * The formatting itself happens in .build/prettify-html-worker.mjs — see there
@@ -117,6 +121,16 @@ export default defineConfig({
     host: true,
   },
   vite: {
+    server: {
+      watch: {
+        // Poll on Windows to avoid exhausting handles with a watcher per file.
+        ...(process.platform === 'win32' ? { usePolling: true, interval: 500, binaryInterval: 1000 } : {}),
+        ignored: (file) => {
+          const normalized = file.replaceAll('\\', '/')
+          return normalized === generatedWatchDir || normalized.startsWith(`${generatedWatchDir}/`)
+        },
+      },
+    },
     resolve: {
       alias: {
         // Demo data in shared/data (single source of truth).
