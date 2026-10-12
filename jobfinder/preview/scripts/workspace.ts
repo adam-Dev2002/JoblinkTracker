@@ -1025,6 +1025,39 @@ function updateJobSelection() {
 function trackedApplication(job: Job) {
   return owned('application').find((item) => (job.url && safeUrl(item.payload.url) === safeUrl(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
 }
+function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string; preview: string }) {
+  const id = htmlEscape(job.id)
+  const title = htmlEscape(job.title)
+  const logo = google
+    ? `${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(google.iconUrl)}" alt="${htmlEscape(google.domain)} source icon" loading="lazy" referrerpolicy="no-referrer" />`
+    : `<span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(job.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(job.logo))}" alt="${htmlEscape(job.company)} logo" loading="lazy" referrerpolicy="no-referrer" />` : ''}`
+  const identity = google
+    ? `<a class="google-job-source fw-semibold" data-job-source-website href="${htmlEscape(google.origin)}" target="_blank" rel="noopener noreferrer" aria-label="Visit ${htmlEscape(google.domain)} website">${htmlEscape(google.domain)} &nearr;</a><span class="text-secondary small">Found on Google</span>`
+    : `<div class="fw-semibold">${htmlEscape(job.company)}</div><span class="text-secondary small" data-job-location>${htmlEscape(job.location)}</span>`
+  const metadata = google
+    ? `<p class="google-job-preview text-secondary small mb-0">${htmlEscape(google.preview)}</p>`
+    : `<div class="d-flex flex-wrap gap-2"><span class="job-tag">${htmlEscape(job.role)}</span><span class="job-tag">${htmlEscape(job.workMode)}</span><span class="job-tag">${htmlEscape(job.employmentType || 'Not specified')}</span>${job.salary ? `<span class="job-tag">${htmlEscape(job.salary)}</span>` : ''}</div>`
+  const source = google
+    ? `Source: Google &middot; <a data-job-source-listing href="${htmlEscape(job.url)}" target="_blank" rel="noopener noreferrer">Original listing &nearr;</a>`
+    : `Source: <a href="${htmlEscape(safeUrl(job.url))}" target="_blank" rel="noopener noreferrer">${htmlEscape(job.source)}</a>${job.date ? ' | ' + htmlEscape(job.date.slice(0, 10)) : ''}`
+  return `<article class="card job-card${google ? ' google-job-card' : ''}" data-job-card="${id}" tabindex="0" aria-label="Read description for ${title}">
+    <div class="card-body d-flex flex-column">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <span class="avatar bg-white border rounded-3 position-relative text-blue flex-shrink-0">${logo}</span>
+        <div class="job-card-identity flex-grow-1">${identity}</div>
+        <input type="checkbox" class="form-check-input job-pick ms-auto" data-job-pick="${id}" aria-label="Select ${title}${google ? '' : ' at ' + htmlEscape(job.company)}" />
+      </div>
+      <h3 class="job-title"><button class="job-title-link" data-job-details="${id}">${title}</button></h3>
+      <button class="job-details-link" data-job-details="${id}">Read job description &rarr;</button>
+      <div class="job-card-metadata mb-3">${metadata}</div>
+      <p class="text-secondary small mb-3">${source}</p>
+      <div class="d-flex gap-2 mt-auto job-card-actions">
+        <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
+        <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
+      </div>
+    </div>
+  </article>`
+}
 async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
   const generation = ++googleRenderGeneration
   const text = (value: string) => new DOMParser().parseFromString(value, 'text/html').body.textContent?.trim() || ''
@@ -1068,7 +1101,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
         const domain = website.hostname.replace(/^www\./, '')
         const preview = text(results.find((result) => safeUrl(result.listingUrl || result.url) === job.url)?.content || '')
         const iconUrl = 'https://www.google.com/s2/favicons?' + new URLSearchParams({ domain: website.hostname, sz: '64' })
-        return `<article class="card job-card google-job-card" data-job-card="${job.id}" tabindex="0" aria-label="View details for ${htmlEscape(job.title)}"><div class="card-body d-flex flex-column"><div class="d-flex align-items-center gap-3 mb-3"><span class="avatar bg-white border rounded-3 position-relative text-blue flex-shrink-0">${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(iconUrl)}" alt="${htmlEscape(domain)} source icon" loading="lazy" referrerpolicy="no-referrer" /></span><div class="flex-grow-1" style="min-width:0"><a class="google-job-source fw-semibold" data-job-source-website href="${htmlEscape(website.origin)}" target="_blank" rel="noopener noreferrer" aria-label="Visit ${htmlEscape(domain)} website">${htmlEscape(domain)} &nearr;</a><div class="small text-secondary mt-1">Found on Google</div></div><input type="checkbox" class="form-check-input job-pick ms-auto" data-job-pick="${job.id}" aria-label="Select ${htmlEscape(job.title)}" /></div><h3 class="job-title"><button class="job-title-link" data-job-details="${job.id}">${htmlEscape(job.title)}</button></h3><p class="google-job-preview text-secondary small mb-3">${htmlEscape(preview)}</p><div class="d-flex flex-wrap gap-3 mb-3"><button class="job-details-link mb-0" data-job-details="${job.id}">Read job description &rarr;</button><a class="small" data-job-source-listing href="${htmlEscape(job.url)}" target="_blank" rel="noopener noreferrer">Original listing &nearr;</a></div><div class="d-flex gap-2 mt-auto"><a class="btn btn-primary flex-grow-1" href="${htmlEscape(job.applyUrl || job.url)}" target="_blank" rel="noopener noreferrer" data-apply-job="${job.id}">Apply via source &nearr;</a><button class="btn" data-track="${job.id}" aria-label="Save ${htmlEscape(job.title)}">Save</button></div></div></article>`
+        return renderJobCard(job, { domain, origin: website.origin, iconUrl, preview })
       })
       .join('') +
     (listings.length ? '' : '<p class="text-secondary mb-0">No matching job-detail pages on this Google results page. Try another page or broader keywords.</p>') +
@@ -1182,10 +1215,7 @@ function renderJobs(resetPage = true) {
   select('[data-job-results]').innerHTML =
     list
       .slice((jobPage - 1) * jobsPerPage, jobPage * jobsPerPage)
-      .map(
-        (j) =>
-          `<div class="col-md-6 col-xl-4"><div class="card job-card" data-job-card="${htmlEscape(j.id)}" tabindex="0" aria-label="Read description for ${htmlEscape(j.title)}" style="cursor:pointer"><div class="card-body d-flex flex-column"><div class="d-flex align-items-center gap-3 mb-3"><span class="avatar bg-white border rounded-3 position-relative text-blue" style="flex-shrink:0;width:48px;height:48px"><span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(j.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(j.logo))}" alt="${htmlEscape(j.company)} logo" loading="lazy" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:white;padding:4px;border-radius:inherit" />` : ''}</span><div style="min-width:0"><div class="fw-semibold">${htmlEscape(j.company)}</div><span class="text-secondary small" data-job-location>${htmlEscape(j.location)}</span></div><input type="checkbox" class="form-check-input job-pick ms-auto" data-job-pick="${htmlEscape(j.id)}" aria-label="Select ${htmlEscape(j.title)} at ${htmlEscape(j.company)}" /></div><h3 class="job-title"><button class="job-title-link" data-job-details="${htmlEscape(j.id)}">${htmlEscape(j.title)}</button></h3><button class="job-details-link" data-job-details="${htmlEscape(j.id)}">Read job description &rarr;</button><div class="d-flex flex-wrap gap-2 mt-2 mb-3"><span class="job-tag">${htmlEscape(j.role)}</span><span class="job-tag">${htmlEscape(j.workMode)}</span><span class="job-tag">${htmlEscape(j.employmentType || 'Not specified')}</span>${j.salary ? `<span class="job-tag">${htmlEscape(j.salary)}</span>` : ''}</div><p class="text-secondary small">Source: <a href="${htmlEscape(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer">${htmlEscape(j.source)}</a>${j.date ? ' | ' + htmlEscape(j.date.slice(0, 10)) : ''}</p><div class="d-flex gap-2 mt-auto"><a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(j.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${htmlEscape(j.id)}">${j.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a><button class="btn" data-track="${htmlEscape(j.id)}" aria-label="Save ${htmlEscape(j.title)}">Save</button></div></div></div></div>`,
-      )
+      .map((job) => `<div class="col-md-6 col-xl-4">${renderJobCard(job)}</div>`)
       .join('') || `<div class="col-12">${empty('No jobs match your search. Try broader keywords or filters.')}</div>`
   root.querySelectorAll<HTMLImageElement>('[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
   updateJobSelection()

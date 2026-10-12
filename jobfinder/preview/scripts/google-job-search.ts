@@ -94,7 +94,17 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
             },
             ready,
             rendered: () => {
-              /* Results-ready finishes the current query. */
+              // Reuse the workspace pagination theme on Google's own controls.
+              // Keep the original nodes and handlers so Google still owns paging.
+              host.querySelectorAll<HTMLElement>('.gsc-cursor').forEach((cursor) => cursor.classList.add('pagination'))
+              host.querySelectorAll<HTMLElement>('.gsc-cursor-page').forEach((page) => {
+                const current = page.classList.contains('gsc-cursor-current-page')
+                page.classList.add('page-link')
+                page.classList.toggle('active', current)
+                page.setAttribute('aria-label', 'Page ' + page.textContent?.trim())
+                if (current) page.setAttribute('aria-current', 'page')
+                else page.removeAttribute('aria-current')
+              })
             },
           },
         },
