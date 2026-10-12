@@ -595,7 +595,7 @@ async function handleClick(event: Event) {
       render()
       try {
         for (let offset = 0; offset < selectedIds.length; offset += 200) {
-          const data = await api('workspace/items', { action: 'bulk-delete', ids: selectedIds.slice(offset, offset + 200) })
+          const data = await api('workspace/items', { action: 'bulk-delete', kind: 'application', ids: selectedIds.slice(offset, offset + 200) })
           items = items.filter((row) => !data.deleted.includes(row.id))
           data.deleted.forEach((id: number) => applicationSelection.delete(id))
         }
@@ -668,7 +668,7 @@ async function handleClick(event: Event) {
       try {
         await sheetWriteQueue
         for (let offset = 0; offset < selectedIds.length; offset += 200) {
-          const data = await api('workspace/items', { action: 'bulk-delete', ids: selectedIds.slice(offset, offset + 200) })
+          const data = await api('workspace/items', { action: 'bulk-delete', kind: 'sheet', ids: selectedIds.slice(offset, offset + 200) })
           items = items.filter((row) => !data.deleted.includes(row.id))
           data.deleted.forEach((id: number) => sheetSelection.delete(id))
         }

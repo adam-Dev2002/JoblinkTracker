@@ -26,7 +26,8 @@ begin
  perform id from public.users where id=p_user for update;
  if not found then raise exception 'Account not found'; end if;
  if p_action='bulk-delete' then
-  select array_agg(id) into affected from public.workspace_items where user_id=p_user and kind='sheet' and id=any(p_ids);
+  if coalesce(p_kind,'') not in ('','application','sheet') then raise exception 'Invalid bulk-delete entry type'; end if;
+  select array_agg(id) into affected from public.workspace_items where user_id=p_user and kind=coalesce(nullif(p_kind,''),'sheet') and id=any(p_ids);
   if coalesce(cardinality(affected),0)<>coalesce(cardinality(p_ids),0) then raise exception 'Entry not found'; end if;
   delete from public.workspace_items where user_id=p_user and id=any(affected);
   return jsonb_build_object('deleted',to_jsonb(affected));

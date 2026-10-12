@@ -26,9 +26,10 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
     $id = filter_var($input['id'] ?? 0, FILTER_VALIDATE_INT);
     if ($id === false || $id < 0) respond(['error' => 'Invalid entry ID.'], 422);
     if (($input['action'] ?? '') === 'bulk-delete') {
+        $bulkKind=$input['kind']??'sheet';if(!in_array($bulkKind,['application','sheet'],true))respond(['error'=>'Invalid bulk-delete entry type.'],422);
         $ids=$input['ids']??null;if(!is_array($ids)||!$ids||count($ids)>200||array_filter($ids,fn($id)=>!is_int($id)||$id<1))respond(['error'=>'Select 1 to 200 valid rows.'],422);
-        $ids=array_values(array_unique($ids));$marks=implode(',',array_fill(0,count($ids),'?'));$q=$pdo->prepare("SELECT id FROM workspace_items WHERE user_id=? AND kind='sheet' AND id IN ($marks)");$q->execute(array_merge([$user['id']],$ids));$owned=array_map('intval',$q->fetchAll(PDO::FETCH_COLUMN));if(count($owned)!==count($ids))respond(['error'=>'Some rows were not found. Nothing deleted.'],404);
-        removeAttachmentFiles($pdo,$user['id'],$owned);$pdo->prepare("DELETE FROM workspace_items WHERE user_id=? AND kind='sheet' AND id IN ($marks)")->execute(array_merge([$user['id']],$ids));respond(['deleted'=>$owned]);
+        $ids=array_values(array_unique($ids));$marks=implode(',',array_fill(0,count($ids),'?'));$q=$pdo->prepare("SELECT id FROM workspace_items WHERE user_id=? AND kind=? AND id IN ($marks)");$q->execute(array_merge([$user['id'],$bulkKind],$ids));$owned=array_map('intval',$q->fetchAll(PDO::FETCH_COLUMN));if(count($owned)!==count($ids))respond(['error'=>'Some rows were not found. Nothing deleted.'],404);
+        removeAttachmentFiles($pdo,$user['id'],$owned);$pdo->prepare("DELETE FROM workspace_items WHERE user_id=? AND kind=? AND id IN ($marks)")->execute(array_merge([$user['id'],$bulkKind],$ids));respond(['deleted'=>$owned]);
     }
     if (($input['action'] ?? '') === 'delete-status') {
         $q=$pdo->prepare("SELECT payload FROM workspace_items WHERE id=? AND user_id=? AND kind='task_status'");$q->execute([$id,$user['id']]);$status=$q->fetch();if(!$status)respond(['error'=>'Status not found'],404);
