@@ -265,7 +265,7 @@ const desk = [
                   <div class="d-flex flex-wrap align-items-center gap-3 job-selection-summary">
                     <label class="form-check mb-0">
                       <input class="form-check-input" type="checkbox" data-job-select-all disabled />
-                      <span class="form-check-label">Select up to 50 new jobs</span>
+                      <span class="form-check-label" data-job-selection-label>Select up to 50 new jobs</span>
                       <span class="form-hint" data-job-selection-scope>
                         Across all pages
                       </span>
@@ -282,9 +282,6 @@ const desk = [
                     <button type="button" class="btn btn-sm" data-job-bulk-export disabled>
                       <Icon name="download" />
                       Export selected
-                    </button>
-                    <button type="button" class="btn btn-sm" data-job-clear-selection disabled>
-                      Clear selection
                     </button>
                   </div>
                 </div>
@@ -359,12 +356,9 @@ const desk = [
             <div slot="selection" class="workspace-table-selection d-none" data-application-selection-toolbar>
               <div class="d-flex flex-wrap align-items-center gap-3">
                 <span class="fw-semibold" role="status" data-application-selected-count />
-                <div class="dropdown ms-auto">
-                  <button type="button" class="btn workspace-row-actions" data-bs-toggle="dropdown" aria-expanded="false">Selected actions <Icon name="chevron-down" class="workspace-action-chevron" /></button>
-                  <div class="dropdown-menu dropdown-menu-end workspace-actions-menu">
-                    <button type="button" class="dropdown-item" data-application-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
-                    <button type="button" class="dropdown-item" data-application-clear-selection><Icon name="x" class="workspace-action-icon" />Clear selection</button>
-                  </div>
+                <div class="d-flex flex-wrap gap-2 ms-auto">
+                  <button type="button" class="btn btn-sm" data-application-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
+                  <button type="button" class="btn btn-sm" data-application-clear-selection><Icon name="x" class="workspace-action-icon" />Clear selection</button>
                 </div>
               </div>
             </div>

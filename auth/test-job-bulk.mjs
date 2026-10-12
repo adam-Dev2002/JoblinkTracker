@@ -52,7 +52,7 @@ const items = [
   {
     id: 1,
     kind: "application",
-    payload: { ...jobs[0], jobId: jobs[0].id, status: "Applied" },
+    payload: { ...jobs[0], url: 'https://example.com/jobs/already-applied', jobId: 'already-applied', status: "Applied" },
   },
 ];
 const writes = [];
@@ -60,6 +60,11 @@ let rejectOnce = true;
 let delaySave;
 let source = "all";
 let searchRequests = 0;
+async function selectBatch() {
+  const bulk = page.locator('[data-job-select-all]');
+  if (await bulk.isChecked()) await bulk.uncheck();
+  await bulk.check();
+}
 try {
   const session = await (await context.request.get("/api/auth/session")).json();
   const response = await context.request.post("/api/auth/register", {
@@ -236,7 +241,8 @@ try {
     initialSearchRequests,
     "Changing result pages must not refetch the feed",
   );
-  await page.locator("[data-job-clear-selection]").click();
+  assert.equal(await page.locator('[data-job-clear-selection]').count(), 0, 'The redundant clear button is removed');
+  await page.locator("[data-job-select-all]").uncheck();
   await page.locator('[data-job-pick="bulk-7"]').check();
   await page.getByLabel("Listing time").selectOption("1");
   assert.equal(await page.locator("[data-job-results] .job-card").count(), 12);
@@ -248,7 +254,11 @@ try {
     await page.locator("[data-job-selected-count]").innerText(),
     /1 outside current results/,
   );
-  await page.locator("[data-job-select-all]").check();
+  assert.equal(await page.locator('[data-job-select-all]').isChecked(), true);
+  assert.equal(await page.locator('[data-job-selection-label]').innerText(), 'Deselect 1 job');
+  await page.locator('[data-job-select-all]').uncheck();
+  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Unchecking also clears jobs hidden by date filters');
+  await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
     /50 selected/,
@@ -256,9 +266,9 @@ try {
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 selected/,
+    /0 selected/,
   );
-  await page.locator("[data-job-clear-selection]").click();
+  await page.locator("[data-job-select-all]").uncheck();
   for (const [days, count] of [
     ["3", 211],
     ["7", 212],
@@ -307,7 +317,7 @@ try {
     await page
       .locator("[data-job-select-all]")
       .evaluate((input) => input.indeterminate),
-    true,
+    false,
   );
   await page.getByLabel("Place or location").fill("USA");
   assert.equal(await page.locator("[data-job-results] .job-card").count(), 12);
@@ -319,7 +329,13 @@ try {
     await page.locator("[data-job-selected-count]").innerText(),
     /1 outside current results/,
   );
-  await page.locator("[data-job-select-all]").check();
+  await page.getByLabel('Place or location').fill('No matching location');
+  assert.equal(await page.locator('[data-job-select-all]').isEnabled(), true, 'Hidden selections can be cleared with zero matching jobs');
+  await page.locator('[data-job-select-all]').uncheck();
+  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/);
+  assert.equal(await page.locator('[data-job-select-all]').isEnabled(), false, 'Empty results cannot start a new batch');
+  await page.getByLabel('Place or location').fill('USA');
+  await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
     /50 selected/,
@@ -327,7 +343,7 @@ try {
   await page.locator("[data-job-select-all]").uncheck();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
-    /1 selected/,
+    /0 selected/,
   );
   await page.getByLabel("Place or location").fill("");
   await page.getByLabel("Employment type").selectOption("Contract");
@@ -337,6 +353,7 @@ try {
     "109 results",
   );
   await page.getByLabel("Employment type").selectOption("");
+  await page.locator('[data-job-pick="bulk-0"]').check();
   await page.getByLabel("Search feed").selectOption("jobicy");
   await page.waitForFunction(
     () =>
@@ -347,7 +364,8 @@ try {
     await page.locator("[data-job-selected-count]").innerText(),
     /1 outside current results/,
   );
-  await page.locator("[data-job-clear-selection]").click();
+  await page.locator("[data-job-select-all]").uncheck();
+  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Switching feeds does not prevent clearing hidden selections');
   assert.equal(await page.locator("[data-job-bulk-save]").isEnabled(), false);
   await page.getByLabel("Search feed").selectOption("all");
   await page.waitForFunction(
@@ -363,7 +381,7 @@ try {
   for await (const chunk of stream) csv += chunk;
   assert.ok(csv.includes("Software Developer 1"));
   assert.ok(!csv.includes("Software Developer 0"));
-  await page.locator("[data-job-select-all]").check();
+  await selectBatch();
   let releaseSave;
   delaySave = new Promise((resolve) => {
     releaseSave = resolve;
@@ -376,10 +394,6 @@ try {
         .getAttribute("aria-busy") === "true",
   );
   assert.equal(await page.locator("[data-job-select-all]").isEnabled(), false);
-  assert.equal(
-    await page.locator("[data-job-clear-selection]").isEnabled(),
-    false,
-  );
   releaseSave();
   await page.waitForFunction(
     () =>
@@ -416,7 +430,7 @@ try {
       .textContent.includes("1 already in your tracker"),
   );
   assert.equal(writes.length, 51);
-  await page.locator("[data-job-select-all]").check();
+  await selectBatch();
   assert.match(
     await page.locator("[data-job-selected-count]").innerText(),
     /50 selected/,
@@ -479,7 +493,7 @@ try {
   await page
     .locator(".job-results-panel")
     .screenshot({ path: "auth/runtime/job-pagination-desktop.png" });
-  await page.locator("[data-job-clear-selection]").click();
+  await page.locator("[data-job-select-all]").uncheck();
   await page.getByLabel("Search feed").selectOption("google");
   await page.waitForFunction(
     () => document.querySelectorAll(".google-job-card").length === 2,
@@ -545,7 +559,7 @@ try {
   await page.waitForFunction(() =>
     window.googleFixtureQueries.at(-1).includes("Manila"),
   );
-  await page.locator("[data-job-select-all]").check();
+  await selectBatch();
   await page.locator("[data-job-bulk-save]").click();
   await page.waitForFunction(() =>
     document
@@ -576,6 +590,8 @@ try {
     await page.locator("[data-job-selected-count]").innerText(),
     /1 outside current results/,
   );
+  await page.locator('[data-job-select-all]').press('Space');
+  assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/, 'Keyboard deselection clears previous Google pages');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(
     await page.evaluate(

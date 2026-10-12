@@ -553,6 +553,7 @@ async function handleClick(event: Event) {
   try {
     if (target.closest('[data-workspace-row-menu]')) tableActions?.close(true)
     if (target.hasAttribute('data-application-clear-filters')) {
+      select<HTMLInputElement>('[data-item-search]').value = ''
       select<HTMLSelectElement>('[data-status-filter]').value = ''
       select<HTMLSelectElement>('[data-application-company]').value = ''
       selectedApplicationId = null
@@ -563,6 +564,7 @@ async function handleClick(event: Event) {
     if (target.hasAttribute('data-application-clear-selection')) {
       applicationSelection.clear()
       render()
+      select('[data-application-all]').focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-export-selected')) exportCsv('application', owned('application').filter(item => applicationSelection.has(item.id)))
     if (target.dataset.applicationPage) {
@@ -586,11 +588,6 @@ async function handleClick(event: Event) {
     }
     if (target.hasAttribute('data-job-bulk-save')) await saveSelectedJobs()
     if (target.hasAttribute('data-job-bulk-export')) exportSelectedJobs()
-    if (target.hasAttribute('data-job-clear-selection') && !savingSelectedJobs) {
-      jobSelection.clear()
-      select('[data-job-bulk-status]').classList.add('d-none')
-      updateJobSelection()
-    }
     if (target.hasAttribute('data-job-source-website') || target.hasAttribute('data-job-source-listing')) {
       event.preventDefault()
       const url = safeUrl(target.getAttribute('href') || '')
@@ -784,20 +781,21 @@ async function handleChange(event: Event) {
       select('[data-job-bulk-status]').classList.add('d-none')
       const job = findJob(target.dataset.jobPick)
       if (job && target.checked && (jobSelection.has(job.id) || jobSelection.size < maxSelectedJobs)) jobSelection.set(job.id, job)
-      else if (job && target.checked) jobBulkStatus(`You can select up to ${maxSelectedJobs} jobs at a time. Save or clear your selection before selecting more.`)
+      else if (job && target.checked) jobBulkStatus(`You can select up to ${maxSelectedJobs} jobs at a time. Save or deselect your batch before selecting more.`)
       else jobSelection.delete(target.dataset.jobPick)
       updateJobSelection()
     }
     if (target.hasAttribute('data-job-select-all') && !savingSelectedJobs) {
       select('[data-job-bulk-status]').classList.add('d-none')
-      for (const job of [...jobs, ...googleJobs.values()].filter((job) => [...visibleJobIds, ...visibleGoogleJobIds].includes(job.id))) {
-        if (target.checked) {
+      if (!target.checked) jobSelection.clear()
+      else {
+        for (const job of [...jobs, ...googleJobs.values()].filter((job) => [...visibleJobIds, ...visibleGoogleJobIds].includes(job.id))) {
           if (jobSelection.has(job.id)) continue
           if (jobSelection.size >= maxSelectedJobs) break
           if (!trackedApplication(job)) jobSelection.set(job.id, job)
-        } else jobSelection.delete(job.id)
+        }
       }
-      if (target.checked && jobSelection.size === maxSelectedJobs) jobBulkStatus(`Selected ${maxSelectedJobs} jobs. Save or clear this batch before selecting more.`)
+      if (target.checked && jobSelection.size === maxSelectedJobs) jobBulkStatus(`Selected ${maxSelectedJobs} jobs. Save or deselect this batch before selecting more.`)
       else if (target.checked && jobSelection.size === 0) jobBulkStatus('These matching jobs are already in your tracker.')
       updateJobSelection()
     }
@@ -1030,17 +1028,19 @@ function companyPlaceholder() {
 function updateJobSelection() {
   const busy = savingSelectedJobs || !loaded
   const all = select<HTMLInputElement>('[data-job-select-all]')
-  const visibleIds = [...visibleJobIds, ...visibleGoogleJobIds]
+  const visibleIds = [...new Set([...visibleJobIds, ...visibleGoogleJobIds])]
   const selectedVisible = visibleIds.filter((id) => jobSelection.has(id)).length
   const hidden = jobSelection.size - selectedVisible
-  const batchSize = Math.min(visibleIds.length, maxSelectedJobs - hidden)
-  all.checked = batchSize > 0 && selectedVisible >= batchSize
-  all.indeterminate = selectedVisible > 0 && !all.checked
-  all.disabled = busy || jobsLoading || visibleIds.length === 0 || (jobSelection.size >= maxSelectedJobs && selectedVisible === 0)
+  const hasSelection = jobSelection.size > 0
+  const hasNewJobs = visibleIds.some(id => { const job = findJob(id); return job && !trackedApplication(job) })
+  all.checked = hasSelection
+  all.indeterminate = false
+  all.disabled = busy || (!hasSelection && (jobsLoading || !hasNewJobs))
+  select('[data-job-selection-label]').textContent = hasSelection ? `Deselect ${jobSelection.size} ${jobSelection.size === 1 ? 'job' : 'jobs'}` : 'Select up to 50 new jobs'
   const googleOnly = select<HTMLSelectElement>('#job-source').value === 'google'
   select('[data-job-selection-scope]').textContent = googleOnly ? 'This Google results page' : visibleGoogleJobIds.length ? 'All feed pages and this Google page' : 'Across all pages'
   select('[data-job-selected-count]').textContent = `${jobSelection.size} selected · Max ${maxSelectedJobs}${hidden ? ` (${hidden} outside current results)` : ''}`
-  for (const name of ['bulk-save', 'bulk-export', 'clear-selection']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || jobSelection.size === 0
+  for (const name of ['bulk-save', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
   select('[data-job-selection-toolbar]').setAttribute('aria-busy', String(savingSelectedJobs))
   root.querySelectorAll<HTMLInputElement>('[data-job-pick]').forEach((input) => {
     input.checked = jobSelection.has(input.dataset.jobPick!)

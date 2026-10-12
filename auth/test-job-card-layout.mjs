@@ -164,7 +164,7 @@ try {
   await page.getByRole('button', { name: 'Close job details', exact: true }).click();
   await page.locator('.google-job-card [data-job-pick]').first().check();
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /1 selected/);
-  await page.locator('[data-job-clear-selection]').click();
+  await page.locator('[data-job-select-all]').uncheck();
   await page.evaluate(() => window.drawGoogleCards(2, false, true));
   await checkLayout('.google-job-grid', 2);
   await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 2 entries on page 1');
