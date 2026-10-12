@@ -42,7 +42,7 @@ const groups = [
   <div class="jobify-shell">
     <aside class="jobify-sidebar" id="jobify-sidebar">
       <div class="sidebar-brand"><Logo href="/dashboard" /><button class="btn btn-icon sidebar-close" aria-label="Close navigation" data-menu-close><Icon name="x" /></button></div>
-      <div class="sidebar-clock"><span class="text-secondary small">Your workspace Manila</span><strong data-manila-clock></strong></div>
+      <div class="sidebar-clock"><span class="text-secondary small">Your workspace <span data-workspace-city>Manila</span></span><strong data-workspace-clock></strong></div>
       <nav aria-label="Main navigation">
         {
           groups.map((group) => (
@@ -676,9 +676,34 @@ const groups = [
     }
   })
   const clock = () => {
-    const el = document.querySelector('[data-manila-clock]')
-    if (el) el.textContent = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' }).format(new Date())
+    const el = document.querySelector('[data-workspace-clock]')
+    if (el) el.textContent = new Intl.DateTimeFormat('en-PH', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date())
   }
   clock()
-  setInterval(clock, 60000)
+  setInterval(clock, 15000)
+  // Show the viewer's real city; the timezone-derived name stays until an IP lookup confirms it.
+  const cityEl = document.querySelector('[data-workspace-city]')
+  if (cityEl) {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+    const localCity = (timezone.split('/').pop() || 'Manila').replace(/_/g, ' ')
+    cityEl.textContent = localCity
+    let city = ''
+    try {
+      city = localStorage.getItem('joblink-workspace-city') || ''
+    } catch {}
+    if (city) cityEl.textContent = city
+    else
+      fetch('https://get.geojs.io/v1/ip/geo.json', { signal: AbortSignal.timeout(8000) })
+        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+        .then((data) => {
+          if (data?.city && cityEl.isConnected) {
+            cityEl.textContent = data.city
+            try {
+              localStorage.setItem('joblink-workspace-city', data.city)
+            } catch {}
+          }
+        })
+        .catch(() => {})
+  }
+
 </script>
