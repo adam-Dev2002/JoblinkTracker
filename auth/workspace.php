@@ -49,15 +49,16 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
         respond(['ok' => true]);
     }
     $kind = $input['kind'] ?? '';
-    $fields = ['application' => ['title','company','url','salary','status','notes','date','jobId','source','location'], 'task' => ['title','status','date','notes'], 'task_status' => ['title'], 'event' => ['title','date','time','notes'], 'link' => ['title','url','notes'], 'sheet' => ['title','company','value','notes']];
+    $fields = ['application' => ['title','company','url','salary','status','notes','date','jobId','source','location','logo'], 'task' => ['title','status','date','notes'], 'task_status' => ['title'], 'event' => ['title','date','time','notes'], 'link' => ['title','url','notes'], 'sheet' => ['title','company','value','notes']];
     if (!is_string($kind) || !isset($fields[$kind]) || !is_array($input['payload'] ?? null)) respond(['error' => 'Invalid entry type.'], 422);
     $data = [];
     foreach ($fields[$kind] as $field) {
         $value = $input['payload'][$field] ?? '';
-        if (!is_string($value) || mb_strlen($value) > ($field === 'notes' ? 4000 : ($field === 'url' ? 2048 : 500))) respond(['error' => 'Check entry field length.'], 422);
+        if (!is_string($value) || mb_strlen($value) > ($field === 'notes' ? 4000 : (in_array($field, ['url', 'logo'], true) ? 2048 : 500))) respond(['error' => 'Check entry field length.'], 422);
         $data[$field] = trim($value);
     }
     if ($data['title'] === '') respond(['error' => 'A title is required.'], 422);
+    if (!empty($data['logo']) && !preg_match('~^/static/company-logos/[a-z0-9._-]+\.(?:png|jpe?g|webp|svg|ico)$~i', $data['logo']) && (!filter_var($data['logo'], FILTER_VALIDATE_URL) || !in_array(parse_url($data['logo'], PHP_URL_SCHEME), ['http','https'], true) || parse_url($data['logo'], PHP_URL_USER) !== null || parse_url($data['logo'], PHP_URL_PASS) !== null)) respond(['error' => 'Use a valid company logo URL.'], 422);
     if (!empty($data['url']) && (!filter_var($data['url'], FILTER_VALIDATE_URL) || !in_array(parse_url($data['url'], PHP_URL_SCHEME), ['http','https'], true))) respond(['error' => 'Use a valid http or https URL.'], 422);
     if (!empty($data['date'])) {
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $data['date']);

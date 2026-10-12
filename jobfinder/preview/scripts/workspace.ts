@@ -1,6 +1,7 @@
 import { attachSuggestions } from './search-suggestions'
 import { attachTrackedJobSearch } from './application-tracker'
 import { attachTableActions } from './table-actions'
+import { companyLogo, validCompanyLogo } from '../server/company-logo.mjs'
 import { getSession } from '@shared/lib/client-session'
 import { createGoogleJobSearch, type GoogleJobResult } from './google-job-search'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
@@ -65,6 +66,7 @@ root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
 })
 let month = new Date(today() + 'T12:00:00')
 let editing: Entry | null = null
+let modalPrefill: Record<string, string> = {}
 let modalKind: Kind = 'application'
 let restoreFocus: HTMLElement | null = null
 const appStatuses = ['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted']
@@ -100,6 +102,27 @@ function filteredApplications() {
   const company = select<HTMLSelectElement>('[data-application-company]').value
   return owned('application').filter(item => (!status || item.payload.status === status) && (!company || item.payload.company === company) && (selectedApplicationId !== null ? item.id === selectedApplicationId : Object.values(item.payload).join(' ').toLowerCase().includes(query)))
 }
+const dashboardCompanyLogos = new Map<string, string>()
+const companyKey = (company: string) => company.trim().toLowerCase()
+function applicationLogo(item: Entry) {
+  return companyLogo(item.payload.company || '', item.payload.logo || '') || dashboardCompanyLogos.get(companyKey(item.payload.company || '')) || ''
+}
+async function restoreDashboardLogos() {
+  const recent = owned('application').sort((a, b) => b.id - a.id).slice(0, recentApplicationLimit)
+  const sourceFor = (item: Entry) => (item.payload.source || /^Source:\s*(Remotive|Jobicy|Arbeitnow)\b/i.exec(item.payload.notes || '')?.[1] || '').toLowerCase()
+  const sources = new Set(recent.filter(item => item.payload.company && !applicationLogo(item)).map(sourceFor).filter(source => ['remotive', 'jobicy', 'arbeitnow'].includes(source)))
+  await Promise.allSettled(Array.from(sources, async source => {
+    const feed = await searchJobFeed('', source, AbortSignal.timeout(15000))
+    let changed = false
+    for (const item of recent.filter(item => sourceFor(item) === source && !applicationLogo(item))) {
+      const matches = feed.jobs.filter(job => companyKey(job.company) === companyKey(item.payload.company))
+      const job = matches.find(job => safeUrl(job.url) === safeUrl(item.payload.url) || job.id === item.payload.jobId) || matches[0]
+      const logo = validCompanyLogo(job?.logo)
+      if (logo) { dashboardCompanyLogos.set(companyKey(item.payload.company), logo); changed = true }
+    }
+    if (changed && root.isConnected) render()
+  }))
+}
 function render() {
   taskStatuses = ['To do', 'In progress', 'Done', ...owned('task_status').map((item) => item.payload.title)]
   const apps = owned('application'),
@@ -116,10 +139,12 @@ function render() {
           .slice(0, recentApplicationLimit)
           .map((item) => {
             const initials = (item.payload.company || item.payload.title).trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase()
-            return `<li class="list-group-item dashboard-application-item" data-dashboard-application="${item.id}"><span class="avatar bg-secondary-lt rounded-3" aria-hidden="true">${htmlEscape(initials)}</span><div class="dashboard-application-copy"><button type="button" class="dashboard-application-title" data-edit="${item.id}" title="${htmlEscape(item.payload.title)}" aria-label="Edit application ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.title)}</button><div class="dashboard-application-meta text-secondary"><span>${htmlEscape(item.payload.company || 'Company not specified')}</span>${item.payload.date ? `<time datetime="${htmlEscape(item.payload.date)}">${htmlEscape(item.payload.date)}</time>` : ''}</div></div><span class="badge bg-secondary-lt dashboard-application-status">${htmlEscape(item.payload.status)}</span></li>`
+            const logo = applicationLogo(item)
+            return `<li class="list-group-item dashboard-application-item" data-dashboard-application="${item.id}"><span class="avatar bg-secondary-lt rounded-3 position-relative"><span aria-hidden="true" data-dashboard-logo-fallback>${htmlEscape(initials)}</span>${logo ? `<img class="dashboard-application-logo" data-dashboard-company-logo src="${htmlEscape(logo)}" alt="${htmlEscape(item.payload.company)} logo" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ''}</span><div class="dashboard-application-copy"><button type="button" class="dashboard-application-title" data-edit="${item.id}" title="${htmlEscape(item.payload.title)}" aria-label="Edit application ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.title)}</button><div class="dashboard-application-meta text-secondary"><span>${htmlEscape(item.payload.company || 'Company not specified')}</span>${item.payload.date ? `<time datetime="${htmlEscape(item.payload.date)}">${htmlEscape(item.payload.date)}</time>` : ''}</div></div><span class="badge bg-secondary-lt dashboard-application-status">${htmlEscape(item.payload.status)}</span></li>`
           })
           .join('')}</ul>`
       : empty('Your applications will appear here. Start with Find work or add one to your tracker.')
+    root.querySelectorAll<HTMLImageElement>('[data-dashboard-company-logo]').forEach(image => image.addEventListener('error', () => image.remove(), { once: true }))
     select('[data-dashboard-tasks]').innerHTML =
       tasks
         .filter((i) => i.payload.status !== 'Done')
@@ -302,6 +327,7 @@ function openModal(kind: Kind, item: Entry | null = null, prefill: Record<string
     return
   }
   editing = item
+  modalPrefill = prefill
   modalKind = kind
   restoreFocus = document.activeElement as HTMLElement
   const data = item?.payload || prefill
@@ -624,7 +650,7 @@ async function handleClick(event: Event) {
         const data = await api('workspace/items', {
           action: 'open-application',
           kind: 'application',
-          payload: { title: job.title, company: job.company, url: job.url, salary: job.salary, status: 'Application opened', date: today(), jobId: job.id, source: job.source, location: job.location, notes: 'Source: ' + job.source },
+          payload: { title: job.title, company: job.company, url: job.url, salary: job.salary, status: 'Application opened', date: today(), jobId: job.id, source: job.source, location: job.location, logo: validCompanyLogo(job.logo), notes: 'Source: ' + job.source },
         })
         const item = data.item as Entry
         const index = items.findIndex((i) => i.id === item.id)
@@ -681,7 +707,7 @@ async function handleClick(event: Event) {
       if (savingSelectedJobs) return
       const job = findJob(target.dataset.track)
       if (job) closeJobDetails()
-      if (job) openModal('application', null, { title: job.title, company: job.company, url: job.url, salary: job.salary, status: 'Saved', date: today(), jobId: job.id, source: job.source, location: job.location, notes: 'Source: ' + job.source })
+      if (job) openModal('application', null, { title: job.title, company: job.company, url: job.url, salary: job.salary, status: 'Saved', date: today(), jobId: job.id, source: job.source, location: job.location, logo: validCompanyLogo(job.logo), notes: 'Source: ' + job.source })
     }
     if (target.dataset.calendarAdd || target.dataset.calendarCell) openModal('event', null, { date: target.dataset.calendarAdd || target.dataset.calendarCell! })
     if (target.hasAttribute('data-month-prev')) {
@@ -842,7 +868,9 @@ async function handleSubmit(event: Event) {
   event.preventDefault()
   const form = event.currentTarget as HTMLFormElement,
     button = form.querySelector<HTMLButtonElement>('[type="submit"]')!
-  const data = Object.fromEntries(new FormData(form)) as Record<string, string>
+  const original = editing?.payload || modalPrefill
+  const data = { ...modalPrefill, ...editing?.payload, ...Object.fromEntries(new FormData(form)) } as Record<string, string>
+  if (modalKind === 'application' && companyKey(data.company || '') !== companyKey(original.company || '')) data.logo = ''
   button.disabled = true
   clearError()
   try {
@@ -1077,7 +1105,7 @@ async function saveSelectedJobs() {
         continue
       }
       try {
-        await save('application', { title: job.title, company: job.company, url: job.url, salary: job.salary || '', status: 'Saved', date: today(), jobId: job.id, source: job.source, location: job.location, notes: 'Source: ' + job.source }, 0, false)
+        await save('application', { title: job.title, company: job.company, url: job.url, salary: job.salary || '', status: 'Saved', date: today(), jobId: job.id, source: job.source, location: job.location, logo: validCompanyLogo(job.logo), notes: 'Source: ' + job.source }, 0, false)
         saved++
         jobSelection.delete(job.id)
       } catch (e) {
@@ -1298,6 +1326,7 @@ async function init() {
       button.disabled = false
     })
     render()
+    if (view === 'dashboard') void restoreDashboardLogos()
   } catch (e) {
     error(e instanceof Error ? e.message : 'Unable to load workspace.')
   } finally {

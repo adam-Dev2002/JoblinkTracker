@@ -118,6 +118,7 @@ try {
   let rows = (await (await c.request.get("/api/workspace/items")).json()).items;
   assert.equal(rows.length, 1);
   assert.equal(rows[0].payload.status, "Application opened");
+  assert.equal(rows[0].payload.logo, jobs[0].logo, 'The backend persists employer logos when opening an application');
   assert.equal(await p.locator("[data-application-notice]").count(), 0);
   await p.locator("[data-application-later]").click();
   await p.locator("[data-application-modal]").waitFor({ state: "hidden" });
@@ -162,6 +163,18 @@ try {
   await p.goto("/applications");
   await p.locator("[data-ready=true]").waitFor();
   assert.equal(await p.locator("[data-entry-status]").inputValue(), "Applied");
+  assert.equal((await (await c.request.get('/api/workspace/items')).json()).items[0].payload.logo, jobs[0].logo);
+  await p.getByRole('button', { name: 'Actions for Virtual Assistant', exact: true }).click();
+  await p.getByRole('menuitem', { name: 'Edit application', exact: true }).click();
+  await p.locator('[data-entry-form] button[type=submit]').click();
+  await p.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
+  const edited = (await (await c.request.get('/api/workspace/items')).json()).items[0];
+  assert.equal(edited.payload.logo, jobs[0].logo, 'Logos survive a real backend form update');
+  assert.equal(edited.payload.jobId, jobs[0].id);
+  const logoSession = await (await c.request.get('/api/auth/session')).json();
+  for (const logo of ['javascript:alert(1)', '/static/company-logos/../../private.svg', 'https://name:secret@example.com/logo.png']) {
+    assert.equal((await c.request.post('/api/workspace/items', { data: { id: edited.id, kind: 'application', payload: { ...edited.payload, logo } }, headers: { 'X-CSRF-Token': logoSession.csrf } })).status(), 422);
+  }
   assert.equal(
     await p
       .locator("[data-application-rows]")
@@ -212,6 +225,14 @@ try {
     await p.evaluate(() => document.documentElement.scrollWidth > innerWidth),
     false,
   );
+  await p.locator('[data-application-modal]').waitFor({ state: 'hidden' });
+  await p.locator('[data-track="apply-test-2"]').click();
+  await p.locator('[data-entry-modal]').waitFor({ state: 'visible' });
+  await p.locator('[data-entry-form] button[type=submit]').click();
+  await p.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
+  const bookmarked = (await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.payload.jobId === jobs[1].id);
+  assert.equal(bookmarked.payload.logo, jobs[1].logo, 'Saving through the job card preserves its logo');
+  assert.equal(bookmarked.payload.source, jobs[1].source);
   assert.deepEqual(errors, []);
   console.log(
     "PASS: Bootstrap application modal, Not yet, failed-save retry, Applied persistence, duplicate prevention, status preservation, CSRF and mobile layout.",

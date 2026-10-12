@@ -33,11 +33,12 @@ let items = [
       attachments: [],
       payload: {
         title: `Application ${id}`,
-        company: "Test company",
+        company: id === 18 ? 'Lemon.io' : id === 19 ? 'Legacy company' : 'Test company',
+        logo: id === 22 ? 'https://example.com/company-logo.svg' : id === 21 ? 'https://example.com/missing-logo.png' : id === 20 ? 'javascript:alert(1)' : '',
         url: `https://example.com/jobs/${id}`,
         salary: "",
         status: id % 2 ? "Saved" : "Applied",
-        notes: "",
+        notes: id === 19 ? 'Source: Jobicy' : '',
         date: "2026-10-12",
       },
     };
@@ -134,10 +135,19 @@ try {
     else items.unshift(item);
     return route.fulfill({ json: { item } });
   });
+  await context.route('https://example.com/company-logo.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#175eb8"/></svg>' }));
+  await context.route('https://example.com/missing-logo.png', route => route.abort());
+  await context.route('**/api/jobs/search*', route => route.fulfill({ json: { jobs: [{ id: 'legacy-19', company: 'Legacy company', url: 'https://example.com/jobs/19', logo: 'https://example.com/company-logo.svg' }] } }));
   await page.goto('/dashboard');
   await page.locator('[data-ready=true]').waitFor();
   assert.equal(await page.locator('[data-dashboard-applications] table').count(), 0, 'Recent applications use a list, not a table');
   assert.equal(await page.locator('[data-dashboard-application]').count(), 7);
+  await page.waitForFunction(() => document.querySelector('[data-dashboard-application="22"] img')?.naturalWidth > 0);
+  await page.waitForFunction(() => document.querySelector('[data-dashboard-application="19"] img')?.naturalWidth > 0);
+  await page.waitForFunction(() => document.querySelector('[data-dashboard-application="18"] img')?.naturalWidth > 0);
+  assert.equal(await page.locator('[data-dashboard-application="21"] img').count(), 0, 'Broken logos fall back to initials');
+  assert.equal(await page.locator('[data-dashboard-application="20"] img').count(), 0, 'Unsafe logo URLs are not rendered');
+  assert.equal(await page.locator('[data-dashboard-application="22"] img').getAttribute('alt'), 'Test company logo');
   assert.deepEqual(await page.locator('[data-dashboard-application]').evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('data-dashboard-application')))), [22, 21, 20, 19, 18, 17, 16], 'Only the seven latest applications appear');
   assert.equal(await page.locator('[data-dashboard-application-panel] .pagination, [data-dashboard-pagination]').count(), 0, 'Recent applications have no paginator');
   assert.doesNotMatch(await page.locator('[data-dashboard-application-panel]').innerText(), /Showing \d|of \d+ applications/);
@@ -146,6 +156,10 @@ try {
   assert.equal(await page.getByLabel('Title / role', { exact: true }).inputValue(), 'Application 22');
   await page.locator('[data-entry-modal]').getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Edit application Application 22', exact: true }).click();
+  await page.locator('[data-entry-form] button[type=submit]').click();
+  await page.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
+  assert.equal(items.find(item => item.id === 22).payload.logo, 'https://example.com/company-logo.svg', 'Editing preserves the company logo');
   await page.locator('[data-dashboard-application-panel]').screenshot({ path: 'auth/runtime/dashboard-applications-list-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.sidebar-close').evaluate(button => button.click());
