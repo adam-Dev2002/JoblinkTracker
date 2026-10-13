@@ -1278,6 +1278,9 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
   googleJobs.clear()
   for (const job of listings) googleJobs.set(job.id, job)
   googleResultsHost = div
+  // Retain the provider's containers and listeners while letting their cards
+  // join the feed grid, even when a new search clears the old card contents.
+  for (let group: HTMLElement | null = div; group && group !== select('[data-google-jobs]'); group = group.parentElement) group.dataset.jobGridGroup = ''
   googleRendering = false
   renderGoogleJobCards()
 }
@@ -1311,6 +1314,7 @@ function updateJobResultsState() {
   const googleOnly = select<HTMLSelectElement>('#job-source').value === 'google'
   const googlePanel = select('[data-google-jobs]')
   const googleActive = !googlePanel.classList.contains('d-none')
+  root.toggleAttribute('data-job-combined', !googleOnly && select<HTMLSelectElement>('#job-source').value === 'all' && googleActive)
   const count = (googleOnly ? 0 : feedResultCount) + (googleActive ? visibleGoogleJobIds.length : 0)
   const loading = (!googleOnly && jobsLoading) || (googleActive && (googleRendering || googlePanel.getAttribute('aria-busy') === 'true'))
   const failed = (!googleOnly && feedSearchFailed) || (googleActive && googlePanel.dataset.searchFailed === 'true')
@@ -1413,7 +1417,7 @@ function renderPagination(nav: HTMLElement, count: number, page: number, attribu
   nav.innerHTML = `<p class="text-secondary small mb-0 workspace-page-count" role="status">Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}</p>${pages > 1 ? `<ul class="pagination mb-0">${links}</ul>` : ''}`
 }
 function renderJobPagination(count: number) {
-  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', savingSelectedJobs, entriesPerPage('job', count))
+  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', root.hasAttribute('data-job-combined') ? 'feed results' : 'results', savingSelectedJobs, entriesPerPage('job', count))
 }
 function renderJobs(resetPage = true) {
   // Feed/search requests can finish before the account's tracker. Keep the

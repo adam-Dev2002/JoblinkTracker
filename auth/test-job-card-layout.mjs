@@ -58,7 +58,7 @@ try {
         });
       }
     };
-    const element={execute(query){window.layoutQuery=query;window.layoutPage=1;window.drawGoogleCards(window.layoutPageSize)},clearAllResults(){}};
+    const element={execute(query){window.layoutQuery=query;window.layoutPage=1;if(!window.layoutHold)window.drawGoogleCards(window.layoutPageSize)},clearAllResults(){}};
     window.google={search:{cse:{element:{render(config){
       host=config.div;
       window.layoutPageSize=Number(config.attributes.webSearchResultSetSize)||10;
@@ -79,10 +79,11 @@ try {
   async function checkLayout(selector, count) {
     await page.waitForFunction(({ selector, count }) => document.querySelector(selector)?.children.length === count, { selector, count });
     const result = await page.locator(selector).evaluate(grid => {
+      if (grid.closest('[data-job-combined]')) grid = grid.closest('.job-results-body');
       const box = grid.getBoundingClientRect();
+      const style = getComputedStyle(grid);
       const rows = [];
-      for (const child of grid.children) {
-        const card = child.matches('.job-card') ? child : child.querySelector('.job-card');
+      for (const card of grid.querySelectorAll('.job-card')) {
         const rect = card.getBoundingClientRect();
         const action = card.querySelector('[data-apply-job]').getBoundingClientRect();
         const footer = card.querySelector('.job-card-footer').getBoundingClientRect();
@@ -95,7 +96,7 @@ try {
         if (!row) { row = { top: rect.top, cards: [] }; rows.push(row); }
         row.cards.push({ left: rect.left, right: rect.right, width: rect.width, height: rect.height, actionTop: action.top, actionLeft: action.left, actionRight: action.right, footerLeft: footer.left, footerRight: footer.right, secondary, icons: card.querySelectorAll('.job-card-button-icon svg').length });
       }
-      return { left: box.left, right: box.right, rows, trackWidth: parseFloat(getComputedStyle(grid).gridTemplateColumns), overflow: document.documentElement.scrollWidth > window.innerWidth };
+      return { left: box.left + parseFloat(style.paddingLeft), right: box.right - parseFloat(style.paddingRight), rows, trackWidth: parseFloat(style.gridTemplateColumns), overflow: document.documentElement.scrollWidth > window.innerWidth };
     });
     assert.equal(result.overflow, false, 'No horizontal page overflow');
     for (const row of result.rows) {
@@ -129,6 +130,29 @@ try {
       for (const [selector, top] of Object.entries(card.positions)) assert.ok(Math.abs(top - cards[0].positions[selector]) < 1, selector + ' stays aligned across titles, salaries and New badges');
     }
   }
+  async function checkContinuousGrid() {
+    const layout = await page.locator('.job-results-body').evaluate(body => {
+      const cards = Array.from(body.querySelectorAll('.job-card'), card => {
+        const rect = card.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
+      });
+      const style = getComputedStyle(body), box = body.getBoundingClientRect();
+      const left = box.left + parseFloat(style.paddingLeft), right = box.right - parseFloat(style.paddingRight);
+      const columns = Math.max(1, Math.round((right - left + 16) / (cards[0].width + 16)));
+      const footers = Array.from(body.querySelectorAll('[data-job-pagination], .gsc-cursor-box')).filter(footer => footer.getBoundingClientRect().height > 0).map(footer => footer.getBoundingClientRect().top);
+      const feedFooter = body.querySelector('[data-job-pagination]');
+      const controlsFollowCards = Array.from(body.querySelectorAll('.job-card')).every(card => card.compareDocumentPosition(feedFooter) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return { cards, columns, left, footers, controlsFollowCards };
+    });
+    for (const [index, card] of layout.cards.entries()) {
+      const column = index % layout.columns;
+      assert.ok(Math.abs(card.left - (layout.left + column * (card.width + 16))) < 2, 'Google jobs fill the next available column after feed jobs');
+      if (column) assert.ok(Math.abs(card.top - layout.cards[index - column].top) < 2, 'Feed and Google cards share the same row');
+      else if (index) assert.ok(Math.abs(card.top - layout.cards[index - 1].bottom - 16) < 2, 'Rows have one consistent gap across sources');
+    }
+    assert.ok(layout.footers.every(top => top >= Math.max(...layout.cards.map(card => card.bottom)) + 15), 'All page controls appear below the full card grid');
+    assert.equal(layout.controlsFollowCards, true, 'Keyboard order visits all cards before the feed page controls');
+  }
   const metrics = node => {
     const style = getComputedStyle(node);
     return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','padding','borderRadius','backgroundColor','color','borderWidth','borderColor'].map(key => [key,style[key]]));
@@ -141,7 +165,7 @@ try {
   assert.equal(await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   await page.locator('#job-query').fill('cashier, medical');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
-  await page.locator('.google-job-grid').waitFor();
+  await page.locator('.google-job-card').first().waitFor();
   await checkLayout('.google-job-grid', 12);
   await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 12 entries on page 1');
   assert.equal(await page.evaluate(() => window.layoutPageSize), 12, 'Google requests the same twelve-card page as feeds');
@@ -166,6 +190,16 @@ try {
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await checkLayout('[data-job-results]', 2);
   await checkLayout('.google-job-grid', 12);
+  await page.evaluate(() => window.drawGoogleCards(4));
+  await checkLayout('.google-job-grid', 4);
+  await checkContinuousGrid();
+  await page.evaluate(() => { window.layoutHold = true; document.querySelector('[data-job-search]').requestSubmit(); });
+  await page.waitForFunction(() => document.querySelectorAll('[data-google-jobs-preview] .google-job-card').length === 4);
+  await checkContinuousGrid();
+  await page.evaluate(() => { window.layoutHold = false; window.drawGoogleCards(4); });
+  await page.waitForFunction(() => document.querySelectorAll('[data-google-jobs-preview] .google-job-card').length === 0);
+  await checkLayout('.google-job-grid', 4);
+  await checkContinuousGrid();
   await page.evaluate(() => window.drawGoogleCards(3));
   await checkLayout('.google-job-grid', 3);
   await checkSharedCardSections();
@@ -185,6 +219,7 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     await checkLayout('[data-job-results]', 2);
     await checkLayout('.google-job-grid', 3);
+    await checkContinuousGrid();
     await checkSharedCardSections();
   }
   if (process.env.JOBLINK_LAYOUT_SCREENSHOT) {
@@ -285,7 +320,7 @@ try {
   await checkLayout('[data-job-results]', 12);
   assert.equal(await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   assert.deepEqual(errors, [], 'No browser errors');
-  console.log('PASS: shared card typography and section alignment across all filters, long identities, salaries, mixed New badges and source switching; details; selection; native Google paging; responsive grids and incomplete rows.');
+  console.log('PASS: continuous feed/Google rows, cached previews, shared card alignment, filtering, source switching, details, selection, native Google paging, keyboard order and responsive grids.');
 } finally {
   await browser?.close();
   await unlink(preview);

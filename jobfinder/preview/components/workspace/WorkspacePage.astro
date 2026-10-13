@@ -315,12 +315,12 @@ const desk = [
                 <template data-job-action-icon="applied"><span class="job-card-button-icon" aria-hidden="true"><Icon name="check" /></span></template>
                 <template data-job-action-icon="save"><span class="job-card-button-icon" aria-hidden="true"><Icon name="bookmark" /></span></template>
                 <template data-job-action-icon="unavailable"><span class="job-card-button-icon" aria-hidden="true"><Icon name="circle-minus" /></span></template>
-                <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
                 <div class="d-none google-jobs-results" data-google-jobs aria-busy="false">
                   <p class="text-secondary small" data-google-jobs-status role="status" aria-live="polite" />
                   <div class="d-none" data-google-jobs-preview />
                   <div data-google-jobs-host />
                 </div>
+                <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
               </div>
             </section>
           </>
@@ -851,15 +851,59 @@ const desk = [
   .google-job-grid > p {
     grid-column: 1 / -1;
   }
+  /* Both sources participate in the same grid while retaining Google's DOM
+     and native paging handlers. Footers follow the complete set of cards. */
+  [data-job-combined] .job-results-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+  [data-job-combined] [data-job-results],
+  [data-job-combined] [data-google-jobs]:not(.d-none),
+  [data-job-combined] [data-google-jobs-preview]:not(.d-none),
+  [data-job-combined] [data-google-jobs-host],
+  [data-job-combined] [data-job-grid-group]:not(.d-none),
+  [data-job-combined] .google-job-grid {
+    display: contents !important;
+  }
+  [data-job-combined] [data-job-results] > div > .job-card {
+    height: 100%;
+  }
+  [data-job-combined] [data-job-bulk-status],
+  [data-job-combined] [data-job-empty],
+  [data-job-combined] [data-google-jobs-status],
+  [data-job-combined] .data-placeholder,
+  [data-job-combined] [data-google-jobs-host] .gsc-adBlock,
+  [data-job-combined] [data-google-jobs-host] a.d-block {
+    grid-column: 1 / -1;
+  }
+  [data-job-combined] [data-job-bulk-status],
+  [data-job-combined] [data-google-jobs-host] .gsc-adBlock,
+  [data-job-combined] [data-google-jobs-host] a.d-block {
+    order: -1;
+  }
+  [data-job-combined] [data-job-pagination],
+  [data-job-combined] [data-google-jobs-host] .gsc-cursor-box {
+    grid-column: 1 / -1;
+    order: 1;
+    margin-top: 0 !important;
+  }
+  [data-job-combined] [data-google-jobs-host] .gcsc-more-maybe-branding-root,
+  [data-job-combined] [data-google-jobs-host] .gcsc-branding {
+    grid-column: 1 / -1;
+    order: 2;
+  }
   @container job-results (min-width: 640px) {
     .google-job-grid,
-    .job-results-panel [data-job-results] {
+    .job-results-panel [data-job-results],
+    [data-job-combined] .job-results-body {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   @container job-results (min-width: 1000px) {
     .google-job-grid,
-    .job-results-panel [data-job-results] {
+    .job-results-panel [data-job-results],
+    [data-job-combined] .job-results-body {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
