@@ -32,13 +32,30 @@ try {
   });
   await context.route('https://www.google.com/s2/favicons?*', route => route.abort());
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body: `
-    let organic;
+    let organic, host;
     window.searchQueries = [];
     const rows = [{ title: 'AI-First Developer', url: 'https://www.onlinejobs.ph/jobseekers/job/developer-123', content: 'Full-time role in Manila. Build software.' },
       { title: 'Chair Developer', url: 'https://www.onlinejobs.ph/jobseekers/job/chair-456', content: 'Manufacture chairs in Manila.' }];
     window.replySearch = query => {
       window.__gcse.searchCallbacks.web.ready('joblink-google-jobs', query, [], rows, organic);
       window.__gcse.searchCallbacks.web.rendered();
+      // Google adds its spelling/no-results UI outside the organic callback.
+      host.querySelector('[data-provider-messages]')?.remove();
+      const messages = document.createElement('div');
+      messages.dataset.providerMessages = '';
+      const correction = document.createElement('div');
+      correction.className = 'gs-result';
+      for (const label of ['Showing results for ', 'Search instead for ']) {
+        const line = document.createElement('div');
+        line.className = 'gs-spelling';
+        line.textContent = label + query;
+        correction.append(line);
+      }
+      const empty = document.createElement('div');
+      empty.className = 'gs-result gs-no-results-result';
+      empty.textContent = 'No results found. Try different keywords.';
+      messages.append(correction, empty);
+      host.querySelector('.gsc-results').append(messages);
     };
     const element = { execute(query) {
       window.searchQueries.push(query);
@@ -46,7 +63,8 @@ try {
       if (!window.holdSearch) window.replySearch(query);
     }, clearAllResults() {} };
     window.google = { search: { cse: { element: { render(config) {
-      config.div.innerHTML = '<div class="gsc-results gsc-webResult"><div data-organic></div><div class="gsc-cursor-box"><div class="gsc-cursor"><div class="gsc-cursor-page gsc-cursor-current-page">1</div></div></div></div>';
+      host = config.div;
+      config.div.innerHTML = '<div class="gsc-results gsc-webResult"><div data-organic></div><div class="gsc-cursor-box"><div class="gsc-cursor"><div class="gsc-cursor-page gsc-cursor-current-page">1</div></div></div><div class="gcsc-more-maybe-branding-root">Enhanced by Google (fixture)</div></div>';
       organic = config.div.querySelector('[data-organic]');
     }, getElement() { return element; } } } } };
     window.__gcse.initializationCallback();
@@ -65,6 +83,10 @@ try {
     assert.equal(await page.locator('[data-job-selection-toolbar]').isVisible(), false);
     assert.equal(await page.locator('[data-job-pagination]').isVisible(), false);
     assert.equal(await page.locator('.gsc-cursor-box:visible').count(), 0);
+    assert.equal(await page.locator('.gs-spelling:visible, .gs-no-results-result:visible').count(), 0, 'Provider spelling and duplicate empty messages do not expose internal queries');
+    if (await page.locator('[data-google-jobs]').evaluate(panel => !panel.classList.contains('d-none')))
+      assert.equal(await page.locator('.gcsc-more-maybe-branding-root').isVisible(), true, 'Google attribution remains visible');
+    assert.ok(await page.locator('[data-job-empty]').evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 20, 'The empty message has larger readable text');
   };
   await page.goto('/playground-empty-job-search');
   await page.locator('[data-ready=true]').waitFor();
@@ -73,6 +95,7 @@ try {
   await search('unavailable-unicorn-role');
   await expectEmpty();
   assert.equal(await page.locator('[data-job-count]').innerText(), '0 results');
+  if (process.env.JOBLINK_EMPTY_SCREENSHOT) await page.locator('.job-results-panel').screenshot({ path: process.env.JOBLINK_EMPTY_SCREENSHOT });
 
   await search('AI developer');
   await page.locator('.google-job-card').waitFor();

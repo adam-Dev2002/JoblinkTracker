@@ -729,6 +729,11 @@ const desk = [
   .google-jobs-results .gsc-result-info {
     display: none !important;
   }
+  .google-jobs-results .gs-spelling,
+  .google-jobs-results .gs-result:has(> .gs-spelling),
+  .google-jobs-results .gs-no-results-result {
+    display: none !important;
+  }
   .google-jobs-results .gsc-orderby-container {
     padding-right: 0;
   }
@@ -1061,6 +1066,12 @@ const desk = [
     border-color: var(--tblr-success);
   }
   .job-results-body { padding: 20px; }
+  .job-results-panel [data-job-empty] {
+    color: var(--tblr-body-color);
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
   @media (max-width: 575px) {
     .job-results-header, .job-toolbar-controls, .job-results-body { padding: 16px; }
     .job-selection-row { padding: 12px 16px; }
