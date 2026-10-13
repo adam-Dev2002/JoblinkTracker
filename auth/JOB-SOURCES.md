@@ -82,7 +82,7 @@ News and job feeds run on a separate local PHP process at port 8082; account and
 
 ## Applying and tracking
 
-Application statuses share one color palette in the tracker, edit dialog, search suggestions and dashboard: Saved is gray, Application opened azure, Unavailable orange, Applied blue, Interview purple, Offer green, Rejected red and Ghosted amber. Status text remains visible and the controls retain native keyboard operation. Light and dark themes use contrasting text with tinted backgrounds.
+Application statuses share one color palette in the tracker, edit dialog, search suggestions and dashboard: Saved and Ghosted are gray, Unavailable orange, Applied/Interview/Offer green, and Rejected maroon. Status dropdowns use neutral surfaces, colored dots and a checkmark for the selected option, with keyboard navigation and readable light/dark themes.
 
 Salaries retain the amount or range, disclosed currency and pay period. Feed normalization reads Remotive salary text, [Jobicy salary fields](https://github.com/Jobicy/remote-jobs-api), [JSearch salary fields](https://www.openwebninja.com/api/jsearch), and salary statements in job descriptions. Google summaries and structured result data can also supply pay. No currency or pay estimate is inferred when the employer has not disclosed it.
 
@@ -96,7 +96,7 @@ Find Work displays provider-supplied employer logos, with initials when a logo i
 
 The Apply button opens a new tab without saving an application. When the provider supplies a verified direct application URL, the tab opens that employer page; otherwise the button says **Apply via source** and opens the original job-board listing. The same behavior applies to the job details dialog. Joblink does not invent employer application URLs.
 
-Cross-site submission cannot be observed by Joblink. After submitting on the external website, use the **Applied** button on the job card or set its tracker status to **Applied**. Use **Save** to bookmark a job with the **Saved** status. Repeated Apply clicks leave the tracker unchanged, including existing statuses and notes. Existing **Application opened** records remain editable in the tracker.
+Cross-site submission cannot be observed by Joblink. After submitting on the external website, use the **Applied** button on the job card or set its tracker status to **Applied**. Use **Save** to bookmark a job with the **Saved** status. Repeated Apply clicks leave the tracker unchanged, including existing statuses and notes. The **Application opened** status and API action have been removed. Existing records with that legacy status appear as **Saved**, retaining their details and notes; saving them writes the supported status.
 
 ## Company branding
 

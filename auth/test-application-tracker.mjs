@@ -122,7 +122,8 @@ try {
   await setSort('company');
   assert.equal(await page.locator('[data-application-rows] tr td').nth(3).getByText('Acme', { exact: true }).count(), 1);
   await setSort('status');
-  assert.equal(await page.locator('[data-entry-status]').first().inputValue(), 'Application opened');
+  assert.equal(await page.locator('[data-entry-status]').first().inputValue(), 'Interview');
+  assert.equal(await page.locator('[data-entry-status] option').filter({ hasText: 'Application opened' }).count(), 0, 'Removed status is absent from choices');
   await setSort('newest');
   await setFilter('Filter application status', 'Interview');
   await setFilter('Filter application company', 'Acme');

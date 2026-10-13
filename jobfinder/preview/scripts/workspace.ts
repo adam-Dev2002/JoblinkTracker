@@ -11,7 +11,8 @@ import { jobListingIdentity } from './job-identity'
 import { isClosedListing } from './job-availability.mjs'
 import { makeApplicationIndex } from './application-index'
 import { createJobFreshness } from './job-freshness'
-import { applicationStatusColor, applicationStatuses } from './application-status'
+import { applicationStatusColor, applicationStatuses, normalizeApplicationStatus } from './application-status'
+import { attachApplicationStatusPicker } from './application-status-picker'
 import { jobSalaryListingUrl, salaryFromJob } from './job-salary.mjs'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
@@ -99,6 +100,12 @@ let modalPrefill: Record<string, string> = {}
 let modalKind: Kind = 'application'
 let restoreFocus: HTMLElement | null = null
 const appStatuses = applicationStatuses
+const statusPicker = attachApplicationStatusPicker(root)
+function normalizeApplications(entries: Entry[]) {
+  return entries.map(item => item.kind === 'application' && item.payload.status === 'Application opened'
+    ? { ...item, payload: { ...item.payload, status: normalizeApplicationStatus(item.payload.status) } }
+    : item)
+}
 let taskStatuses = ['To do', 'In progress', 'Done']
 const empty = (message: string) => `<div class="workspace-empty">${htmlEscape(message)}</div>`
 function error(message: string) {
@@ -264,6 +271,7 @@ async function restoreDashboardLogos() {
 function render() {
   // Never confuse a pending or failed request with a genuinely empty workspace.
   if (!loaded) return
+  statusPicker.close()
   cacheWorkspace()
   if (view === 'jobs' && jobSearchInitialized) {
     for (const [id, job] of jobSelection) if (!selectableJob(job)) jobSelection.delete(id)
@@ -335,6 +343,7 @@ function render() {
       })
       .join('')
     root.querySelectorAll<HTMLImageElement>('[data-application-rows] img[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
+    statusPicker.refresh()
     updateTableSelection('application')
     select('[data-application-empty]').innerHTML = filtered.length ? '' : empty(apps.length ? 'No tracked jobs match your search. Clear the search or choose another status.' : 'No applications yet. Add one or save a job from Find work.')
     updateApplicationSalaryCells()
@@ -487,18 +496,20 @@ function openModal(kind: Kind, item: Entry | null = null, prefill: Record<string
       '<div class="mb-3"><label class="form-label" for="entry-attachments">Pictures or files</label><input class="form-control" id="entry-attachments" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.csv,.docx,.xlsx" /><div class="form-hint">Up to 3 files per upload, 2 MB each. Existing files remain attached.</div></div>',
     )
   select('[data-entry-modal]').classList.remove('d-none')
+  statusPicker.refresh()
   select<HTMLInputElement>('#entry-title').focus()
 }
 window.addEventListener('jobify-save-article', (event) => {
   openModal('link', null, (event as CustomEvent<Record<string, string>>).detail)
 })
 function closeModal() {
+  statusPicker.close()
   select('[data-entry-modal]').classList.add('d-none')
   restoreFocus?.focus()
 }
 async function save(kind: Kind, payload: Record<string, string>, id = 0, renderAfter = true) {
   if (kind === 'application' && !payload.salary?.trim()) {
-    const salary = salaryFromJob(payload) || await listingSalary(payload.url)
+    const salary = salaryFromJob(payload) || await listingSalary(payload.url || '')
     if (salary) payload = { ...payload, salary }
   }
   const data = await api('workspace/items', { kind, payload, id })
@@ -923,6 +934,8 @@ root.addEventListener('click', (event) => {
 })
 async function handleChange(event: Event) {
   const target = event.target as HTMLInputElement
+  const statusButton = target.closest('.application-status-picker')?.querySelector<HTMLButtonElement>('.application-status-trigger')
+  const restoreStatusFocus = document.activeElement === statusButton
   try {
     if (target.matches('.application-status-control')) target.dataset.statusColor = applicationStatusColor(target.value)
     if (target.matches('[data-entries-control]')) {
@@ -981,6 +994,7 @@ async function handleChange(event: Event) {
     }
     if (target.dataset.entryStatus) {
       const i = items.find((i) => i.id === Number(target.dataset.entryStatus))
+      if (statusButton) statusButton.disabled = true
       if (i) await save(i.kind, { ...i.payload, status: target.value }, i.id)
     }
     if (target.dataset.sheetId) {
@@ -1003,6 +1017,11 @@ async function handleChange(event: Event) {
     error(e instanceof Error ? e.message : 'Unable to save.')
     if (target.dataset.sheetId) select('[data-sheet-save-status]').textContent = 'Changes could not be saved. Try again.'
     render()
+  } finally {
+    if (statusButton?.isConnected) statusButton.disabled = false
+    if (restoreStatusFocus && !target.isConnected && document.activeElement === document.body) {
+      select('[data-entry-status="' + target.dataset.entryStatus + '"]')?.closest('.application-status-picker')?.querySelector<HTMLButtonElement>('.application-status-trigger')?.focus({ preventScroll: true })
+    }
   }
 }
 root.addEventListener('change', (event) => {
@@ -1601,7 +1620,7 @@ async function init() {
     if (entries && savedEntries && Array.from(entries.options).some(option => option.value === savedEntries)) entries.value = savedEntries
     const cached = readPageData<Entry[]>('workspace', cacheOwner)
     if (cached) {
-      items = cached
+      items = normalizeApplications(cached)
       markReady()
       render()
     }
@@ -1610,7 +1629,7 @@ async function init() {
     if (!signedIn || cacheOwner === null) return
     if (result.error) throw result.error
     if (revision === workspaceRevision) {
-      const fresh = result.data.items as Entry[]
+      const fresh = normalizeApplications(result.data.items as Entry[])
       const changed = !loaded || JSON.stringify(items) !== JSON.stringify(fresh)
       items = fresh
       markReady()
@@ -1658,8 +1677,9 @@ if (wasPrerendered) void whenPageActive().then(async () => {
     csrf = session.csrf
     const data = await api('workspace/items')
     if (revision !== workspaceRevision || !signedIn) return
-    if (JSON.stringify(items) !== JSON.stringify(data.items)) {
-      items = data.items
+    const fresh = normalizeApplications(data.items)
+    if (JSON.stringify(items) !== JSON.stringify(fresh)) {
+      items = fresh
       render()
     }
   } catch {

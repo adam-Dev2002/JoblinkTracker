@@ -6,6 +6,7 @@ import WorkspaceTable from './WorkspaceTable.astro'
 import DataPlaceholder from '@shared/components/DataPlaceholder.astro'
 import { site } from '@shared/lib/site'
 import { classifications } from '../../scripts/google-job-query'
+import { applicationStatuses } from '../../scripts/application-status'
 interface Props {
   view: string
   title: string
@@ -361,7 +362,7 @@ const desk = [
                   <label class="form-label" for="application-status-filter">Status</label>
                   <select id="application-status-filter" class="form-select mb-3" aria-label="Filter application status" data-status-filter>
                     <option value="">All statuses</option>
-                    {['Saved', 'Application opened', 'Unavailable', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].map((status) => <option>{status}</option>)}
+                    {applicationStatuses.map((status) => <option>{status}</option>)}
                   </select>
                   <label class="form-label" for="application-company-filter">Company</label>
                   <select id="application-company-filter" class="form-select" aria-label="Filter application company" data-application-company><option value="">All companies</option></select>
@@ -592,7 +593,6 @@ const desk = [
 </script>
 
 <style is:global>
-  .application-status-control,
   .application-status-badge {
     --application-status-color: var(--tblr-secondary);
     color: color-mix(in srgb, var(--application-status-color) 40%, var(--tblr-body-color));
@@ -601,18 +601,72 @@ const desk = [
     font-weight: 600;
   }
   .application-status-control { border-radius: 8px; min-width: 12rem; }
-  .application-status-control option {
-    background-color: var(--tblr-bg-surface);
-    color: color-mix(in srgb, var(--application-status-color) 40%, var(--tblr-body-color));
+  .application-status-picker { position: relative; min-width: 12rem; }
+  .application-status-trigger {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: .5rem .75rem;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: 8px;
+    color: var(--tblr-body-color);
+    background: var(--tblr-bg-surface);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
   }
+  .application-status-trigger:focus-visible,
+  .application-status-trigger[aria-expanded='true'] {
+    border-color: var(--tblr-primary);
+    outline: 3px solid color-mix(in srgb, var(--tblr-primary) 18%, transparent);
+    outline-offset: 1px;
+  }
+  .application-status-trigger:disabled { opacity: .6; cursor: default; }
+  .application-status-dot {
+    flex: 0 0 .65rem;
+    width: .65rem;
+    height: .65rem;
+    border-radius: 50%;
+    background: var(--application-status-color, var(--tblr-secondary));
+    border: 1px solid color-mix(in srgb, var(--application-status-color, var(--tblr-secondary)) 80%, var(--tblr-body-color));
+  }
+  .application-status-chevron { margin-left: auto; width: 1rem; height: 1rem; color: var(--tblr-secondary); }
+  .application-status-menu {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: .35rem;
+    max-height: min(22rem, calc(100dvh - 24px));
+    overflow-y: auto;
+    border: 1px solid var(--tblr-border-color);
+    border-radius: 10px;
+    background: var(--tblr-bg-surface);
+    color: var(--tblr-body-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+  }
+  .application-status-option {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: .5rem .65rem;
+    border: 0;
+    border-radius: 6px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+  .application-status-option[data-active='true'] { background: var(--tblr-hover-bg); }
+  .application-status-check { margin-left: auto; width: 1.15rem; height: 1.15rem; color: var(--tblr-secondary); }
   [data-status-color='secondary'] { --application-status-color: var(--tblr-secondary); }
-  [data-status-color='azure'] { --application-status-color: var(--tblr-azure); }
   [data-status-color='orange'] { --application-status-color: var(--tblr-orange); }
-  [data-status-color='blue'] { --application-status-color: var(--tblr-blue); }
-  [data-status-color='purple'] { --application-status-color: var(--tblr-purple); }
   [data-status-color='green'] { --application-status-color: var(--tblr-green); }
-  [data-status-color='red'] { --application-status-color: var(--tblr-red); }
-  [data-status-color='yellow'] { --application-status-color: var(--tblr-yellow); }
+  [data-status-color='maroon'] { --application-status-color: #800000; }
   .dashboard-application-item {
     display: flex;
     align-items: center;

@@ -27,7 +27,7 @@ export function attachTableActions(root: HTMLElement, entry: (id: number) => Tab
     trigger = button
     const mark = menu.querySelector<HTMLButtonElement>('[data-table-mark]')
     if (mark) {
-      mark.hidden = !['Saved', 'Application opened'].includes(item.payload.status || '')
+      mark.hidden = item.payload.status !== 'Saved'
       mark.dataset.confirmApplication = String(item.id)
     }
     menu.querySelector<HTMLButtonElement>('[data-table-edit]')!.dataset.edit = String(item.id)

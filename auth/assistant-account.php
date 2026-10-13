@@ -7,6 +7,7 @@ function assistantAccountContext(PDO $pdo, int $userId): array {
         $data = json_decode($record['payload'], true);
         if (!is_array($data)) continue;
         $kind = $record['kind'];
+        if ($kind === 'application' && ($data['status'] ?? '') === 'Application opened') $data['status'] = 'Saved';
         if ($kind === 'application' || $kind === 'task') {
             $key = $kind === 'application' ? 'applicationStatusCounts' : 'taskStatusCounts';
             $status = $data['status'] ?? 'Unknown';
@@ -28,7 +29,7 @@ function assistantAccountContext(PDO $pdo, int $userId): array {
 function accountSummary(array $context): string {
     $counts = $context['applicationStatusCounts'];
     $lines = ['Here is your current Joblink account summary:', 'Tracked jobs: ' . array_sum($counts)];
-    foreach (['Saved','Application opened','Unavailable','Applied','Interview','Offer','Rejected','Ghosted'] as $status) $lines[] = $status . ': ' . ($counts[$status] ?? 0);
+    foreach (['Saved','Unavailable','Applied','Interview','Offer','Rejected','Ghosted'] as $status) $lines[] = $status . ': ' . ($counts[$status] ?? 0);
     $interviews = array_filter($context['applications'], fn($entry) => $entry['status'] === 'Interview');
     if ($interviews) {
         $lines[] = "\nRecent jobs marked Interview:";

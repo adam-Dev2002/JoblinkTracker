@@ -10,7 +10,11 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
     if ($method === 'GET') {
         $query = $pdo->prepare('SELECT id, kind, payload FROM workspace_items WHERE user_id = ? ORDER BY id DESC');
         $query->execute([$user['id']]);
-        $items = array_map(fn($r) => ['id' => (int)$r['id'], 'kind' => $r['kind'], 'payload' => json_decode($r['payload'], true)], $query->fetchAll());
+        $items = array_map(function ($r) {
+            $payload = json_decode($r['payload'], true);
+            if ($r['kind'] === 'application' && ($payload['status'] ?? '') === 'Application opened') $payload['status'] = 'Saved';
+            return ['id' => (int)$r['id'], 'kind' => $r['kind'], 'payload' => $payload];
+        }, $query->fetchAll());
         $q=$pdo->prepare('SELECT id,item_id,name,mime,size FROM workspace_attachments WHERE user_id=?');$q->execute([$user['id']]);$attachments=$q->fetchAll();
         foreach($items as &$item) $item['attachments']=array_values(array_map(fn($a)=>['id'=>(int)$a['id'],'name'=>$a['name'],'mime'=>$a['mime'],'size'=>(int)$a['size']],array_filter($attachments,fn($a)=>(int)$a['item_id']===$item['id'])));unset($item);
         respond(['items' => $items]);
@@ -23,6 +27,7 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
     if (strlen($raw) > 16384) respond(['error' => 'Entry is too large.'], 413);
     $input = json_decode($raw, true);
     if (!is_array($input)) respond(['error' => 'Invalid entry.'], 422);
+    if (!in_array($input['action'] ?? 'save', ['save', 'delete', 'bulk-delete', 'delete-status'], true)) respond(['error' => 'Invalid action.'], 422);
     $id = filter_var($input['id'] ?? 0, FILTER_VALIDATE_INT);
     if ($id === false || $id < 0) respond(['error' => 'Invalid entry ID.'], 422);
     if (($input['action'] ?? '') === 'bulk-delete') {
@@ -66,38 +71,13 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
         if (!$date || $date->format('Y-m-d') !== $data['date']) respond(['error' => 'Use a valid date.'], 422);
     }
     if (!empty($data['time']) && !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $data['time'])) respond(['error' => 'Use a valid time.'], 422);
-    if ($kind === 'application' && !in_array($data['status'], ['Saved','Application opened','Unavailable','Applied','Interview','Offer','Rejected','Ghosted'], true)) respond(['error' => 'Invalid application status.'], 422);
+    if ($kind === 'application' && !in_array($data['status'], ['Saved','Unavailable','Applied','Interview','Offer','Rejected','Ghosted'], true)) respond(['error' => 'Invalid application status.'], 422);
     $statuses=['To do','In progress','Done'];$q=$pdo->prepare("SELECT payload FROM workspace_items WHERE user_id=? AND kind='task_status'");$q->execute([$user['id']]);foreach($q->fetchAll() as $row)$statuses[]=json_decode($row['payload'],true)['title'];
     if ($kind === 'task' && !in_array($data['status'], $statuses, true)) respond(['error' => 'Invalid task status.'], 422);
     if($kind==='task_status'){
         if($id>0)respond(['error'=>'Status renaming is not supported.'],422);
         if(mb_strlen($data['title'])>40||count($statuses)>=15)respond(['error'=>'Use up to 40 characters and at most 12 custom statuses.'],422);
         foreach($statuses as $name)if(mb_strtolower($name)===mb_strtolower($data['title']))respond(['error'=>'That status already exists.'],409);
-    }
-    if (($input['action'] ?? '') === 'open-application') {
-        if ($kind !== 'application' || empty($data['url'])) respond(['error' => 'A valid application URL is required.'], 422);
-        $pdo->beginTransaction();
-        try {
-            $lock = $pdo->prepare('SELECT id FROM users WHERE id = ? FOR UPDATE'); $lock->execute([$user['id']]);
-            $existing = $pdo->prepare("SELECT id, payload FROM workspace_items WHERE user_id = ? AND kind = 'application' AND (JSON_UNQUOTE(JSON_EXTRACT(payload, '$.url')) = ? OR (? <> '' AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.jobId')) = ? AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.source')) = ?)) LIMIT 1");
-            $existing->execute([$user['id'], $data['url'], $data['jobId'], $data['jobId'], $data['source']]);
-            $found = $existing->fetch();
-            if ($found) {
-                $id = (int)$found['id']; $data = json_decode($found['payload'], true);
-                if (($data['status'] ?? '') === 'Saved') {
-                    $data['status'] = 'Application opened';
-                    $pdo->prepare('UPDATE workspace_items SET payload = ? WHERE id = ? AND user_id = ?')->execute([json_encode($data, JSON_THROW_ON_ERROR), $id, $user['id']]);
-                }
-            } else {
-                $count = $pdo->prepare('SELECT COUNT(*) FROM workspace_items WHERE user_id = ?'); $count->execute([$user['id']]);
-                if ((int)$count->fetchColumn() >= 2000) { $pdo->rollBack(); respond(['error' => 'Workspace limit reached.'], 422); }
-                $data['status'] = 'Application opened';
-                $pdo->prepare('INSERT INTO workspace_items (user_id, kind, payload) VALUES (?, ?, ?)')->execute([$user['id'], 'application', json_encode($data, JSON_THROW_ON_ERROR)]);
-                $id = (int)$pdo->lastInsertId();
-            }
-            $pdo->commit();
-        } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
-        respond(['item' => ['id' => $id, 'kind' => 'application', 'payload' => $data]]);
     }
     $payload = json_encode($data, JSON_THROW_ON_ERROR);
     if ($id > 0) {

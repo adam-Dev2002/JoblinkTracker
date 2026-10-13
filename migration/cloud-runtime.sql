@@ -23,6 +23,7 @@ create or replace function public.joblink_workspace_write(p_user bigint,p_action
 language plpgsql security definer set search_path=public as $$
 declare existing public.workspace_items; updated jsonb; affected bigint[]; result jsonb; title text; tasks jsonb;
 begin
+ if p_action is null or p_action not in ('save','delete','bulk-delete','delete-status') then raise exception 'Invalid action';end if;
  perform id from public.users where id=p_user for update;
  if not found then raise exception 'Account not found'; end if;
  if p_action='bulk-delete' then
@@ -44,6 +45,7 @@ begin
   return case when p_action='delete-status' then jsonb_build_object('deleted',p_id,'updated',tasks) else jsonb_build_object('ok',true) end;
  end if;
  if p_kind not in ('application','task','task_status','event','link','sheet') then raise exception 'Invalid entry kind'; end if;
+ if p_kind='application' and (p_payload->>'status' is null or p_payload->>'status' not in ('Saved','Unavailable','Applied','Interview','Offer','Rejected','Ghosted')) then raise exception 'Invalid application status';end if;
  title:=btrim(p_payload->>'title');if coalesce(title,'')='' then raise exception 'A title is required';end if;
  if p_kind='task_status' then
   if p_id>0 or length(title)>40 then raise exception 'Invalid status name'; end if;
@@ -51,15 +53,6 @@ begin
   if (select count(*) from public.workspace_items where user_id=p_user and kind='task_status')>=12 then raise exception 'Status limit reached'; end if;
  end if;
  if p_kind='task' and p_payload->>'status' not in ('To do','In progress','Done') and not exists(select 1 from public.workspace_items where user_id=p_user and kind='task_status' and payload->>'title'=p_payload->>'status') then raise exception 'Invalid task status';end if;
- if p_action='open-application' then
-  if p_kind<>'application' or coalesce(p_payload->>'url','')='' then raise exception 'Invalid application';end if;
-  select * into existing from public.workspace_items where user_id=p_user and kind='application' and (payload->>'url'=p_payload->>'url' or (coalesce(p_payload->>'jobId','')<>'' and payload->>'jobId'=p_payload->>'jobId' and payload->>'source'=p_payload->>'source')) order by id limit 1;
-  if found then
-   if existing.payload->>'status'='Saved' then update public.workspace_items set payload=jsonb_set(payload,'{status}','"Application opened"') where id=existing.id returning * into existing;end if;
-   return jsonb_build_object('item',jsonb_build_object('id',existing.id,'kind',existing.kind,'payload',existing.payload));
-  end if;
-  p_payload:=jsonb_set(p_payload,'{status}','"Application opened"');
- end if;
  if p_id>0 then
   update public.workspace_items set payload=p_payload where id=p_id and user_id=p_user and kind=p_kind returning * into existing;
   if not found then raise exception 'Entry not found';end if;

@@ -1,14 +1,13 @@
+export { applicationStatuses, normalizeApplicationStatus } from '../server/application-status.mjs'
+
 export const applicationStatusColors: Record<string, string> = {
   Saved: 'secondary',
-  'Application opened': 'azure',
   Unavailable: 'orange',
-  Applied: 'blue',
-  Interview: 'purple',
+  Applied: 'green',
+  Interview: 'green',
   Offer: 'green',
-  Rejected: 'red',
-  Ghosted: 'yellow',
+  Rejected: 'maroon',
+  Ghosted: 'secondary',
 }
-
-export const applicationStatuses = Object.keys(applicationStatusColors)
 
 export const applicationStatusColor = (status: string) => applicationStatusColors[status] || 'secondary'

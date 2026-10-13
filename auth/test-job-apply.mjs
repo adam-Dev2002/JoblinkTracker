@@ -196,7 +196,14 @@ try {
     data: { kind: "application", action: "open-application", payload },
     headers: { "X-CSRF-Token": session.csrf },
   });
-  assert.equal((await repeat.json()).item.payload.status, "Applied");
+  assert.equal(repeat.status(), 422, "The removed open-application action is rejected");
+  assert.equal((await repeat.json()).error, "Invalid action.");
+  const invalidStatus = await c.request.post("/api/workspace/items", {
+    data: { id: edited.id, kind: "application", payload: { ...edited.payload, status: "Application opened" } },
+    headers: { "X-CSRF-Token": session.csrf },
+  });
+  assert.equal(invalidStatus.status(), 422, "The removed application status cannot be saved");
+  assert.deepEqual((await (await c.request.get("/api/workspace/items")).json()).items[0], edited, "Rejected legacy requests leave the application unchanged");
   assert.equal(
     (
       await c.request.post("/api/workspace/items", {

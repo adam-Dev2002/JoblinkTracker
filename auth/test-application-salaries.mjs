@@ -17,7 +17,7 @@ try {
   page.setDefaultTimeout(15000);
   const errors = [], salaryReads = [], refreshes = [];
   const statuses = ['Saved', 'Application opened', 'Unavailable', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'];
-  const colors = ['secondary', 'azure', 'orange', 'blue', 'purple', 'green', 'red', 'yellow'];
+  const colors = ['secondary', 'secondary', 'orange', 'green', 'green', 'green', 'maroon', 'secondary'];
   const items = statuses.map((status, index) => ({ id: index + 1, kind: 'application', payload: { title: `Tracked role ${index + 1}`, company: 'Fixture company', salary: index === 1 ? 'PHP 99,000/month (manual)' : '', status, date: '2026-10-14', notes: 'Personal notes', url: index < 3 ? `https://www.onlinejobs.ph/jobseekers/job/salary-${78000 + index}` : `https://example.com/jobs/${index}` } }));
   const manual = structuredClone(items[1]);
   let rejectStatus = false;
@@ -67,13 +67,18 @@ try {
   assert.deepEqual(refreshes[0], [1, 3], 'Refresh only blank salaries on supported listing URLs');
   for (const [index, color] of colors.entries()) assert.equal(await page.locator(`[data-entry-status="${index + 1}"]`).getAttribute('data-status-color'), color);
   async function checkColors() {
-    const styles = await page.locator('[data-entry-status]').evaluateAll(controls => {
+    const styles = await page.locator('.application-status-trigger').evaluateAll(controls => {
       const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
       const rgb = color => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3); };
       const luminance = values => values.map(value => { const v = value / 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
       return controls.map(control => { const style = getComputedStyle(control), foreground = luminance(rgb(style.color)), background = luminance(rgb(style.backgroundColor)); return { color: style.backgroundColor, contrast: (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05) }; });
     });
-    assert.equal(new Set(styles.map(style => style.color)).size, 8, 'All eight statuses have distinct colors');
+    assert.equal(new Set(styles.map(style => style.color)).size, 1, 'Status dropdowns use the same neutral surface');
+    const dots = await page.locator('.application-status-trigger .application-status-dot').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
+    assert.equal(new Set(dots).size, 4, 'Status dots use gray, orange, green and maroon');
+    assert.equal(dots[0], dots[1], 'Legacy opened records display as Saved');
+    assert.equal(dots[0], dots[7], 'Ghosted is gray');
+    assert.equal(dots[3], dots[4]); assert.equal(dots[4], dots[5], 'Applied, Interview and Offer share green');
     for (const style of styles) assert.ok(style.contrast >= 4.5, `Status text stays readable: ${JSON.stringify(style)}`);
   }
   await checkColors();
@@ -82,23 +87,51 @@ try {
   assert.deepEqual(items[1], manual, 'A manual salary is never overwritten');
   assert.equal(await page.locator('[data-application-salary="3"]').innerText(), '—', 'Undisclosed pay is left empty');
   await mkdir(new URL('../.local-tools/', import.meta.url), { recursive: true });
+  const statusTrigger = () => page.locator('[data-entry-status="1"]').locator('..').getByRole('combobox');
+  const statusMenu = page.getByRole('listbox', { name: 'Application status', exact: true });
+  await statusTrigger().click();
+  assert.equal(await statusMenu.getByRole('option').count(), 7);
+  assert.equal(await statusMenu.getByRole('option', { name: 'Application opened', exact: true }).count(), 0);
+  assert.equal(await statusMenu.getByRole('option', { selected: true }).innerText(), 'Saved');
+  assert.equal(await statusMenu.locator('.application-status-check').count(), 1);
   await page.screenshot({ path: '.local-tools/application-status-salaries-light.png' });
+  await statusTrigger().press('Escape');
+  assert.equal(await statusTrigger().getAttribute('aria-expanded'), 'false');
   await page.evaluate(() => { document.documentElement.dataset.bsTheme = 'dark'; document.body.dataset.bsTheme = 'dark'; });
   await checkColors();
+  await statusTrigger().click();
   await page.screenshot({ path: '.local-tools/application-status-salaries-dark.png' });
+  await statusTrigger().press('Escape');
   rejectStatus = true;
-  await page.locator('[data-entry-status="1"]').selectOption('Offer');
+  await statusTrigger().click();
+  await statusMenu.getByRole('option', { name: 'Offer', exact: true }).click();
   await page.locator('[data-workspace-error]').filter({ hasText: 'Fixture status save failed' }).waitFor();
   assert.equal(await page.locator('[data-entry-status="1"]').getAttribute('data-status-color'), 'secondary', 'A failed status save restores its color');
-  await page.locator('[data-entry-status="1"]').selectOption('Interview');
-  await page.waitForFunction(() => document.querySelector('[data-entry-status="1"]')?.dataset.statusColor === 'purple');
+  assert.equal(await statusTrigger().innerText(), 'Saved', 'A failed save restores the visible label');
+  await statusTrigger().focus();
+  await statusTrigger().press('ArrowDown');
+  await statusTrigger().press('i');
+  await statusTrigger().press('Enter');
+  await page.waitForFunction(() => document.querySelector('[data-entry-status="1"]')?.dataset.statusColor === 'green');
+  await page.waitForFunction(() => document.querySelector('[data-entry-status="1"]')?.value === 'Interview');
+  assert.equal(await statusTrigger().innerText(), 'Interview');
+  await statusTrigger().press('ArrowDown');
+  await statusTrigger().press('End');
+  await statusTrigger().press('Tab');
+  assert.equal(await statusTrigger().innerText(), 'Interview', 'Tab closes without committing another status');
+  assert.equal(await statusTrigger().getAttribute('aria-expanded'), 'false');
   await page.reload();
   await page.locator('[data-ready=true]').waitFor();
-  assert.equal(await page.locator('[data-entry-status="1"]').getAttribute('data-status-color'), 'purple');
+  assert.equal(await page.locator('[data-entry-status="1"]').getAttribute('data-status-color'), 'green');
   assert.equal(await page.locator('[data-application-salary="1"]').innerText(), 'PHP 40,000/month');
   await visit('jobs');
   await page.locator('[data-track="salary-feed"]').click();
   assert.equal(await page.getByLabel('Salary / range', { exact: true }).inputValue(), 'PHP 30,000/month');
+  await page.getByRole('combobox', { name: 'Status', exact: true }).click();
+  assert.equal(await statusMenu.getByRole('option').count(), 7, 'Edit dialog uses the same statuses');
+  await statusMenu.getByRole('option', { name: 'Saved', exact: true }).click();
+  assert.equal(await page.locator('#entry-status').inputValue(), 'Saved');
+  assert.equal(await page.locator('[data-entry-modal]').isVisible(), true);
   await page.locator('[data-entry-form] button[type=submit]').click();
   await page.locator('[data-entry-modal]').waitFor({ state: 'hidden' });
   assert.equal(items.find(item => item.payload.jobId === feed.id).payload.salary, 'PHP 30,000/month');
@@ -115,12 +148,17 @@ try {
   await visit('applications');
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Colored status controls preserve mobile table scrolling');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Status controls preserve mobile table scrolling');
+    await statusTrigger().scrollIntoViewIfNeeded();
+    await statusTrigger().click();
+    const box = await statusMenu.boundingBox();
+    assert.ok(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= 844, 'Dropdown stays inside the mobile viewport');
+    await statusMenu.getByRole('option', { name: 'Interview', exact: true }).click();
   }
   await visit('dashboard');
   assert.equal(await page.locator('.dashboard-application-status[data-status-color]').count(), 7);
   assert.deepEqual(errors, []);
-  console.log('PASS: all status colors and readable light/dark contrast, failed-save color restoration, background salary fetching, manual salary preservation, feed/snippet/source salary persistence, reloads, dashboard colors and mobile layouts.');
+  console.log('PASS: neutral dropdowns, requested status dots, seven choices without Application opened, legacy compatibility, mouse/keyboard/modal/mobile interaction, light/dark contrast, failed-save restoration, persisted salaries and dashboard colors.');
 } finally {
   release?.();
   await browser?.close();
