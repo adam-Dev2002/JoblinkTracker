@@ -294,7 +294,7 @@ const desk = [
                         <Icon name="check" class="workspace-action-icon" />
                         Mark selected as applied
                       </button>
-                      <button type="button" class="btn btn-sm text-secondary" data-job-bulk-unavailable disabled>
+                      <button type="button" class="btn btn-sm job-card-action-unavailable" data-job-bulk-unavailable disabled>
                         <Icon name="x" class="workspace-action-icon" />
                         Mark selected unavailable
                       </button>
@@ -1090,19 +1090,24 @@ const desk = [
     min-height: 40px;
     padding: 8px 6px;
     border-radius: 8px;
-    background: var(--job-action-bg);
-    border-color: var(--job-action-border);
-    color: var(--job-action-color);
     font-size: 12px;
     font-weight: 500;
     line-height: 1.4;
   }
-  .job-card .job-card-action:hover:not(:disabled) {
+  .job-card .job-card-action,
+  .job-selection-actions [data-job-bulk-unavailable] {
+    background: var(--job-action-bg);
+    border-color: var(--job-action-border);
+    color: var(--job-action-color);
+  }
+  .job-card .job-card-action:hover:not(:disabled),
+  .job-selection-actions [data-job-bulk-unavailable]:hover:not(:disabled) {
     background: var(--job-action-hover);
     border-color: var(--job-action-color);
     color: var(--job-action-color);
   }
-  .job-card .job-card-action:focus-visible {
+  .job-card .job-card-action:focus-visible,
+  .job-selection-actions [data-job-bulk-unavailable]:focus-visible {
     outline: 2px solid var(--tblr-primary);
     outline-offset: 2px;
   }
