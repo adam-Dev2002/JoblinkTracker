@@ -771,27 +771,8 @@ async function handleClick(event: Event) {
         return
       }
       popup.opener = null
-      target.setAttribute('aria-disabled', 'true')
-      try {
-        const data = await api('workspace/items', {
-          action: 'open-application',
-          kind: 'application',
-          payload: { title: job.title, company: job.company, url: job.url, salary: job.salary, status: 'Application opened', date: today(), jobId: job.id, source: job.source, location: job.location, logo: validCompanyLogo(job.logo), notes: 'Source: ' + job.source },
-        })
-        const item = data.item as Entry
-        const index = items.findIndex((i) => i.id === item.id)
-        if (index >= 0) items[index] = item
-        else items.unshift(item)
-        cacheWorkspace()
-        popup.location.href = safeUrl(job.applyUrl || job.url)
-        closeJobDetails()
-        render()
-      } catch (e) {
-        popup.close()
-        throw e
-      } finally {
-        target.removeAttribute('aria-disabled')
-      }
+      popup.location.href = safeUrl(job.applyUrl || job.url)
+      closeJobDetails()
     }
     if ((target.dataset.markAppliedJob || target.dataset.markUnavailableJob) && !savingSelectedJobs && loaded) {
       const job = findJob((target.dataset.markAppliedJob || target.dataset.markUnavailableJob)!)
@@ -1085,12 +1066,13 @@ function updateJobSelection() {
   all.checked = scope.length > 0 && selectedVisible === scope.length
   all.indeterminate = selectedVisible > 0 && !all.checked
   all.disabled = busy || jobsLoading || scope.length === 0
-  select('[data-job-selection-label]').textContent = all.checked ? 'Deselect this page' : 'Select this page'
+  select('[data-job-selection-label]').textContent = all.checked ? (scope.length === 1 ? 'Deselect job' : 'Deselect this page') : 'Select this page'
   select('[data-job-selection-scope]').textContent = 'Current page only'
   select('[data-job-selected-count]').textContent = `${jobSelection.size} selected`
   select('[data-job-entries-control]').classList.remove('d-none')
   select<HTMLSelectElement>('[data-job-entries]').disabled = busy || jobsLoading
   select('[data-job-selection-actions]').classList.toggle('d-none', !hasSelection)
+  select('[data-job-deselect]').classList.toggle('d-none', !all.checked || selectedVisible < 2)
   for (const name of ['deselect', 'bulk-save', 'bulk-apply', 'bulk-unavailable', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
   select('[data-job-selection-toolbar]').setAttribute('aria-busy', String(savingSelectedJobs))
   select('[data-job-selection-toolbar]').classList.toggle('d-none', scope.length === 0)

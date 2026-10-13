@@ -83,6 +83,14 @@ try {
       body: "<h1>Official application form</h1>",
     }),
   );
+  await c.route(jobs[1].url, (r) =>
+    r.fulfill({ contentType: "text/html", body: "<h1>Source listing</h1>" }),
+  );
+  const writes = [];
+  c.on("request", request => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/workspace/items")
+      writes.push(request.postDataJSON());
+  });
   await p.goto("/job-listing");
   await p.locator("[data-ready=true]").waitFor();
   await p.locator("[data-apply-job]").first().waitFor();
@@ -117,9 +125,8 @@ try {
   await popup.close();
   assert.equal(await p.locator("[data-application-modal], .modal-backdrop").count(), 0);
   let rows = (await (await c.request.get("/api/workspace/items")).json()).items;
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].payload.status, "Application opened");
-  assert.equal(rows[0].payload.logo, jobs[0].logo, 'The backend persists employer logos when opening an application');
+  assert.equal(rows.length, 0, 'Opening a company application page does not create a tracker record');
+  assert.equal(writes.length, 0, 'Apply sends no workspace write');
   assert.equal(await p.locator("[data-application-notice]").count(), 0);
   const secondPopup = p.waitForEvent("popup");
   await p.getByRole("link", { name: "Apply on company site" }).click();
@@ -127,7 +134,8 @@ try {
   await other.waitForURL("https://example.com/careers/apply");
   await other.close();
   rows = (await (await c.request.get("/api/workspace/items")).json()).items;
-  assert.equal(rows.length, 1);
+  assert.equal(rows.length, 0, 'Repeated Apply clicks leave the tracker empty');
+  assert.equal(writes.length, 0);
   let rejectConfirmation = true;
   await c.route("**/api/workspace/items", async (route) => {
     const request = route.request();
@@ -148,11 +156,7 @@ try {
     .locator("[data-workspace-error]")
     .filter({ hasText: "Test save failure" })
     .waitFor();
-  assert.equal(
-    (await (await c.request.get("/api/workspace/items")).json()).items[0]
-      .payload.status,
-    "Application opened",
-  );
+  assert.equal((await (await c.request.get("/api/workspace/items")).json()).items.length, 0, 'A failed explicit confirmation does not create a record');
   await p.locator('[data-job-card="apply-test-1"] [data-mark-applied-job]').click();
   await p.locator('[data-job-card="apply-test-1"]').waitFor({ state: 'detached' });
   assert.equal(await p.locator('[data-job-card="apply-test-1"]').count(), 0);
@@ -219,7 +223,10 @@ try {
   const mobilePopup = await mobilePopupPromise;
   await mobilePopup.waitForURL(jobs[1].url);
   await mobilePopup.close();
+  const afterOpening = (await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.id === bookmarked.id);
+  assert.deepEqual(afterOpening, bookmarked, 'Opening a saved source listing leaves its tracker record unchanged');
   assert.equal(await p.locator("[data-application-modal], .modal-backdrop").count(), 0);
+  await p.locator('[data-job-card="apply-test-2"] [data-mark-applied-job]').waitFor();
   assert.equal(await p.locator('[data-job-card="apply-test-2"] [data-mark-applied-job]').isVisible(), true);
   const buttonBounds = await p
     .locator('[data-job-card="apply-test-2"] [data-mark-applied-job]')
@@ -234,7 +241,7 @@ try {
   assert.equal((await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.id === bookmarked.id).payload.status, 'Applied');
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: reminder-free application opening, every-card confirmation, failed-save retry, Applied persistence, duplicate prevention, status preservation, CSRF and mobile layout.",
+    "PASS: company/source opening without automatic tracking, repeated clicks, saved-record preservation, explicit Applied persistence, failed-save retry, logos, CSRF and mobile layout.",
   );
 } finally {
   await b.close();

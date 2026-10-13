@@ -105,16 +105,18 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   assert.match(await page.locator('[data-job-count]').innerText(), /^9 results$/);
   assert.match(await page.locator('[data-job-selected-count]').innerText(), /^0 selected/);
 
-  // Opening keeps the listing and its confirmation button available without a reminder.
+  // Opening keeps the listing available without adding an application.
+  const postsBeforeOpening = posts;
   const popupPromise = page.waitForEvent('popup');
   await card(7).locator('[data-apply-job]').click();
   const popup = await popupPromise;
   await popup.waitForURL(jobs[7].url);
   await popup.close();
   assert.equal(await page.locator('[data-application-modal], .modal-backdrop').count(), 0);
-  assert.equal(items.find(item => item.payload.jobId === jobs[7].id).payload.status, 'Application opened');
+  assert.equal(items.some(item => item.payload.jobId === jobs[7].id), false);
+  assert.equal(posts, postsBeforeOpening, 'Opening an untracked feed job sends no workspace write');
   await card(7).locator('[data-mark-applied-job]').waitFor();
-  // Opening from details also stays unobstructed and reuses the tracker record.
+  // Opening from details also leaves the tracker untouched.
   await card(7).locator('[data-job-details]').first().click();
   await page.locator('[data-job-details-modal]').waitFor({ state: 'visible' });
   const detailsPopupPromise = page.waitForEvent('popup');
@@ -124,8 +126,9 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await detailsPopup.close();
   await page.locator('[data-job-details-modal]').waitFor({ state: 'hidden' });
   assert.equal(await page.locator('[data-application-modal], .modal-backdrop').count(), 0);
-  assert.equal(items.filter(item => item.payload.jobId === jobs[7].id).length, 1);
-  await page.evaluate(id => sessionStorage.setItem('jobify-opened-application', String(id)), items.find(item => item.payload.jobId === jobs[7].id).id);
+  assert.equal(items.filter(item => item.payload.jobId === jobs[7].id).length, 0);
+  assert.equal(posts, postsBeforeOpening, 'Opening from details sends no workspace write');
+  await page.evaluate(() => sessionStorage.setItem('jobify-opened-application', '6'));
   await visit('jobs');
   assert.equal(await page.locator('[data-application-modal], .modal-backdrop').count(), 0, 'Legacy session state cannot restore the reminder');
   await card(7).locator('[data-mark-applied-job]').waitFor();
@@ -137,16 +140,20 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
 
   // Google uses the same tracker state and counts only the remaining cards.
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-job-count]').filter({ hasText: /^2 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
   assert.equal(await page.locator('.google-job-card').count(), 2);
   assert.equal(await page.locator('.google-job-card [data-mark-applied-job]').count(), 2, 'Google cards offer the same direct action');
-  assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 2 entries/);
+  assert.match(await page.locator('[data-job-pagination]').innerText(), /Showing 1–2 of 2 results/);
+  const savedBeforeOpening = structuredClone(items.find(item => item.id === 7));
+  const postsBeforeGoogleOpening = posts;
   const googleCard = page.locator('.google-job-card').filter({ hasText: 'Assistant 6' });
   const googlePopupPromise = page.waitForEvent('popup');
   await googleCard.locator('[data-apply-job]').click();
   const googlePopup = await googlePopupPromise;
   await googlePopup.waitForURL(jobs[6].url);
   await googlePopup.close();
+  assert.deepEqual(items.find(item => item.id === 7), savedBeforeOpening, 'Opening a saved Google result preserves its record');
+  assert.equal(posts, postsBeforeGoogleOpening);
   assert.equal(await page.locator('[data-application-modal], .modal-backdrop').count(), 0);
   failSave = true;
   await googleCard.locator('[data-mark-applied-job]').click();
@@ -162,10 +169,10 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await page.locator('.google-job-card').waitFor({ state: 'detached' });
   assert.equal(items.find(item => item.payload.url === jobs[8].url).payload.status, 'Applied');
   assert.equal(await page.locator('.google-job-card').count(), 0);
-  assert.match(await page.locator('[data-job-count]').innerText(), /^0 results on this page$/);
-  assert.match(await page.locator('[data-google-page-count]').innerText(), /Showing 0 entries/);
+  assert.match(await page.locator('[data-job-count]').innerText(), /^0 results$/);
+  assert.equal(await page.locator('[data-job-pagination]').isVisible(), false);
   await page.evaluate(() => window.redrawVisibilityGoogle());
-  await page.locator('.google-job-grid').getByText('No unapplied jobs', { exact: false }).waitFor();
+  await page.locator('[data-job-empty]').waitFor();
   assert.equal(await page.locator('.google-job-card').count(), 0, 'Provider redraw also filters applied jobs');
 
   // Tracker edits are reconciled on navigation, including a slow fresh response.
@@ -189,11 +196,11 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   // A cached Applied status must not prevent Google results from loading.
   // A delayed fresh tracker response may restore the same job to Saved.
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-google-jobs-host] .google-job-grid').waitFor();
+  await page.locator('[data-google-jobs-host] .gsc-results').waitFor({ state: 'attached' });
   items.find(item => item.id === 7).payload.status = 'Saved';
   workspaceGate = new Promise(resolve => { release = resolve; });
   await page.reload();
-  await page.locator('[data-google-jobs-host] .google-job-grid').waitFor();
+  await page.locator('[data-google-jobs-host] .gsc-results').waitFor({ state: 'attached' });
   release(); workspaceGate = null;
   await page.locator('.google-job-card').waitFor();
   assert.equal(await page.locator('.google-job-card').count(), 1, 'Fresh tracker state restores an open listing even when the preview said Applied');

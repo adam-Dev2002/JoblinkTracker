@@ -21,6 +21,7 @@ try {
     employmentType: 'Full-time', role: 'Virtual assistance', url: `https://example.com/jobs/${index}`, source: 'Test feed',
     salary: '', date: '', logo: '', workMode: 'Remote / WFH', description: 'Assistant job', direct: false });
   const jobs = Array.from({ length: 16 }, (_, index) => job(index));
+  jobs[12].location = 'Unique location';
   jobs[14].availability = 'closed';
   const google = Array.from({ length: 12 }, (_, index) => ({ ...job(index + 100), url: `https://www.onlinejobs.ph/jobseekers/job/bulk-${index}`, title: `Google Assistant ${index}` }));
   const entry = (id, row, status) => ({ id, kind: 'application', payload: { ...row, jobId: row.id, status, notes: `Personal note ${id}`, date: '2026-10-01' } });
@@ -67,6 +68,7 @@ try {
   ` }));
   const bulk = page.locator('[data-job-bulk-unavailable]');
   const header = page.locator('[data-job-select-all]');
+  const deselect = page.locator('[data-job-deselect]');
   const done = async count => {
     await page.locator('[data-removal-success-modal]').waitFor({ state: 'visible' });
     assert.match(await page.locator('[data-removal-success-message]').innerText(), new RegExp(`^${count} ${count === 1 ? 'job was' : 'jobs were'} marked unavailable`));
@@ -78,8 +80,22 @@ try {
   await page.locator('[data-job-count]').filter({ hasText: /^14 results$/ }).waitFor();
   assert.equal((await bulk.innerText()).trim(), 'Mark selected unavailable');
   assert.equal(await bulk.isDisabled(), true);
+  assert.equal(await deselect.isVisible(), false);
+  const cardIcon = await page.locator('[data-mark-unavailable-job] svg').first().evaluate(icon => icon.innerHTML);
+  assert.equal(await bulk.locator('svg').evaluate(icon => icon.innerHTML), cardIcon, 'Individual and bulk unavailable actions use the same circle-minus icon');
+  await page.locator('[data-job-pick]').nth(0).check();
+  assert.equal(await deselect.isVisible(), false, 'A single selection does not show Deselect this page');
+  assert.equal(await page.locator('[data-job-selection-label]').innerText(), 'Select this page');
+  await page.locator('[data-job-pick]').nth(1).check();
+  assert.equal(await deselect.isVisible(), false, 'A partial selection does not show Deselect this page');
+  assert.equal(await header.evaluate(input => input.indeterminate), true);
   await header.check();
   assert.equal(await page.locator('[data-job-pick]:checked').count(), 12);
+  assert.equal(await deselect.isVisible(), true, 'Selecting the whole page shows its deselect action');
+  await deselect.click();
+  assert.equal(await page.locator('[data-job-pick]:checked').count(), 0);
+  assert.equal(await deselect.isVisible(), false);
+  await header.check();
   await bulk.click();
   await page.locator('[data-job-selection-toolbar][aria-busy=true]').waitFor();
   assert.equal(await bulk.isDisabled(), true);
@@ -93,6 +109,7 @@ try {
   assert.equal(await page.locator('[data-removal-success-modal]').isVisible(), false, 'Partial failures never show a complete-success dialog');
   assert.equal(await page.locator('.job-card').count(), 3);
   assert.equal(await page.locator('[data-job-pick]:checked').count(), 1);
+  assert.equal(await deselect.isVisible(), false, 'A single failed posting remains selected without a page deselect action');
   assert.equal(await page.locator(`[data-job-pick="${jobs[2].id}"]`).isChecked(), true);
   assert.equal(items.some(item => item.payload.jobId === jobs[12].id), false, 'Unselected jobs are untouched');
   assert.equal(items.some(item => item.payload.jobId === jobs[13].id), false);
@@ -109,14 +126,23 @@ try {
   await page.reload();
   await page.locator('[data-ready=true]').waitFor();
   await page.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
+  await page.locator('#job-location').fill('Unique location');
+  await page.locator('[data-job-count]').filter({ hasText: /^1 results$/ }).waitFor();
+  await header.check();
+  assert.equal(await deselect.isVisible(), false, 'A page with only one selected job also hides the deselect button');
+  assert.equal(await page.locator('[data-job-selection-label]').innerText(), 'Deselect job');
+  await header.uncheck();
+  await page.locator('#job-location').fill('');
+  await page.locator('#job-location').press('Escape');
+  await page.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-job-count]').filter({ hasText: /^12 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^12 results$/ }).waitFor();
   await page.setViewportSize({ width: 320, height: 844 });
   await header.check();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'The expanded toolbar wraps on small screens');
   assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 12);
   await bulk.press('Enter');
-  await page.locator('[data-job-count]').filter({ hasText: /^0 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^0 results$/ }).waitFor();
   await done(12);
   assert.equal(await page.locator('.google-job-card').count(), 0);
   assert.equal(await page.locator('[data-job-selection-actions]').isVisible(), false);
@@ -129,7 +155,7 @@ try {
   }
   await page.reload();
   await page.locator('[data-ready=true]').waitFor();
-  await page.locator('[data-job-count]').filter({ hasText: /^0 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^0 results$/ }).waitFor();
   await page.evaluate(() => window.redrawBulkUnavailable());
   assert.equal(await page.locator('.google-job-card').count(), 0);
   assert.deepEqual(errors, []);

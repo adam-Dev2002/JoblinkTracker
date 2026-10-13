@@ -4,6 +4,8 @@
 
 Every job source uses one application-owned card grid, one result count and one pagination control. **Show entries** offers 12, 24, 48 and All for every source, including Google. Feed matches appear first, followed by loaded Google matches; duplicate posting identities across sources appear once. Selection covers only displayed cards, and new cards brought forward after a removal are not selected automatically.
 
+Individual and selected-job **Unavailable** actions share the circle-minus icon. **Deselect this page** appears only when every displayed job is selected and the selection contains at least two jobs. Single and partial selections keep the job checkboxes available without that extra button.
+
 Marking jobs **Applied** or **Unavailable** repaginates the combined matches and fills gaps from later jobs. Google provider pages are retrieved only when the requested page needs more matching jobs; loaded results are reused for navigation. All entries loads the accessible provider pages. An emptied last page falls back to remaining jobs. **No results** appears once matching listings and accessible provider pages are exhausted. Failed or pending requests retain their error/loading state. Searches and filter changes reset the provider page pool.
 
 The shared pager shows numbered Google pages as soon as the provider exposes its cursor, without fetching all pages first. Numbers account for unread provider capacity and the selected entry count, then shrink to the exact remaining matches after filtering and deduplication finish. While unread pages remain, the visible range omits a finalized total.
@@ -44,7 +46,7 @@ Register for JSearch through RapidAPI and select a plan yourself. Joblink does n
 
 Keep Google credentials and database settings as they are. Save, then select **Philippines · JSearch** in Find work. An empty key returns an explicit unconnected state. API errors return a readable error; they never generate mock jobs. API secrets remain server-side.
 
-Joblink opens source listings or provider-supplied application links. Clicking Apply creates or updates an **Application opened** record. The user confirms submission to mark it **Applied**; Joblink does not automatically know whether an external application was submitted.
+Joblink opens source listings or provider-supplied application links. Clicking Apply opens a new tab without creating or updating a tracker record. Use **Save** to bookmark a job or **Applied** to record a submitted application; Joblink does not automatically know whether an external application was submitted.
 
 ## Saved workspace
 
@@ -82,9 +84,9 @@ News and job feeds run on a separate local PHP process at port 8082; account and
 
 Find Work displays provider-supplied employer logos, with initials when a logo is missing or fails to load. Keyword search, location, employment type, and listing time narrow the results. Remote-work tags are not a guarantee of worldwide eligibility.
 
-The Apply button saves an account-owned entry as **Application opened** before opening a new tab. When the provider supplies a verified direct application URL, the tab opens that employer page; otherwise the button says **Apply via source** and opens the original job-board listing. Joblink does not invent employer application URLs.
+The Apply button opens a new tab without saving an application. When the provider supplies a verified direct application URL, the tab opens that employer page; otherwise the button says **Apply via source** and opens the original job-board listing. The same behavior applies to the job details dialog. Joblink does not invent employer application URLs.
 
-Cross-site submission cannot be observed by Joblink. After submitting on the external website, use **I submitted it** on Find Work or the tracker to mark the entry **Applied**. Opening a page alone does not count as a submitted application. Saved jobs have their own **Saved** status. Repeated Apply clicks reuse the existing record and preserve later statuses.
+Cross-site submission cannot be observed by Joblink. After submitting on the external website, use the **Applied** button on the job card or set its tracker status to **Applied**. Use **Save** to bookmark a job with the **Saved** status. Repeated Apply clicks leave the tracker unchanged, including existing statuses and notes. Existing **Application opened** records remain editable in the tracker.
 
 ## Company branding
 

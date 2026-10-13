@@ -282,7 +282,7 @@ const desk = [
                       0 selected
                     </span>
                     <div class="d-flex flex-wrap gap-2 ms-auto job-selection-actions">
-                      <button type="button" class="btn btn-sm" data-job-deselect disabled>
+                      <button type="button" class="btn btn-sm d-none" data-job-deselect disabled>
                         <Icon name="checkbox" class="workspace-action-icon" />
                         Deselect this page
                       </button>
@@ -295,7 +295,7 @@ const desk = [
                         Mark selected as applied
                       </button>
                       <button type="button" class="btn btn-sm job-card-action-unavailable" data-job-bulk-unavailable disabled>
-                        <Icon name="x" class="workspace-action-icon" />
+                        <Icon name="circle-minus" class="workspace-action-icon" />
                         Mark selected unavailable
                       </button>
                       <button type="button" class="btn btn-sm" data-job-bulk-export disabled>
