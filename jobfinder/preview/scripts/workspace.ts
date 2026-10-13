@@ -1262,7 +1262,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
     }),
   )
   if (generation !== googleRenderGeneration || !div.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
-  jobFreshness?.observe(listings, googleCacheKey(), div !== cachedPreview)
+  jobFreshness?.observe(listings)
   if (div !== cachedPreview) {
     cachedPreview.replaceChildren()
     cachedPreview.classList.add('d-none')
@@ -1487,7 +1487,7 @@ async function loadJobs(preservePage = false) {
     source = select<HTMLSelectElement>('#job-source').value
   const cached = cacheOwner === null ? null : readPageData<JobFeed>('jobs:' + new URLSearchParams({ q, source }).toString(), cacheOwner)
   if (cached && source !== 'google') {
-    jobFreshness?.observe(cached.jobs, 'feed:' + new URLSearchParams({ q, source }).toString(), false)
+    jobFreshness?.observe(cached.jobs)
     jobs = cached.jobs
     select('[data-feed-message]').textContent = cached.message
     renderJobs(!preservePage)
@@ -1509,7 +1509,7 @@ async function loadJobs(preservePage = false) {
     }
     const data = await searchJobFeed(q, source, AbortSignal.any([jobSearchController.signal, AbortSignal.timeout(15000)]))
     if (request !== jobRequest) return
-    jobFreshness?.observe(data.jobs, 'feed:' + new URLSearchParams({ q, source }).toString())
+    jobFreshness?.observe(data.jobs)
     jobs = [...data.jobs]
     select('[data-feed-message]').textContent = data.message
     if (!cached || JSON.stringify(cached.jobs) !== JSON.stringify(data.jobs) || cached.message !== data.message) renderJobs(!preservePage)
