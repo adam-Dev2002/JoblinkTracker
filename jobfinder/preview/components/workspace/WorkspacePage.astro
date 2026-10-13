@@ -592,6 +592,27 @@ const desk = [
 </script>
 
 <style is:global>
+  .application-status-control,
+  .application-status-badge {
+    --application-status-color: var(--tblr-secondary);
+    color: color-mix(in srgb, var(--application-status-color) 40%, var(--tblr-body-color));
+    background-color: color-mix(in srgb, var(--application-status-color) 12%, var(--tblr-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--application-status-color) 35%, var(--tblr-bg-surface));
+    font-weight: 600;
+  }
+  .application-status-control { border-radius: 8px; min-width: 12rem; }
+  .application-status-control option {
+    background-color: var(--tblr-bg-surface);
+    color: color-mix(in srgb, var(--application-status-color) 40%, var(--tblr-body-color));
+  }
+  [data-status-color='secondary'] { --application-status-color: var(--tblr-secondary); }
+  [data-status-color='azure'] { --application-status-color: var(--tblr-azure); }
+  [data-status-color='orange'] { --application-status-color: var(--tblr-orange); }
+  [data-status-color='blue'] { --application-status-color: var(--tblr-blue); }
+  [data-status-color='purple'] { --application-status-color: var(--tblr-purple); }
+  [data-status-color='green'] { --application-status-color: var(--tblr-green); }
+  [data-status-color='red'] { --application-status-color: var(--tblr-red); }
+  [data-status-color='yellow'] { --application-status-color: var(--tblr-yellow); }
   .dashboard-application-item {
     display: flex;
     align-items: center;

@@ -2,7 +2,7 @@ import { googleJobQuery, googleJobListingUrl, type GoogleJobFilters } from './go
 import { jobListingIdentity } from './job-identity'
 
 export const jobsPerPage = 12
-export type GoogleJobResult = { url: string; listingUrl?: string; title: string; content?: string; visibleUrl?: string }
+export type GoogleJobResult = { url: string; listingUrl?: string; title: string; content?: string; visibleUrl?: string; pagemap?: Record<string, unknown>; richSnippet?: Record<string, unknown> }
 type GoogleElement = { execute: (query: string) => void; clearAllResults: () => void }
 type ReadyCallback = (name: string, query: string, promos: GoogleJobResult[], results: GoogleJobResult[], div: HTMLElement) => boolean
 type GoogleWindow = Window & {

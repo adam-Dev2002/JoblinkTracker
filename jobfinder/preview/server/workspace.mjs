@@ -1,10 +1,11 @@
 import {db,query,current,owned,json,checkWrite,body,fail,random,safeUrl} from './core.mjs'
 import {fileTypeFromBuffer} from 'file-type'
 import {validCompanyLogo} from './company-logo.mjs'
+import {applicationSalaries} from './application-salaries.mjs'
 const bucket='joblink-attachments'
 const fields={application:['title','company','url','salary','status','notes','date','jobId','source','location','logo'],task:['title','status','date','notes'],task_status:['title'],event:['title','date','time','notes'],link:['title','url','notes'],sheet:['title','company','value','notes']}
 const attachmentPublic=row=>({id:Number(row.id),name:row.name,mime:row.mime,size:row.size})
-export async function workspace(request,url){const user=await current(request,true);if(url.pathname==='/api/workspace/attachments')return attachments(request,url,user);if(url.pathname!=='/api/workspace/items')fail(404,'Not found.')
+export async function workspace(request,url){const user=await current(request,true);if(url.pathname==='/api/workspace/attachments')return attachments(request,url,user);if(url.pathname==='/api/workspace/salaries')return applicationSalaries(request,user);if(url.pathname!=='/api/workspace/items')fail(404,'Not found.')
  if(request.method==='GET'){const [items,files]=await Promise.all([owned(user.id),owned(user.id,'workspace_attachments')]);return json({items:items.map(row=>({id:Number(row.id),kind:row.kind,payload:row.payload,attachments:files.filter(f=>Number(f.item_id)===Number(row.id)).map(attachmentPublic)}))})}
  if(request.method!=='POST')fail(405,'Method not allowed.');checkWrite(request);const input=await body(request);const id=Number(input.id||0);if(!Number.isSafeInteger(id)||id<0)fail(422,'Invalid entry ID.');const action=input.action||'save';if(!['save','delete','bulk-delete','delete-status','open-application'].includes(action))fail(422,'Invalid action.');let ids=null,payload={};const kind=input.kind||''
  const bulkKind=kind||'sheet'

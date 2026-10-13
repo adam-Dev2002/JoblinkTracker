@@ -11,6 +11,8 @@ import { jobListingIdentity } from './job-identity'
 import { isClosedListing } from './job-availability.mjs'
 import { makeApplicationIndex } from './application-index'
 import { createJobFreshness } from './job-freshness'
+import { applicationStatusColor, applicationStatuses } from './application-status'
+import { jobSalaryListingUrl, salaryFromJob } from './job-salary.mjs'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
@@ -57,6 +59,10 @@ let indexedWorkspace: Entry[] | null = null
 let indexedWorkspaceRevision = -1
 let applicationIndex: ReturnType<typeof makeApplicationIndex<Entry>> | null = null
 let jobs: Job[] = []
+const listingSalaryRequests = new Map<string, Promise<string>>()
+const checkedApplicationSalaries = new Set<number>()
+const pendingApplicationSalaries = new Set<number>()
+let refreshingApplicationSalaries = false
 const jobSelection = new Map<string, Job>()
 const googleJobs = new Map<string, Job>()
 let googleResultsLive = false
@@ -92,7 +98,7 @@ let editing: Entry | null = null
 let modalPrefill: Record<string, string> = {}
 let modalKind: Kind = 'application'
 let restoreFocus: HTMLElement | null = null
-const appStatuses = ['Saved', 'Application opened', 'Unavailable', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted']
+const appStatuses = applicationStatuses
 let taskStatuses = ['To do', 'In progress', 'Done']
 const empty = (message: string) => `<div class="workspace-empty">${htmlEscape(message)}</div>`
 function error(message: string) {
@@ -107,7 +113,7 @@ async function api(path: string, body?: object, signal?: AbortSignal) {
   const response = await fetch('/api/' + path, { credentials: 'same-origin', signal: signal ?? null, ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) } : {}) })
   const data = await response.json()
   if (!response.ok) throw new Error(data.error || 'Unable to load your workspace.')
-  if (body && path.startsWith('workspace/')) {
+  if (body && path.startsWith('workspace/') && (path !== 'workspace/salaries' || data.updated?.length)) {
     workspaceRevision++
     window.dispatchEvent(new Event('joblink-workspace-changed'))
   }
@@ -130,6 +136,58 @@ function cacheWorkspace() {
   cachedWorkspace = items
   cachedWorkspaceOwner = cacheOwner
   cachedWorkspaceRevision = workspaceRevision
+}
+async function preloadListingSalaries(urls: string[]) {
+  const missing = [...new Set(urls.map(jobSalaryListingUrl).filter(Boolean))].filter(url => !listingSalaryRequests.has(url))
+  for (let offset = 0; offset < missing.length; offset += 20) {
+    const batch = missing.slice(offset, offset + 20)
+    const request = api('jobs/salary', { urls: batch }, AbortSignal.timeout(30000)).then(data => {
+      const salaries = new Map<string, string>()
+      for (const result of data.results || []) if (batch.includes(result.url) && typeof result.salary === 'string' && result.salary.length <= 500) salaries.set(result.url, result.salary)
+      return salaries
+    }).catch(() => new Map<string, string>())
+    for (const url of batch) listingSalaryRequests.set(url, request.then(salaries => salaries.get(url) || ''))
+    await request
+  }
+}
+async function listingSalary(value: string) {
+  const url = jobSalaryListingUrl(value)
+  if (!url || !signedIn) return ''
+  await preloadListingSalaries([url])
+  return await listingSalaryRequests.get(url) || ''
+}
+function updateApplicationSalaryCells() {
+  for (const id of visibleApplicationIds) {
+    const cell = select(`[data-application-salary="${id}"]`)
+    const item = items.find(item => item.id === id)
+    if (cell && item) cell.textContent = item.payload.salary || (pendingApplicationSalaries.has(id) ? 'Fetching…' : '—')
+  }
+}
+async function refreshVisibleApplicationSalaries() {
+  if (view !== 'applications' || !loaded || !signedIn || refreshingApplicationSalaries) return
+  const candidates = () => visibleApplicationIds.filter(id => !checkedApplicationSalaries.has(id) && items.some(item => item.id === id && !item.payload.salary?.trim() && jobSalaryListingUrl(item.payload.url)))
+  if (!candidates().length) return
+  refreshingApplicationSalaries = true
+  const owner = cacheOwner
+  try {
+    await whenPageActive()
+    while (root.isConnected && cacheOwner === owner && candidates().length) {
+      const ids = candidates().slice(0, 20)
+      const originalUrls = new Map(ids.map(id => [id, items.find(item => item.id === id)!.payload.url]))
+      for (const id of ids) { checkedApplicationSalaries.add(id); pendingApplicationSalaries.add(id) }
+      updateApplicationSalaryCells()
+      try {
+        const data = await api('workspace/salaries', { ids }, AbortSignal.timeout(30000))
+        if (cacheOwner !== owner || !root.isConnected) return
+        for (const result of data.updated || []) {
+          const item = items.find(item => item.id === result.id)
+          if (item && ids.includes(result.id) && item.payload.url === originalUrls.get(result.id) && !item.payload.salary?.trim() && typeof result.salary === 'string' && result.salary.length <= 500) item.payload.salary = result.salary
+        }
+        cacheWorkspace()
+      } catch { break /* Optional source fetching never blocks the tracker or its edits. */ }
+      finally { for (const id of ids) pendingApplicationSalaries.delete(id); updateApplicationSalaryCells() }
+    }
+  } finally { refreshingApplicationSalaries = false }
 }
 function updateTableSelection(kind: 'application' | 'sheet') {
   const selection = kind === 'application' ? applicationSelection : sheetSelection
@@ -161,7 +219,8 @@ function actionButtons(item: Entry) {
   return `<div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary" data-edit="${item.id}">Edit</button><button class="btn btn-sm btn-outline-danger" data-delete="${item.id}" aria-label="Remove ${htmlEscape(item.payload.title)}">Remove</button></div>`
 }
 function statusSelect(item: Entry, statuses: string[]) {
-  return `<select class="form-select form-select-sm" data-entry-status="${item.id}" aria-label="Status for ${htmlEscape(item.payload.title)}">${statuses.map((status) => `<option ${status === item.payload.status ? 'selected' : ''}>${htmlEscape(status)}</option>`).join('')}</select>`
+  const application = item.kind === 'application'
+  return `<select class="form-select form-select-sm${application ? ' application-status-control' : ''}" ${application ? `data-status-color="${applicationStatusColor(item.payload.status)}"` : ''} data-entry-status="${item.id}" aria-label="Status for ${htmlEscape(item.payload.title)}">${statuses.map((status) => `<option ${application ? `data-status-color="${applicationStatusColor(status)}"` : ''} ${status === item.payload.status ? 'selected' : ''}>${htmlEscape(status)}</option>`).join('')}</select>`
 }
 const tableActions = ['applications', 'sheet'].includes(view) ? attachTableActions(root, id => owned(view === 'applications' ? 'application' : 'sheet').find(item => item.id === id)) : null
 function filteredApplications() {
@@ -227,7 +286,7 @@ function render() {
           .map((item) => {
             const initials = (item.payload.company || item.payload.title).trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase()
             const logo = applicationLogo(item)
-            return `<li class="list-group-item dashboard-application-item" data-dashboard-application="${item.id}"><span class="avatar bg-secondary-lt rounded-3 position-relative"><span aria-hidden="true" data-dashboard-logo-fallback>${htmlEscape(initials)}</span>${logo ? `<img class="company-logo-fill" data-dashboard-company-logo src="${htmlEscape(logo)}" alt="${htmlEscape(item.payload.company)} logo" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ''}</span><div class="dashboard-application-copy"><button type="button" class="dashboard-application-title" data-edit="${item.id}" title="${htmlEscape(item.payload.title)}" aria-label="Edit application ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.title)}</button><div class="dashboard-application-meta text-secondary"><span>${htmlEscape(item.payload.company || 'Company not specified')}</span>${item.payload.date ? `<time datetime="${htmlEscape(item.payload.date)}">${htmlEscape(item.payload.date)}</time>` : ''}</div></div><span class="badge bg-secondary-lt dashboard-application-status">${htmlEscape(item.payload.status)}</span></li>`
+            return `<li class="list-group-item dashboard-application-item" data-dashboard-application="${item.id}"><span class="avatar bg-secondary-lt rounded-3 position-relative"><span aria-hidden="true" data-dashboard-logo-fallback>${htmlEscape(initials)}</span>${logo ? `<img class="company-logo-fill" data-dashboard-company-logo src="${htmlEscape(logo)}" alt="${htmlEscape(item.payload.company)} logo" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ''}</span><div class="dashboard-application-copy"><button type="button" class="dashboard-application-title" data-edit="${item.id}" title="${htmlEscape(item.payload.title)}" aria-label="Edit application ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.title)}</button><div class="dashboard-application-meta text-secondary"><span>${htmlEscape(item.payload.company || 'Company not specified')}</span>${item.payload.date ? `<time datetime="${htmlEscape(item.payload.date)}">${htmlEscape(item.payload.date)}</time>` : ''}</div></div><span class="badge application-status-badge dashboard-application-status" data-status-color="${applicationStatusColor(item.payload.status)}">${htmlEscape(item.payload.status)}</span></li>`
           })
           .join('')}</ul>`
       : empty('Your applications will appear here. Start with Find work or add one to your tracker.')
@@ -272,12 +331,14 @@ function render() {
       .map((i) => {
         const initials = (i.payload.company || i.payload.title).trim().split(/\s+/).slice(0, 2).map(word => Array.from(word)[0] || '').join('').toUpperCase()
         const logo = applicationLogo(i)
-        return `<tr class="${applicationSelection.has(i.id) ? 'table-active' : ''}"><td><input type="checkbox" class="form-check-input m-0" data-application-pick="${i.id}" aria-label="Select ${htmlEscape(i.payload.title)} at ${htmlEscape(i.payload.company || 'unspecified company')}" ${applicationSelection.has(i.id) ? 'checked' : ''} /></td><td class="text-nowrap text-secondary">${htmlEscape(i.payload.date)}</td><td><strong>${htmlEscape(i.payload.title)}</strong>${safeUrl(i.payload.url) ? `<div><a href="${htmlEscape(safeUrl(i.payload.url))}" target="_blank" rel="noopener noreferrer" class="small">Original listing &nearr;</a></div>` : ''}</td><td><div class="d-flex align-items-center gap-2"><span class="avatar avatar-sm bg-secondary-lt rounded-3 position-relative flex-shrink-0"><span aria-hidden="true">${htmlEscape(initials)}</span>${logo ? `<img class="company-logo-fill" data-company-logo src="${htmlEscape(logo)}" alt="${htmlEscape(i.payload.company)} logo" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ''}</span><span>${htmlEscape(i.payload.company || '—')}</span></div></td><td class="text-secondary">${htmlEscape(i.payload.salary || '—')}</td><td>${statusSelect(i, appStatuses)}</td><td class="text-secondary" style="min-width:160px">${htmlEscape(i.payload.notes || '—')}</td><td class="text-end"><button type="button" class="btn workspace-row-actions" data-application-actions="${i.id}" aria-label="Actions for ${htmlEscape(i.payload.title)}" aria-haspopup="menu" aria-controls="workspace-row-menu" aria-expanded="false">Actions ${tableActionArrow}</button></td></tr>`
+        return `<tr class="${applicationSelection.has(i.id) ? 'table-active' : ''}"><td><input type="checkbox" class="form-check-input m-0" data-application-pick="${i.id}" aria-label="Select ${htmlEscape(i.payload.title)} at ${htmlEscape(i.payload.company || 'unspecified company')}" ${applicationSelection.has(i.id) ? 'checked' : ''} /></td><td class="text-nowrap text-secondary">${htmlEscape(i.payload.date)}</td><td><strong>${htmlEscape(i.payload.title)}</strong>${safeUrl(i.payload.url) ? `<div><a href="${htmlEscape(safeUrl(i.payload.url))}" target="_blank" rel="noopener noreferrer" class="small">Original listing &nearr;</a></div>` : ''}</td><td><div class="d-flex align-items-center gap-2"><span class="avatar avatar-sm bg-secondary-lt rounded-3 position-relative flex-shrink-0"><span aria-hidden="true">${htmlEscape(initials)}</span>${logo ? `<img class="company-logo-fill" data-company-logo src="${htmlEscape(logo)}" alt="${htmlEscape(i.payload.company)} logo" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ''}</span><span>${htmlEscape(i.payload.company || '—')}</span></div></td><td class="text-secondary" data-application-salary="${i.id}">${htmlEscape(i.payload.salary || '—')}</td><td>${statusSelect(i, appStatuses)}</td><td class="text-secondary" style="min-width:160px">${htmlEscape(i.payload.notes || '—')}</td><td class="text-end"><button type="button" class="btn workspace-row-actions" data-application-actions="${i.id}" aria-label="Actions for ${htmlEscape(i.payload.title)}" aria-haspopup="menu" aria-controls="workspace-row-menu" aria-expanded="false">Actions ${tableActionArrow}</button></td></tr>`
       })
       .join('')
     root.querySelectorAll<HTMLImageElement>('[data-application-rows] img[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
     updateTableSelection('application')
     select('[data-application-empty]').innerHTML = filtered.length ? '' : empty(apps.length ? 'No tracked jobs match your search. Clear the search or choose another status.' : 'No applications yet. Add one or save a job from Find work.')
+    updateApplicationSalaryCells()
+    void refreshVisibleApplicationSalaries()
   }
   if (view === 'taskboard') {
     select('[data-task-board]').style.setProperty('--board-columns', taskStatuses.length === 4 ? '2' : '3')
@@ -415,7 +476,7 @@ function openModal(kind: Kind, item: Entry | null = null, prefill: Record<string
         field === 'notes'
           ? `<textarea class="form-control" id="${id}" name="${field}" maxlength="4000" rows="3">${htmlEscape(value)}</textarea>`
           : field === 'status'
-            ? `<select class="form-select" id="${id}" name="status">${(kind === 'task' ? taskStatuses : appStatuses).map((s) => `<option ${s === value ? 'selected' : ''}>${htmlEscape(s)}</option>`).join('')}</select>`
+            ? `<select class="form-select${kind === 'application' ? ' application-status-control' : ''}" ${kind === 'application' ? `data-status-color="${applicationStatusColor(value)}"` : ''} id="${id}" name="status">${(kind === 'task' ? taskStatuses : appStatuses).map((s) => `<option ${kind === 'application' ? `data-status-color="${applicationStatusColor(s)}"` : ''} ${s === value ? 'selected' : ''}>${htmlEscape(s)}</option>`).join('')}</select>`
             : `<input class="form-control" id="${id}" name="${field}" type="${['url', 'date', 'time'].includes(field) ? field : 'text'}" value="${htmlEscape(value)}" maxlength="500" ${required ? 'required' : ''} />`
       return `<div class="mb-3"><label class="form-label" for="${id}">${kind === 'task_status' ? 'Status name' : labels[field]}</label>${input}</div>`
     })
@@ -436,6 +497,10 @@ function closeModal() {
   restoreFocus?.focus()
 }
 async function save(kind: Kind, payload: Record<string, string>, id = 0, renderAfter = true) {
+  if (kind === 'application' && !payload.salary?.trim()) {
+    const salary = salaryFromJob(payload) || await listingSalary(payload.url)
+    if (salary) payload = { ...payload, salary }
+  }
   const data = await api('workspace/items', { kind, payload, id })
   const index = items.findIndex((i) => i.id === data.item.id)
   if (index >= 0) {
@@ -859,6 +924,7 @@ root.addEventListener('click', (event) => {
 async function handleChange(event: Event) {
   const target = event.target as HTMLInputElement
   try {
+    if (target.matches('.application-status-control')) target.dataset.statusColor = applicationStatusColor(target.value)
     if (target.matches('[data-entries-control]')) {
       if (cacheOwner !== null) writePageData('entries:' + view, cacheOwner, target.value)
       if (view === 'applications') { applicationPage = 1; applicationSelection.clear(); render() }
@@ -1173,7 +1239,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], cached = false) {
       id: 'google:' + Array.from(new Uint8Array(hash)).map(value => value.toString(16).padStart(2, '0')).join(''),
       title: text(result.title).slice(0, 500), company: '', location: '', role: '',
       url, applyUrl: safeUrl(result.url), source: 'Google · ' + new URL(url).hostname,
-      salary: '', date: '', direct: false, logo: '', workMode: 'Check listing', employmentType: 'Not specified',
+      salary: salaryFromJob(result), date: '', direct: false, logo: '', workMode: 'Check listing', employmentType: 'Not specified',
       description: 'Google search summary:\n\n' + text(result.content || '') + '\n\nOpen the original listing for the full description, employer details, and posting date.',
     } as Job
   }))
@@ -1226,6 +1292,7 @@ async function saveSelectedJobs(status: 'Saved' | 'Applied' | 'Unavailable' = 'S
     failed = 0
   let failureMessage = ''
   try {
+    await preloadListingSalaries(selectedJobs.filter(job => !job.salary && !trackedApplication(job)?.payload.salary).map(job => job.url))
     for (const job of selectedJobs) {
       jobBulkStatus(`${action.progress}… ${saved + skipped + failed} of ${selectedJobs.length}`)
       const existing = trackedApplication(job)
@@ -1398,7 +1465,7 @@ async function loadJobs(preservePage = false) {
   const cached = cacheOwner === null ? null : readPageData<JobFeed>('jobs:' + new URLSearchParams({ q, source }).toString(), cacheOwner)
   if (cached && source !== 'google') {
     jobFreshness?.observe(cached.jobs)
-    jobs = cached.jobs
+    jobs = cached.jobs.map(job => ({ ...job, salary: salaryFromJob(job) }))
     select('[data-feed-message]').textContent = cached.message
     renderJobs(!preservePage)
     preservePage = true
@@ -1422,7 +1489,7 @@ async function loadJobs(preservePage = false) {
     const data = await searchJobFeed(q, source, AbortSignal.any([jobSearchController.signal, AbortSignal.timeout(15000)]))
     if (request !== jobRequest) return
     jobFreshness?.observe(data.jobs)
-    jobs = [...data.jobs]
+    jobs = data.jobs.map((job: Job) => ({ ...job, salary: salaryFromJob(job) }))
     select('[data-feed-message]').textContent = data.message
     if (!cached || JSON.stringify(cached.jobs) !== JSON.stringify(data.jobs) || cached.message !== data.message) renderJobs(!preservePage)
     if (data.mode === 'external' && safeUrl(data.searchUrl))

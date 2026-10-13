@@ -1,3 +1,5 @@
+import { applicationStatusColor } from './application-status'
+
 type Application = { id: number; payload: Record<string, string> & { title: string; company: string; status: string } }
 
 export function attachTrackedJobSearch(input: HTMLInputElement, list: HTMLElement, applications: () => Application[], onQuery: () => void, onChoose: (id: number) => void) {
@@ -49,7 +51,8 @@ export function attachTrackedJobSearch(input: HTMLInputElement, list: HTMLElemen
       company.textContent = item.payload.company || 'Company not specified'
       copy.append(title, company)
       const status = document.createElement('span')
-      status.className = 'badge bg-primary-lt'
+      status.className = 'badge application-status-badge'
+      status.dataset.statusColor = applicationStatusColor(item.payload.status)
       status.textContent = item.payload.status
       option.append(copy, status)
       option.addEventListener('pointerdown', event => event.preventDefault())

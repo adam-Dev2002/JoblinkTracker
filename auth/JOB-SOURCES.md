@@ -82,6 +82,16 @@ News and job feeds run on a separate local PHP process at port 8082; account and
 
 ## Applying and tracking
 
+Application statuses share one color palette in the tracker, edit dialog, search suggestions and dashboard: Saved is gray, Application opened azure, Unavailable orange, Applied blue, Interview purple, Offer green, Rejected red and Ghosted amber. Status text remains visible and the controls retain native keyboard operation. Light and dark themes use contrasting text with tinted backgrounds.
+
+Salaries retain the amount or range, disclosed currency and pay period. Feed normalization reads Remotive salary text, [Jobicy salary fields](https://github.com/Jobicy/remote-jobs-api), [JSearch salary fields](https://www.openwebninja.com/api/jsearch), and salary statements in job descriptions. Google summaries and structured result data can also supply pay. No currency or pay estimate is inferred when the employer has not disclosed it.
+
+The cloud API can retrieve pay from supported original listing pages at `POST /api/jobs/salary` with `{ "urls": ["https://..."] }`. This is authenticated and CSRF protected, accepts at most 20 URLs, validates supported HTTPS hosts and job-detail paths, validates redirects to the same posting, limits response sizes and timeouts, and caches public salary results. JSON-LD JobPosting salaries take precedence over labeled page text. Unsupported, blocked and undisclosed sources leave the salary empty and do not prevent saving a job.
+
+Explicit Save, Applied and Unavailable actions fetch missing salary before saving; opening a source link still does not create a record. Existing applications with blank salary fields refresh on the visible tracker page through `POST /api/workspace/salaries` with `{ "ids": [123] }`. Owner checks apply to every ID. Updates compare the stored payload atomically so concurrent edits and manually entered salaries win. Salary refreshes preserve notes and application status and update the account-scoped page cache.
+
+Run `node auth/test-job-salary.mjs` for extraction and source request checks, `node auth/test-application-salaries.mjs` for fixture browser checks, and `node auth/test-application-salary-api.mjs` for temporary-account cloud persistence, CSRF, ownership and concurrent-edit checks. The API test cleans up its temporary accounts afterward.
+
 Find Work displays provider-supplied employer logos, with initials when a logo is missing or fails to load. Keyword search, location, employment type, and listing time narrow the results. Remote-work tags are not a guarantee of worldwide eligibility.
 
 The Apply button opens a new tab without saving an application. When the provider supplies a verified direct application URL, the tab opens that employer page; otherwise the button says **Apply via source** and opens the original job-board listing. The same behavior applies to the job details dialog. Joblink does not invent employer application URLs.
