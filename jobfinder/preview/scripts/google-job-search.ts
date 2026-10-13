@@ -1,4 +1,5 @@
 import { googleJobQuery, googleJobListingUrl, type GoogleJobFilters } from './google-job-query'
+import { jobListingIdentity } from './job-identity'
 
 export const jobsPerPage = 12
 export type GoogleJobResult = { url: string; listingUrl?: string; title: string; content?: string; visibleUrl?: string }
@@ -19,9 +20,89 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   let latestQuery = ''
   let active = false
   let resultCount = 0
+  let availableCount = 0
+  let requestedPage = 1
+  let logicalPage = 1
+  let repacking = false
+  let pagePending = false
+  let resultReady = false
+  let hiddenResults = false
+  let internalPageClick = false
+  let searchGeneration = 0
+  let resultsDiv: HTMLElement | null = null
+  const pageResults = new Map<number, GoogleJobResult[]>()
+  const allResults = () => {
+    const unique = new Map<string, GoogleJobResult>()
+    for (const [, results] of [...pageResults].sort(([a], [b]) => a - b)) {
+      for (const result of results) {
+        const key = jobListingIdentity(result.listingUrl || result.url)
+        if (key && !unique.has(key)) unique.set(key, result)
+      }
+    }
+    return [...unique.values()]
+  }
+  const nativePages = () => Array.from(host.querySelectorAll<HTMLElement>('.gsc-cursor-page')).map(element => ({ element, page: Number(element.textContent?.trim()) })).filter(value => Number.isInteger(value.page) && value.page > 0)
+  const unreadPage = () => nativePages().find(value => !pageResults.has(value.page))
+  const redraw = () => {
+    if (!active || !resultsDiv?.isConnected) return
+    resultReady = false
+    renderResults(allResults(), resultsDiv)
+  }
+  const changePage = (page: number) => {
+    if (!active || pagePending || page < 1) return
+    logicalPage = page
+    panel.dataset.searchFailed = 'false'
+    redraw()
+  }
+  const fillPage = () => {
+    if (!active || !repacking || !resultReady || pagePending || panel.dataset.searchFailed === 'true') return
+    if (availableCount >= logicalPage * jobsPerPage) return
+    const next = unreadPage()
+    if (!next) {
+      const last = Math.max(1, Math.ceil(availableCount / jobsPerPage))
+      if (logicalPage > last) { logicalPage = last; redraw(); return }
+      panel.setAttribute('aria-busy', 'false')
+      onStatusChange()
+      return
+    }
+    requestedPage = next.page
+    pagePending = true
+    resultReady = false
+    panel.setAttribute('aria-busy', 'true')
+    setStatus('Loading more matching jobs…', true)
+    onStatusChange()
+    updatePagination()
+    clearTimeout(resultTimer)
+    resultTimer = setTimeout(() => finish('More job results could not load. Try searching again.'), 15000)
+    internalPageClick = true
+    try { next.element.click() } finally { internalPageClick = false }
+  }
+  host.addEventListener('click', event => {
+    const target = (event.target as Element).closest<HTMLElement>('.gsc-cursor-page')
+    if (!target || internalPageClick) return
+    if (pagePending) { event.preventDefault(); event.stopImmediatePropagation(); return }
+    requestedPage = Number(target.textContent?.trim()) || 1
+    repacking = false
+    logicalPage = 1
+  }, true)
+  const schedulePagination = () => {
+    const generation = searchGeneration
+    requestAnimationFrame(() => {
+      if (!active || generation !== searchGeneration) return
+      updatePagination()
+      fillPage()
+    })
+  }
   let resultTimer: ReturnType<typeof setTimeout> | undefined
   const updatePagination = () => {
     if (!active) return
+    if (!repacking && resultReady && hiddenResults && nativePages().length > 1) {
+      repacking = true
+      logicalPage = requestedPage
+      panel.setAttribute('aria-busy', 'true')
+      redraw()
+      return
+    }
     const results = host.querySelector<HTMLElement>('.gsc-results.gsc-webResult')
     if (!results) return
     let footer = results.querySelector<HTMLElement>('.gsc-cursor-box')
@@ -33,11 +114,11 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       else results.append(footer)
     }
     footer.classList.add('workspace-pagination')
-    footer.classList.toggle('d-none', resultCount === 0)
+    footer.classList.toggle('d-none', resultCount === 0 && !pagePending)
     const cursor = footer.querySelector<HTMLElement>('.gsc-cursor')
     const pages = Array.from(cursor?.querySelectorAll<HTMLElement>('.gsc-cursor-page') || [])
     const current = Math.max(0, pages.findIndex((page) => page.classList.contains('gsc-cursor-current-page')))
-    const pageNumber = Number(pages[current]?.textContent?.trim()) || 1
+    const pageNumber = repacking ? logicalPage : Number(pages[current]?.textContent?.trim()) || 1
     let count = footer.querySelector<HTMLElement>('[data-google-page-count]')
     if (!count) {
       count = document.createElement('p')
@@ -48,7 +129,38 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     }
     // Google does not provide an exact total of validated job-detail pages.
     count.textContent = `Showing ${resultCount} ${resultCount === 1 ? 'entry' : 'entries'} on page ${pageNumber}`
+    if (repacking) {
+      cursor?.classList.add('d-none')
+      let packed = footer.querySelector<HTMLElement>('[data-google-packed-pages]')
+      if (!packed) {
+        packed = document.createElement('div')
+        packed.className = 'pagination'
+        packed.dataset.googlePackedPages = ''
+        footer.append(packed)
+      }
+      const knownPages = Math.max(1, Math.ceil(availableCount / jobsPerPage))
+      const lastPage = Math.max(logicalPage, knownPages + (unreadPage() ? 1 : 0))
+      packed.replaceChildren()
+      const button = (page: number, label: string, disabled = false) => {
+        const control = document.createElement('button')
+        control.type = 'button'
+        control.className = 'page-link'
+        control.textContent = label
+        control.dataset.googleJobPage = String(page)
+        control.disabled = disabled || pagePending
+        control.setAttribute('aria-label', /^\d+$/.test(label) ? 'Page ' + label : label + ' page')
+        if (label === String(logicalPage)) { control.classList.add('active'); control.setAttribute('aria-current', 'page') }
+        control.addEventListener('click', () => changePage(page))
+        packed!.append(control)
+      }
+      if (logicalPage > 1) button(logicalPage - 1, 'Previous')
+      for (let page = 1; page <= lastPage; page++) button(page, String(page))
+      button(logicalPage + 1, 'Next', logicalPage === lastPage)
+      return
+    }
+    footer.querySelector('[data-google-packed-pages]')?.remove()
     if (!cursor) return
+    cursor.classList.remove('d-none')
     cursor.classList.add('pagination')
     cursor.querySelectorAll<HTMLElement>('.gsc-cursor-nav').forEach((nav) => nav.remove())
     const navButton = (label: string, target: number) => {
@@ -80,6 +192,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     clearTimeout(resultTimer)
     panel.setAttribute('aria-busy', 'false')
     panel.dataset.searchFailed = String(!announcementOnly)
+    if (!announcementOnly) { pagePending = false; resultReady = false }
     setStatus(message, announcementOnly)
     if (!announcementOnly) root.querySelector('[data-google-jobs-preview] .data-placeholder')?.remove()
     onStatusChange()
@@ -104,10 +217,14 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       }
     }
     const listings = (results || []).map((result) => ({ ...result, listingUrl: googleJobListingUrl(result.url) })).filter((result) => result.listingUrl)
+    pageResults.set(requestedPage, listings)
+    pagePending = false
+    resultReady = false
     resultCount = listings.length
     const organic = document.createElement('div')
     div.append(organic)
-    renderResults(listings, organic)
+    resultsDiv = organic
+    renderResults(repacking ? allResults() : listings, organic)
     finish(`${listings.length} job ${listings.length === 1 ? 'listing' : 'listings'} on this page.`, true)
     return true
   }
@@ -154,7 +271,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
             rendered: () => {
               // Google adds its footer after this callback; theme the new nodes.
               // Preserve Google's native page controls and click handlers.
-              requestAnimationFrame(updatePagination)
+              schedulePagination()
             },
           },
         },
@@ -167,19 +284,39 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     return initialization
   }
   return {
-    updateResultCount(count: number) {
+    resultPage() { return repacking ? logicalPage : 1 },
+    updateResultCount(count: number, options: { available?: number; hidden?: boolean; live?: boolean } = {}) {
       resultCount = count
+      availableCount = options.available ?? count
+      if (options.live !== false) {
+        resultReady = true
+        hiddenResults = Boolean(options.hidden)
+        if (repacking && availableCount < logicalPage * jobsPerPage) panel.setAttribute('aria-busy', 'true')
+        else if (repacking) panel.setAttribute('aria-busy', 'false')
+      }
       if (active) setStatus(`${count} job ${count === 1 ? 'listing' : 'listings'} on this page.`, true)
       updatePagination()
+      if (options.live !== false) schedulePagination()
     },
     hide() {
       active = false
+      searchGeneration++
       clearTimeout(resultTimer)
       panel.classList.add('d-none')
       panel.setAttribute('aria-busy', 'false')
       onStatusChange()
     },
     async search(filters: GoogleJobFilters) {
+      searchGeneration++
+      clearTimeout(resultTimer)
+      pageResults.clear()
+      requestedPage = 1
+      logicalPage = 1
+      repacking = false
+      pagePending = false
+      resultReady = false
+      hiddenResults = false
+      resultsDiv = null
       active = true
       panel.classList.remove('d-none')
       panel.setAttribute('aria-busy', 'true')

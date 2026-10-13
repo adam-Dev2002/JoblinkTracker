@@ -1291,7 +1291,10 @@ function renderGoogleJobCards() {
     div.innerHTML = select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML
     return
   }
-  const listings = Array.from(googleJobs.values()).filter(selectableJob)
+  const candidates = Array.from(googleJobs.values())
+  const available = candidates.filter(selectableJob)
+  const page = googleJobSearch?.resultPage() || 1
+  const listings = available.slice((page - 1) * jobsPerPage, page * jobsPerPage)
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
     '<div class="google-job-grid">' +
@@ -1305,7 +1308,7 @@ function renderGoogleJobCards() {
       .join('') +
     '</div>'
   div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
-  googleJobSearch?.updateResultCount(listings.length)
+  googleJobSearch?.updateResultCount(listings.length, { available: available.length, hidden: available.length < candidates.length, live: div !== select('[data-google-jobs-preview]') })
   updateJobResultsState()
   updateJobSelection()
 }
