@@ -31,6 +31,7 @@ const root = document.querySelector<HTMLElement>('[data-workspace-view]')!
 const view = root.dataset.workspaceView!
 const select = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!
 const tableActionArrow = select<HTMLTemplateElement>('[data-table-action-arrow]')?.innerHTML || ''
+const jobActionIcons = Object.fromEntries(Array.from(root.querySelectorAll<HTMLTemplateElement>('[data-job-action-icon]'), template => [template.dataset.jobActionIcon!, template.innerHTML]))
 const loginUrl = () => `/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`
 const htmlEscape = (value: string | number | null | undefined) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -1182,6 +1183,7 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
   const id = htmlEscape(job.id)
   const title = htmlEscape(job.title)
   const newLabel = jobFreshness?.label(job)
+  const savedLabel = trackedApplication(job) ? 'Saved' : 'Save'
   const logo = google
     ? `${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(google.iconUrl)}" alt="${htmlEscape(google.domain)} source icon" loading="lazy" referrerpolicy="no-referrer" />`
     : `<span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(job.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(job.logo))}" alt="${htmlEscape(job.company)} logo" loading="lazy" referrerpolicy="no-referrer" />` : ''}`
@@ -1208,12 +1210,14 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
         <p class="text-secondary small mb-0">${source}</p>
       </div>
       <div class="job-card-footer">
-        <div class="d-flex gap-2 job-card-actions">
-          <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}" title="${job.direct ? 'Apply on company site' : 'Apply via source'}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
-          <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
+        <div class="job-card-actions">
+          <a class="btn btn-primary job-card-apply" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}" title="${job.direct ? 'Apply on company site' : 'Apply via source'}">${jobActionIcons.apply}<span class="job-card-button-label">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</span></a>
+          <div class="job-card-secondary-actions">
+            <button type="button" class="btn job-card-action job-card-action-applied" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}" title="Mark as applied">${jobActionIcons.applied}<span class="job-card-button-label">Applied</span></button>
+            <button type="button" class="btn job-card-action job-card-action-save" data-track="${id}" aria-label="Save ${title}" title="Save to your tracker">${jobActionIcons.save}<span class="job-card-button-label">${savedLabel}</span></button>
+            <button type="button" class="btn job-card-action job-card-action-unavailable" data-mark-unavailable-job="${id}" aria-label="Mark unavailable: ${title}" title="Mark unavailable">${jobActionIcons.unavailable}<span class="job-card-button-label">Unavailable</span></button>
+          </div>
         </div>
-        <button type="button" class="btn btn-outline-success" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}">Mark as applied</button>
-        <button type="button" class="btn btn-outline-secondary" data-mark-unavailable-job="${id}" aria-label="Mark unavailable: ${title}">Mark unavailable</button>
       </div>
     </div>
   </article>`

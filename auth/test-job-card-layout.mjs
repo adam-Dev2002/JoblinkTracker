@@ -85,9 +85,15 @@ try {
         const card = child.matches('.job-card') ? child : child.querySelector('.job-card');
         const rect = card.getBoundingClientRect();
         const action = card.querySelector('[data-apply-job]').getBoundingClientRect();
+        const footer = card.querySelector('.job-card-footer').getBoundingClientRect();
+        const secondary = Array.from(card.querySelectorAll('.job-card-secondary-actions .btn'), button => {
+          const box = button.getBoundingClientRect();
+          const label = button.querySelector('.job-card-button-label');
+          return { left: box.left, right: box.right, top: box.top, height: box.height, clipped: label.scrollWidth > label.clientWidth, text: label.textContent, labelWidth: label.clientWidth, textWidth: label.scrollWidth };
+        });
         let row = rows.find(row => Math.abs(row.top - rect.top) < 2);
         if (!row) { row = { top: rect.top, cards: [] }; rows.push(row); }
-        row.cards.push({ left: rect.left, right: rect.right, width: rect.width, height: rect.height, actionTop: action.top });
+        row.cards.push({ left: rect.left, right: rect.right, width: rect.width, height: rect.height, actionTop: action.top, actionLeft: action.left, actionRight: action.right, footerLeft: footer.left, footerRight: footer.right, secondary, icons: card.querySelectorAll('.job-card-button-icon svg').length });
       }
       return { left: box.left, right: box.right, rows, trackWidth: parseFloat(getComputedStyle(grid).gridTemplateColumns), overflow: document.documentElement.scrollWidth > window.innerWidth };
     });
@@ -98,6 +104,14 @@ try {
         assert.ok(Math.abs(card.width - result.trackWidth) < 2, 'Uniform columns, including incomplete rows');
         assert.ok(Math.abs(card.height - result.rows[0].cards[0].height) < 2, 'Equal card heights across rows');
         assert.ok(Math.abs(card.actionTop - row.cards[0].actionTop) < 2, 'Apply buttons align');
+        assert.ok(Math.abs(card.actionLeft - card.footerLeft) < 1 && Math.abs(card.actionRight - card.footerRight) < 1, 'Apply fills the card action area');
+        assert.equal(card.secondary.length, 3);
+        assert.equal(card.icons, 4, 'Each action has its matching shared icon');
+        assert.ok(Math.abs(card.secondary[0].left - card.actionLeft) < 1 && Math.abs(card.secondary[2].right - card.actionRight) < 1, 'Secondary actions fill the same width as Apply');
+        for (const button of card.secondary) {
+          assert.ok(Math.abs(button.top - card.secondary[0].top) < 1 && Math.abs(button.height - card.secondary[0].height) < 1, 'All three secondary actions remain in one aligned row');
+          assert.equal(button.clipped, false, `${button.text} remains readable on narrow cards (${button.labelWidth}px available, ${button.textWidth}px text)`);
+        }
         if (index) assert.ok(Math.abs(card.left - row.cards[index - 1].right - 16) < 2, 'Consistent 16px gaps');
       }
     }
@@ -131,7 +145,7 @@ try {
   await checkLayout('.google-job-grid', 12);
   await page.waitForFunction(() => document.querySelector('[data-google-page-count]')?.textContent === 'Showing 12 entries on page 1');
   assert.equal(await page.evaluate(() => window.layoutPageSize), 12, 'Google requests the same twelve-card page as feeds');
-  const pairs = ['.job-card','.card-body','.avatar','.job-title','.job-title-link','.job-details-link','.job-card-identity .small','.job-card-metadata','.job-tag','.job-card-actions .btn-primary','.job-card-actions button'];
+  const pairs = ['.job-card','.card-body','.avatar','.job-title','.job-title-link','.job-details-link','.job-card-identity .small','.job-card-metadata','.job-tag','.job-card-actions .btn-primary','.job-card-action-applied','.job-card-action-save','.job-card-action-unavailable'];
   for (const selector of pairs) {
     const feed = await page.locator('[data-job-results]').locator(selector).first().evaluate(metrics);
     const google = await page.locator('.google-job-grid').locator(selector).first().evaluate(metrics);
@@ -176,6 +190,13 @@ try {
   if (process.env.JOBLINK_LAYOUT_SCREENSHOT) {
     await page.locator('#job-results-title').click();
     await page.locator('.job-results-panel').screenshot({ path: process.env.JOBLINK_LAYOUT_SCREENSHOT });
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await page.locator('[data-job-results] .job-card').first().screenshot({ path: process.env.JOBLINK_LAYOUT_SCREENSHOT.replace(/\.png$/, '-mobile.png'), animations: 'disabled', style: '.jobify-sidebar, .joblink-assistant { visibility: hidden !important; }' });
+    await page.setViewportSize({ width: 1530, height: 1000 });
+    const theme = await page.locator('html').getAttribute('data-bs-theme');
+    await page.locator('html').evaluate(html => html.setAttribute('data-bs-theme', 'dark'));
+    await page.locator('[data-job-results] .job-card').first().screenshot({ path: process.env.JOBLINK_LAYOUT_SCREENSHOT.replace(/\.png$/, '-dark.png'), animations: 'disabled', style: '.joblink-assistant { visibility: hidden !important; }' });
+    await page.locator('html').evaluate((html, theme) => theme === null ? html.removeAttribute('data-bs-theme') : html.setAttribute('data-bs-theme', theme), theme);
   }
   await page.locator('#job-location').fill('Davao');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());

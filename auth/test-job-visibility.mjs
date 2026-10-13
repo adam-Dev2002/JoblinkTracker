@@ -92,6 +92,8 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   for (let index = 0; index < 5; index++) assert.equal(await card(index).count(), 0);
   assert.equal(await card(5).getByRole('button', { name: 'Mark as applied' }).count(), 1);
   assert.equal(await card(6).locator('[data-mark-applied-job]').count(), 1, 'Saved jobs also have direct confirmation');
+  assert.equal(await card(6).locator('[data-track] .job-card-button-label').innerText(), 'Saved', 'Previously tracked cards show their saved state');
+  assert.equal(await card(7).locator('[data-track] .job-card-button-label').innerText(), 'Save', 'Untracked cards keep an accurate Save action');
   await card(5).locator('[data-job-pick]').check();
   failSave = true;
   await card(5).getByRole('button', { name: 'Mark as applied' }).click();
