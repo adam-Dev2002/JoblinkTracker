@@ -67,6 +67,7 @@ const googleJobSearch =
     : null
 let visibleJobIds: string[] = []
 let savingSelectedJobs = false
+const pendingJobSaves = new Set<string>()
 let jobsLoading = false
 let jobSearchInitialized = false
 let jobPage = 1
@@ -85,7 +86,7 @@ let editing: Entry | null = null
 let modalPrefill: Record<string, string> = {}
 let modalKind: Kind = 'application'
 let restoreFocus: HTMLElement | null = null
-const appStatuses = ['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted']
+const appStatuses = ['Saved', 'Application opened', 'Unavailable', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted']
 let taskStatuses = ['To do', 'In progress', 'Done']
 const empty = (message: string) => `<div class="workspace-empty">${htmlEscape(message)}</div>`
 function error(message: string) {
@@ -200,7 +201,7 @@ function render() {
   if (!loaded) return
   cacheWorkspace()
   if (view === 'jobs' && jobSearchInitialized) {
-    for (const [id, job] of jobSelection) if (hasApplied(job) || isClosedListing(job)) jobSelection.delete(id)
+    for (const [id, job] of jobSelection) if (!selectableJob(job)) jobSelection.delete(id)
     renderGoogleJobCards()
     if (jobs.length || !jobsLoading) renderJobs(false)
   }
@@ -212,7 +213,7 @@ function render() {
       .filter((item) => item.payload.date >= currentDate)
       .sort((a, b) => (a.payload.date + a.payload.time).localeCompare(b.payload.date + b.payload.time))
   if (view === 'dashboard') {
-    const stats: Record<string, number> = { applications: apps.filter((i) => !['Saved', 'Application opened'].includes(i.payload.status)).length, interviews: apps.filter((i) => i.payload.status === 'Interview').length, tasks: tasks.filter((i) => i.payload.status !== 'Done').length, events: events.length }
+    const stats: Record<string, number> = { applications: apps.filter(isApplied).length, interviews: apps.filter((i) => i.payload.status === 'Interview').length, tasks: tasks.filter((i) => i.payload.status !== 'Done').length, events: events.length }
     for (const [key, value] of Object.entries(stats)) select(`[data-stat="${key}"]`).textContent = String(value)
     select('[data-dashboard-applications]').innerHTML = apps.length
       ? `<ul class="list-group list-group-flush dashboard-application-list" aria-label="Recent applications">${apps
@@ -235,12 +236,13 @@ function render() {
   }
   if (view === 'applications') {
     tableActions?.close()
+    const submitted = apps.filter(isApplied)
     const stats: Record<string, string | number> = {
       total: apps.length,
       open: apps.filter((i) => ['Applied', 'Interview', 'Offer'].includes(i.payload.status)).length,
       interview: apps.filter((i) => i.payload.status === 'Interview').length,
       offer: apps.filter((i) => i.payload.status === 'Offer').length,
-      reply: apps.some((i) => !['Saved', 'Application opened'].includes(i.payload.status)) ? Math.round((apps.filter((i) => ['Interview', 'Offer', 'Rejected'].includes(i.payload.status)).length / apps.filter((i) => !['Saved', 'Application opened'].includes(i.payload.status)).length) * 100) + '%' : '0%',
+      reply: submitted.length ? Math.round((apps.filter((i) => ['Interview', 'Offer', 'Rejected'].includes(i.payload.status)).length / submitted.length) * 100) + '%' : '0%',
     }
     for (const [key, value] of Object.entries(stats)) select(`[data-application-stat="${key}"]`).textContent = String(value)
     const companyFilter = select<HTMLSelectElement>('[data-application-company]')
@@ -542,7 +544,7 @@ select('[data-removal-success-modal]').addEventListener('shown.bs.modal', () => 
   select('[data-removal-success-close]').focus()
 })
 select('[data-removal-success-modal]').addEventListener('hidden.bs.modal', () => {
-  const fallback = root.querySelector<HTMLElement>('[data-application-all]:not(:disabled),[data-sheet-all]:not(:disabled),[data-add]:not(:disabled),[data-month-prev]')
+  const fallback = root.querySelector<HTMLElement>('[data-application-all]:not(:disabled),[data-sheet-all]:not(:disabled),[data-job-select-all]:not(:disabled),#job-query,[data-add]:not(:disabled),[data-month-prev]')
   const focus = confirmationFocus?.isConnected && !confirmationFocus.hasAttribute('disabled') ? confirmationFocus : fallback
   focus?.focus({ preventScroll: true })
 })
@@ -784,12 +786,21 @@ async function handleClick(event: Event) {
         target.removeAttribute('aria-disabled')
       }
     }
-    if (target.dataset.markAppliedJob && !savingSelectedJobs && loaded) {
-      const job = findJob(target.dataset.markAppliedJob)
-      const button = target as HTMLButtonElement
-      if (job) {
-        button.disabled = true
-        try { await markJobApplied(job) } finally { button.disabled = false }
+    if ((target.dataset.markAppliedJob || target.dataset.markUnavailableJob) && !savingSelectedJobs && loaded) {
+      const job = findJob((target.dataset.markAppliedJob || target.dataset.markUnavailableJob)!)
+      if (job && !pendingJobSaves.has(job.id)) {
+        pendingJobSaves.add(job.id)
+        updateJobSelection()
+        try {
+          if (target.dataset.markUnavailableJob) {
+            confirmationFocus = target
+            await markJobUnavailable(job)
+            showRemovalSuccess('The job was marked unavailable and removed from your listings. Change its tracker status to Saved to restore it.')
+          } else await markJobApplied(job)
+        } finally {
+          pendingJobSaves.delete(job.id)
+          updateJobSelection()
+        }
       }
     }
     if (target.dataset.confirmApplication) {
@@ -981,7 +992,7 @@ root.addEventListener(
         input.checked = !input.checked
         void handleChange(event)
       }
-    } else if (target.hasAttribute('data-track') || target.hasAttribute('data-confirm-application') || target.hasAttribute('data-mark-applied-job') || (target.tagName === 'A' && event.key === 'Enter')) {
+    } else if (target.hasAttribute('data-track') || target.hasAttribute('data-confirm-application') || target.hasAttribute('data-mark-applied-job') || target.hasAttribute('data-mark-unavailable-job') || (target.tagName === 'A' && event.key === 'Enter')) {
       event.preventDefault()
       event.stopPropagation()
       if (!(target instanceof HTMLButtonElement) || !target.disabled) void handleClick(event)
@@ -1128,17 +1139,29 @@ function updateJobSelection() {
     input.disabled = busy || jobsLoading
     input.closest('[data-job-card]')?.classList.toggle('border-primary', input.checked)
   })
-  root.querySelectorAll<HTMLButtonElement>('[data-track],[data-mark-applied-job]').forEach((button) => {
-    button.disabled = busy
+  root.querySelectorAll<HTMLButtonElement>('[data-track],[data-mark-applied-job],[data-mark-unavailable-job]').forEach((button) => {
+    button.disabled = busy || pendingJobSaves.has((button.dataset.track || button.dataset.markAppliedJob || button.dataset.markUnavailableJob)!)
+  })
+  root.querySelectorAll<HTMLAnchorElement>('[data-apply-job]').forEach(link => {
+    if (pendingJobSaves.has(link.dataset.applyJob!)) {
+      link.setAttribute('aria-disabled', 'true')
+      link.dataset.jobSaveBusy = ''
+    } else if (link.hasAttribute('data-job-save-busy')) {
+      link.removeAttribute('aria-disabled')
+      delete link.dataset.jobSaveBusy
+    }
   })
 }
-function trackedApplication(job: Job) {
+function getApplicationIndex() {
   if (!applicationIndex || indexedWorkspace !== items || indexedWorkspaceRevision !== workspaceRevision) {
     applicationIndex = makeApplicationIndex(owned('application'))
     indexedWorkspace = items
     indexedWorkspaceRevision = workspaceRevision
   }
-  return applicationIndex.lookup(job)
+  return applicationIndex
+}
+function trackedApplication(job: Job) {
+  return getApplicationIndex().lookup(job)
 }
 function isApplied(item: Entry) {
   return ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].includes(item.payload.status)
@@ -1149,7 +1172,7 @@ function hasApplied(job: Job) {
 }
 function selectableJob(job: Job) {
   // Saving or opening a listing never makes its card ineligible for selection.
-  return !isClosedListing(job) && !hasApplied(job)
+  return !isClosedListing(job) && !getApplicationIndex().isUnavailable(job) && !hasApplied(job)
 }
 function jobsInSelectionScope() {
   return [...new Set([...visibleJobIds, ...visibleGoogleJobIds])]
@@ -1186,6 +1209,7 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
           <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
         </div>
         <button type="button" class="btn btn-outline-success" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}">Mark as applied</button>
+        <button type="button" class="btn btn-outline-secondary" data-mark-unavailable-job="${id}" aria-label="Mark unavailable: ${title}">Mark unavailable</button>
       </div>
     </div>
   </article>`
@@ -1244,7 +1268,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
 function renderGoogleJobCards() {
   const div = googleResultsHost
   if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
-  const listings = Array.from(googleJobs.values()).filter(job => !isClosedListing(job) && !hasApplied(job))
+  const listings = Array.from(googleJobs.values()).filter(selectableJob)
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
     '<div class="google-job-grid">' +
@@ -1256,7 +1280,7 @@ function renderGoogleJobCards() {
         return renderJobCard(job, { domain, origin: website.origin, iconUrl })
       })
       .join('') +
-    (listings.length ? '' : '<p class="text-secondary mb-0">No unapplied jobs on this Google results page. Try another page or broader keywords.</p>') +
+    (listings.length ? '' : '<p class="text-secondary mb-0">No unapplied jobs available on this Google results page. Try another page or broader keywords.</p>') +
     '</div>'
   div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
   if (select<HTMLSelectElement>('#job-source').value === 'google') select('[data-job-count]').textContent = `${listings.length} results on this page`
@@ -1275,6 +1299,10 @@ async function markJobApplied(job: Job, renderAfter = true) {
   const existing = trackedApplication(job)
   if (existing && isApplied(existing)) { if (renderAfter) render(); return existing }
   return save('application', existing ? { ...existing.payload, status: 'Applied', date: today() } : jobApplicationPayload(job, 'Applied'), existing?.id || 0, renderAfter)
+}
+async function markJobUnavailable(job: Job) {
+  const existing = trackedApplication(job)
+  return save('application', existing ? { ...existing.payload, status: 'Unavailable' } : jobApplicationPayload(job, 'Unavailable'), existing?.id || 0)
 }
 async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
   if (savingSelectedJobs || !loaded || !jobSelection.size) return
@@ -1370,7 +1398,7 @@ function renderJobs(resetPage = true) {
     // Feed timestamps without an offset are interpreted in UTC on every device.
     const date = (j.date || '').trim()
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date + 'T00:00:00Z' : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date) ? date.replace(' ', 'T') + 'Z' : date)
-    return !isClosedListing(j) && !hasApplied(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
+    return selectableJob(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
   })
   const perPage = entriesPerPage('job', list.length)
   jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / perPage)))

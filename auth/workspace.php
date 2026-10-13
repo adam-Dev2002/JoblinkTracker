@@ -66,7 +66,7 @@ function workspaceRequest(PDO $pdo, string $path, string $method): never {
         if (!$date || $date->format('Y-m-d') !== $data['date']) respond(['error' => 'Use a valid date.'], 422);
     }
     if (!empty($data['time']) && !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $data['time'])) respond(['error' => 'Use a valid time.'], 422);
-    if ($kind === 'application' && !in_array($data['status'], ['Saved','Application opened','Applied','Interview','Offer','Rejected','Ghosted'], true)) respond(['error' => 'Invalid application status.'], 422);
+    if ($kind === 'application' && !in_array($data['status'], ['Saved','Application opened','Unavailable','Applied','Interview','Offer','Rejected','Ghosted'], true)) respond(['error' => 'Invalid application status.'], 422);
     $statuses=['To do','In progress','Done'];$q=$pdo->prepare("SELECT payload FROM workspace_items WHERE user_id=? AND kind='task_status'");$q->execute([$user['id']]);foreach($q->fetchAll() as $row)$statuses[]=json_decode($row['payload'],true)['title'];
     if ($kind === 'task' && !in_array($data['status'], $statuses, true)) respond(['error' => 'Invalid task status.'], 422);
     if($kind==='task_status'){

@@ -22,6 +22,8 @@ function listingIdentity(value: string | undefined) {
 export function makeApplicationIndex<T extends Application>(applications: T[]) {
   const byUrl = new Map<string, Match<T>>()
   const bySourceId = new Map<string, Match<T>>()
+  const unavailableUrls = new Set<string>()
+  const unavailableSourceIds = new Set<string>()
   const remember = (index: Map<string, Match<T>>, key: string, candidate: Candidate<T>) => {
     const match = index.get(key)
     if (!match) index.set(key, { first: candidate, ...(candidate.applied ? { applied: candidate } : {}) })
@@ -29,12 +31,19 @@ export function makeApplicationIndex<T extends Application>(applications: T[]) {
   }
   applications.forEach((item, order) => {
     const candidate = { item, order, applied: appliedStatuses.has(item.payload.status || '') }
-    remember(byUrl, listingIdentity(item.payload.url), candidate)
+    const url = listingIdentity(item.payload.url)
+    remember(byUrl, url, candidate)
+    if (item.payload.status === 'Unavailable') unavailableUrls.add(url)
     if (typeof item.payload.jobId === 'string' && typeof item.payload.source === 'string') {
-      remember(bySourceId, JSON.stringify([item.payload.source, item.payload.jobId]), candidate)
+      const sourceId = JSON.stringify([item.payload.source, item.payload.jobId])
+      remember(bySourceId, sourceId, candidate)
+      if (item.payload.status === 'Unavailable') unavailableSourceIds.add(sourceId)
     }
   })
   return {
+    isUnavailable(job: { url: string; id: string; source: string }): boolean {
+      return Boolean(job.url && unavailableUrls.has(listingIdentity(job.url))) || unavailableSourceIds.has(JSON.stringify([job.source, job.id]))
+    },
     lookup(job: { url: string; id: string; source: string }): T | undefined {
       const url = job.url ? byUrl.get(listingIdentity(job.url)) : undefined
       const sourceId = bySourceId.get(JSON.stringify([job.source, job.id]))

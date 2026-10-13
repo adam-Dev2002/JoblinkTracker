@@ -17,6 +17,12 @@ assert.equal(makeApplicationIndex([urlMatch]).lookup({ ...job, url: 'https://www
 assert.equal(makeApplicationIndex([identityMatch]).lookup({ ...job, url: '' }), identityMatch, 'An empty job URL still supports source and job ID matches');
 assert.equal(makeApplicationIndex([identityMatch]).lookup({ ...job, source: 'Other source', url: '' }), undefined, 'Source IDs remain separate');
 assert.equal(makeApplicationIndex([saved]).lookup({ ...job, url: '', id: 'missing' }), undefined, 'An empty job URL does not trigger URL matching');
+const unavailable = record(10, { url: listing, jobId: job.id, source: job.source, status: 'Unavailable' });
+assert.equal(makeApplicationIndex([saved, unavailable]).isUnavailable(job), true, 'Unavailable matches are found even behind a saved duplicate');
+assert.equal(makeApplicationIndex([unavailable]).isUnavailable({ ...job, url: 'https://example.com/new-url' }), true, 'Source and ID still match after a URL change');
+assert.equal(makeApplicationIndex([unavailable]).isUnavailable({ ...job, source: 'Other source', url: '' }), false, 'Unavailable state stays scoped to the listing identity');
+assert.equal(makeApplicationIndex([unavailable]).isUnavailable({ ...job, url: 'https://www.google.com/url?q=' + encodeURIComponent(listing) }), true);
+assert.equal(makeApplicationIndex([{ ...unavailable, payload: { ...unavailable.payload, status: 'Saved' } }]).isUnavailable(job), false, 'Changing back to Saved restores availability');
 for (const status of ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted']) {
   const application = record(9, { url: listing, status });
   assert.equal(makeApplicationIndex([saved, application]).lookup(job), application, `${status} remains applied`);
@@ -46,6 +52,6 @@ let payloadReads = 0;
 const counted = applications.map(item => ({ id: item.id, get payload() { payloadReads++; return item.payload; } }));
 const countedIndex = makeApplicationIndex(counted);
 payloadReads = 0;
-for (let attempt = 0; attempt < 1000; attempt++) countedIndex.lookup(job);
+for (let attempt = 0; attempt < 1000; attempt++) { countedIndex.lookup(job); countedIndex.isUnavailable(job); }
 assert.equal(payloadReads, 0, 'Repeated card lookups never rescan application payloads');
 console.log('PASS: indexed application lookup preserves URL/source identity, first applied priority, scan parity, and constant-time repeated record access.');
