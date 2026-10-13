@@ -8,7 +8,7 @@ type GoogleWindow = Window & {
   __gcse?: { parsetags: string; initializationCallback: () => void; searchCallbacks: { web: { starting: (name: string, query: string) => string; ready: ReadyCallback; rendered: () => void } } }
   google?: { search?: { cse?: { element?: { render: (config: object) => void; getElement: (name: string) => GoogleElement | null } } } }
 }
-export function createGoogleJobSearch(root: HTMLElement, renderResults: (results: GoogleJobResult[], div: HTMLElement) => void) {
+export function createGoogleJobSearch(root: HTMLElement, renderResults: (results: GoogleJobResult[], div: HTMLElement) => void, onStatusChange: () => void = () => {}) {
   const panel = root.querySelector<HTMLElement>('[data-google-jobs]')!
   const status = root.querySelector<HTMLElement>('[data-google-jobs-status]')!
   const host = root.querySelector<HTMLElement>('[data-google-jobs-host]')!
@@ -19,7 +19,6 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   let latestQuery = ''
   let active = false
   let resultCount = 0
-  let indexedResultCount = 0
   let resultTimer: ReturnType<typeof setTimeout> | undefined
   const updatePagination = () => {
     if (!active) return
@@ -34,7 +33,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       else results.append(footer)
     }
     footer.classList.add('workspace-pagination')
-    footer.classList.toggle('d-none', indexedResultCount === 0)
+    footer.classList.toggle('d-none', resultCount === 0)
     const cursor = footer.querySelector<HTMLElement>('.gsc-cursor')
     const pages = Array.from(cursor?.querySelectorAll<HTMLElement>('.gsc-cursor-page') || [])
     const current = Math.max(0, pages.findIndex((page) => page.classList.contains('gsc-cursor-current-page')))
@@ -80,8 +79,10 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   const finish = (message: string, announcementOnly = false) => {
     clearTimeout(resultTimer)
     panel.setAttribute('aria-busy', 'false')
+    panel.dataset.searchFailed = String(!announcementOnly)
     setStatus(message, announcementOnly)
     if (!announcementOnly) root.querySelector('[data-google-jobs-preview] .data-placeholder')?.remove()
+    onStatusChange()
   }
   const ready: ReadyCallback = (_name, query, promos, results, div) => {
     if (!active || query !== latestQuery) return true
@@ -104,7 +105,6 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     }
     const listings = (results || []).map((result) => ({ ...result, listingUrl: googleJobListingUrl(result.url) })).filter((result) => result.listingUrl)
     resultCount = listings.length
-    indexedResultCount = listings.length
     const organic = document.createElement('div')
     div.append(organic)
     renderResults(listings, organic)
@@ -177,14 +177,19 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       clearTimeout(resultTimer)
       panel.classList.add('d-none')
       panel.setAttribute('aria-busy', 'false')
+      onStatusChange()
     },
     async search(filters: GoogleJobFilters) {
       active = true
       panel.classList.remove('d-none')
       panel.setAttribute('aria-busy', 'true')
+      panel.dataset.searchFailed = 'false'
       setStatus('Searching job listings…', true)
       const query = googleJobQuery(filters)
       latestQuery = query
+      googleWindow.google?.search?.cse?.element?.getElement(name)?.clearAllResults()
+      host.querySelectorAll('.google-job-grid, .gsc-cursor-box').forEach(node => node.remove())
+      onStatusChange()
       if (!engineId) {
         finish('Google job search is not connected yet. Choose another job feed for now.')
         return

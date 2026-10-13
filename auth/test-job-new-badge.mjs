@@ -32,7 +32,7 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   const job = (id, date = '', url = `https://example.com/jobs/${id}`) => ({ id, title: `Assistant ${id}`, company: 'Fixture company', location: 'Manila',
-    employmentType: 'Full-time', role: 'Virtual assistance', url, source: 'Fixture feed', salary: '', date, logo: '', workMode: 'Remote / WFH', description: 'Assistant job', direct: false });
+    employmentType: 'Full-time', role: 'Virtual assistance', url, source: 'Fixture feed', salary: '', date, logo: '', workMode: 'Remote / WFH', description: 'Assistant job in Manila, Philippines.', direct: false });
   const knownGoogle = job('known-google', '', 'https://www.onlinejobs.ph/jobseekers/job/known-assistant-123');
   const recent = job('recent', new Date(initialTime - 60 * 60 * 1000).toISOString());
   const old = job('old', new Date(initialTime - 10 * 86400000).toISOString());
@@ -147,7 +147,7 @@ try {
   await page.locator('#job-source').selectOption('all');
   jobs.push(...Array.from({ length: 13 }, (_, index) => job('paged-' + index)));
   await page.evaluate(() => { window.badgeTime += 6 * 60000; sessionStorage.setItem('new-badge-test-time', String(window.badgeTime)); document.querySelector('[data-job-search]').requestSubmit(); });
-  await page.locator('[data-job-count]').filter({ hasText: /^19 results$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: new RegExp(`^${19 + googleResults.length} results$`) }).waitFor();
   await page.locator('[data-job-pagination]').getByRole('button', { name: 'Page 2', exact: true }).click();
   assert.equal(await page.locator('[data-job-results] .job-card').count(), 7);
   assert.equal(await page.locator('[data-job-results] [data-job-new]').count(), 7, 'New badges apply on later result pages');

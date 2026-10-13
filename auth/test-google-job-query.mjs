@@ -3,6 +3,7 @@ import {
   googleJobQuery,
   isGoogleJobListing,
   googleJobListingUrl,
+  matchesGoogleJobSearch,
 } from "../jobfinder/preview/scripts/google-job-query.ts";
 
 const query = googleJobQuery({
@@ -12,6 +13,14 @@ const query = googleJobQuery({
   employment: "Part-time",
   listingTime: "7",
 });
+const filters = { keyword: 'AI developer', location: '' };
+assert.equal(matchesGoogleJobSearch(filters, 'AI-First Developer', 'Build software.'), true);
+assert.equal(matchesGoogleJobSearch(filters, 'Chair Developer', 'Build software.'), false, 'Short keywords must match whole words');
+assert.equal(matchesGoogleJobSearch(filters, 'AI Specialist', 'Development team.'), false, 'Every keyword must appear');
+assert.equal(matchesGoogleJobSearch({ keyword: 'bookkeeper, AI developer', location: '' }, 'Bookkeeper', ''), true);
+assert.equal(matchesGoogleJobSearch({ keyword: 'cafe developer', location: 'Manila' }, 'Café Developer', 'Remote role in Manila.'), true);
+assert.equal(matchesGoogleJobSearch({ ...filters, location: 'web developer' }, 'AI Web Developer', 'Full-time role in Manila.'), false, 'A role in the title does not prove a matching location');
+assert.equal(matchesGoogleJobSearch({ ...filters, location: 'Manila' }, 'AI Developer', 'Work in Cebu.'), false);
 assert.ok(query.includes("(assistant OR bookkeeper)"));
 assert.ok(query.includes("accountant"));
 assert.ok(query.includes("Manila"));

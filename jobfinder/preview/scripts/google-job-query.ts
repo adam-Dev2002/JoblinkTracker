@@ -9,6 +9,17 @@ const categoryTerms: Record<string, string> = {
   'Other roles': '-developer -designer -assistant -support -sales -marketing -finance -accountant -bookkeeper',
 }
 export type GoogleJobFilters = { keyword: string; classification: string; location: string; employment: string; listingTime: string }
+const normalizeSearchText = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}+#]+/gu, ' ').trim()
+export function matchesGoogleJobSearch(filters: Pick<GoogleJobFilters, 'keyword' | 'location'>, title: string, summary: string) {
+  const matches = (query: string, text: string) => {
+    const groups = query.split(',').map(normalizeSearchText).filter(Boolean)
+    const listing = ' ' + normalizeSearchText(text) + ' '
+    return !groups.length || groups.some(group => group.split(/\s+/).every(word => listing.includes(' ' + word + ' ')))
+  }
+  // Google can return related results after dropping search terms. Require the
+  // entered words in the listing itself, including cached search previews.
+  return matches(filters.keyword, title + ' ' + summary) && matches(filters.location, summary)
+}
 const siteScope = '(site:onlinejobs.ph/jobseekers/job/ OR site:linkedin.com/jobs/view/ OR site:ph.jobstreet.com/job/ OR site:jobstreet.com.ph/job/ OR site:indeed.com/viewjob OR site:jobs.lever.co OR site:boards.greenhouse.io OR site:job-boards.greenhouse.io OR site:jobs.ashbyhq.com)'
 export function googleJobQuery(filters: GoogleJobFilters) {
   const groups = filters.keyword

@@ -47,7 +47,7 @@ export function createJobFreshness(owner: number, options: { storage?: Pick<Stor
         const [key, entry] = pair
         if (typeof key !== 'string' || !entry || !Number.isFinite(entry.detectedAt) || entry.detectedAt < 0 || entry.detectedAt > now()) continue
         const valid = { detectedAt: entry.detectedAt } as Detection
-        if (Number.isFinite(entry.publishedAt)) valid.publishedAt = entry.publishedAt
+        if (typeof entry.publishedAt === 'number' && Number.isFinite(entry.publishedAt)) valid.publishedAt = entry.publishedAt
         const canonicalKey = key.startsWith('url:') ? listingUrlKey(key.slice(4)) || key : key
         const previous = entries.get(canonicalKey)
         if (previous) {

@@ -40,7 +40,7 @@ try {
     let resultDiv, host;
     window.drawGoogleCards = (count, noCursor = false, invalid = false) => {
       const query = window.layoutQuery;
-      const results = Array.from({length:count}, (_,index) => ({title:index%2?'Medical Billing, Coding & Arbitration Specialist (Remote | US Client)':'Cashier',url:'https://www.onlinejobs.ph/jobseekers/job/layout-'+index,content:index%2?'Longer summary with additional job details. '.repeat(9):index===2?'':'Short summary.'}));
+      const results = Array.from({length:count}, (_,index) => ({title:index%2?'Medical Billing, Coding & Arbitration Specialist (Remote | US Client)':'Cashier',url:'https://www.onlinejobs.ph/jobseekers/job/layout-'+index,content:index%2?'Remote role in Davao. Longer summary with additional job details. '.repeat(9):index===2?'Remote, Davao':'Remote role in Davao. Short summary.'}));
       if (invalid) results.push({title:'Advice article',url:'https://www.onlinejobs.ph/blog/advice',content:'Not a job-detail page'});
       window.__gcse.searchCallbacks.web.starting('joblink-google-jobs',query);
       window.__gcse.searchCallbacks.web.ready('joblink-google-jobs',query,[],results,resultDiv);
@@ -139,7 +139,7 @@ try {
   const feedPagination = await page.locator('[data-job-pagination]').getByRole('button', { name: 'Page 2', exact: true }).evaluate(metrics);
   const feedCurrent = await page.locator('[data-job-pagination] [aria-current=page]').evaluate(metrics);
   assert.equal(await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
-  await page.locator('#job-query').fill('developer');
+  await page.locator('#job-query').fill('cashier, medical');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await page.locator('.google-job-grid').waitFor();
   await checkLayout('.google-job-grid', 12);
@@ -218,9 +218,9 @@ try {
   await page.locator('#job-query').fill('cashier');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await checkLayout('[data-job-results]', 1);
-  await checkLayout('.google-job-grid', 12);
+  await checkLayout('.google-job-grid', 6);
   await checkSharedCardSections();
-  await page.locator('#job-query').fill('developer');
+  await page.locator('#job-query').fill('cashier, medical');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await checkLayout('[data-job-results]', 12);
   assert.equal(await page.locator('.google-job-card .google-job-preview').count(), 0);

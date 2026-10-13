@@ -23,7 +23,7 @@ const returningUrls = [
 const jobs = urls.map((url, index) => ({
   id: `hidden-${index}`, title: index === 3 ? 'Assistant' : ['Assistant', 'Engineer', 'Untracked opening', '', 'Already applied', 'Already unavailable'][index],
   company: 'Fixture company', location: 'Manila', employmentType: 'Full-time', role: 'Virtual assistance',
-  url, source: 'Original feed', salary: '', date: new Date().toISOString(), logo: '', workMode: 'Remote / WFH', description: 'Job description', direct: false,
+  url, source: 'Original feed', salary: '', date: new Date().toISOString(), logo: '', workMode: 'Remote / WFH', description: 'Job description in Manila. Search again or another search. Fresh session search. Slow account load.', direct: false,
 }));
 const returning = jobs.map((job, index) => ({ ...job, id: `returning-${index}`, source: 'Another feed', url: returningUrls[index] }));
 const entry = (id, index, status, url = urls[index]) => ({ id, kind: 'application', payload: { ...jobs[index], jobId: jobs[index].id, url, status, notes: 'Keep my notes', date: '2026-10-01' } });
@@ -149,7 +149,7 @@ try {
   await fresh.goto('/playground-hidden-search');
   await fresh.locator('[data-job-count]').filter({ hasText: /^0 results$/ }).waitFor();
   await search(fresh, 'fresh session search');
-  await fresh.locator('[data-google-jobs-host] .google-job-grid').waitFor();
+  await fresh.locator('[data-job-empty]').waitFor();
   assert.equal(await fresh.locator('.job-card').count(), 0, 'A fresh authenticated session with empty browser storage uses saved account statuses');
   const delayed = await account(1, true);
   await delayed.context.addInitScript(() => sessionStorage.setItem('joblink-page-data-v1:job-filters', JSON.stringify({ owner: 1, time: Date.now(), data: { values: ['slow account load', 'all', '', '', '', ''], page: 1 } })));
@@ -160,7 +160,7 @@ try {
   assert.equal(await delayed.page.locator('.job-card').count(), 0, 'Fast feed and Google results cannot flash hidden cards before account statuses load');
   delayed.release();
   await delayed.page.locator('[data-ready=true]').waitFor();
-  await delayed.page.locator('[data-google-jobs-host] .google-job-grid').waitFor();
+  await delayed.page.locator('[data-job-empty]').waitFor();
   assert.equal(await delayed.page.locator('.job-card').count(), 0, 'Statuses are applied before the first cards are rendered');
   const { page: other } = await account(2);
   await other.goto('/playground-hidden-search');
@@ -168,7 +168,7 @@ try {
   assert.equal(await other.locator('.job-card').count(), 6, 'Hidden status never affects another account');
   items.find(item => item.payload.jobId === jobs[1].id).payload.status = 'Saved';
   await fresh.reload();
-  await fresh.locator('[data-job-count]').filter({ hasText: /^1 results$/ }).waitFor();
+  await fresh.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
   await fresh.waitForFunction(() => document.querySelectorAll('[data-google-jobs-host] .google-job-card').length === 1);
   assert.deepEqual(await fresh.locator('[data-job-results] .job-title-link').allTextContents(), [jobs[1].title], 'Only an explicit status restoration brings a posting back');
   assert.deepEqual(errors, []);

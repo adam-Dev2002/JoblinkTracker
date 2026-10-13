@@ -14,7 +14,7 @@ export function jobListingIdentity(value: string | undefined) {
     if (!url.port) {
       if (host === 'onlinejobs.ph' || /^(?:[a-z]{2}\.|m\.)?linkedin\.com$/.test(host)) {
         const path = host === 'onlinejobs.ph' ? /^\/jobseekers\/job\/([^/]+)\/?$/ : /^\/jobs\/view\/([^/]+)\/?$/
-        const id = url.pathname.match(path)?.[1].match(/(?:^|-)(\d+)$/)?.[1]
+        const id = url.pathname.match(path)?.[1]?.match(/(?:^|-)(\d+)$/)?.[1]
         if (id) return posting(host === 'onlinejobs.ph' ? 'onlinejobs.ph' : 'linkedin.com', id)
       }
       if (['ph.jobstreet.com', 'jobstreet.com.ph'].includes(host)) {
@@ -27,11 +27,11 @@ export function jobListingIdentity(value: string | undefined) {
       }
       if (['boards.greenhouse.io', 'job-boards.greenhouse.io'].includes(host)) {
         const path = url.pathname.match(/^\/([^/]+)\/jobs\/(\d+)(?:\/apply)?\/?$/)
-        if (path) return posting('greenhouse.io', path[1], path[2])
+        if (path?.[1] && path[2]) return posting('greenhouse.io', path[1], path[2])
       }
       if (host === 'jobs.lever.co' || host === 'jobs.ashbyhq.com') {
         const path = url.pathname.match(host === 'jobs.lever.co' ? /^\/([^/]+)\/([^/]+)(?:\/apply)?\/?$/ : /^\/([^/]+)\/([^/]+)(?:\/application)?\/?$/)
-        if (path) return posting(host, path[1], path[2])
+        if (path?.[1] && path[2]) return posting(host, path[1], path[2])
       }
       if (['remotive.com', 'remotive.io'].includes(host)) {
         const id = url.pathname.match(/^\/remote-jobs\/(?:[^/]+\/)*[^/]*-(\d+)\/?$/)?.[1]
