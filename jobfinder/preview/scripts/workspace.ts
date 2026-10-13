@@ -7,6 +7,7 @@ import { readPageData, writePageData } from '@shared/lib/page-data-cache'
 import { wasPrerendered, whenPageActive } from '@shared/lib/page-activation'
 import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './google-job-search'
 import { matchesGoogleJobSearch } from './google-job-query'
+import { jobListingIdentity } from './job-identity'
 import { isClosedListing } from './job-availability.mjs'
 import { makeApplicationIndex } from './application-index'
 import { createJobFreshness } from './job-freshness'
@@ -58,17 +59,16 @@ let applicationIndex: ReturnType<typeof makeApplicationIndex<Entry>> | null = nu
 let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
 const googleJobs = new Map<string, Job>()
-let googleResultsHost: HTMLElement | null = null
+let googleResultsLive = false
 let visibleGoogleJobIds: string[] = []
 let googleRenderGeneration = 0
-let feedResultCount = 0
 let feedSearchFailed = false
 let googleRendering = false
 const findJob = (id: string) => jobs.find((job) => job.id === id) || googleJobs.get(id)
 const googleJobSearch =
   view === 'jobs'
-    ? createGoogleJobSearch(root, (results, div) => {
-        void renderGoogleJobs(results, div).catch(() => error('Google job listings could not be displayed. Try searching again.'))
+    ? createGoogleJobSearch(root, (results) => {
+        void renderGoogleJobs(results).catch(() => error('Google job listings could not be displayed. Try searching again.'))
       }, updateJobResultsState)
     : null
 let visibleJobIds: string[] = []
@@ -208,7 +208,6 @@ function render() {
   cacheWorkspace()
   if (view === 'jobs' && jobSearchInitialized) {
     for (const [id, job] of jobSelection) if (!selectableJob(job)) jobSelection.delete(id)
-    renderGoogleJobCards()
     if (jobs.length || !jobsLoading) renderJobs(false)
   }
   taskStatuses = ['To do', 'In progress', 'Done', ...owned('task_status').map((item) => item.payload.title)]
@@ -678,6 +677,7 @@ async function handleClick(event: Event) {
     if (target.dataset.jobPage && !jobsLoading && !savingSelectedJobs) {
       select('[data-job-bulk-status]').classList.add('d-none')
       jobPage = Number(target.dataset.jobPage)
+      googleJobSearch?.retry()
       renderJobs(false)
       select('.job-results-panel').scrollIntoView({ block: 'start' })
       root.querySelector<HTMLButtonElement>(`[data-job-page="${jobPage}"]`)?.focus({ preventScroll: true })
@@ -961,52 +961,6 @@ async function handleChange(event: Event) {
 root.addEventListener('change', (event) => {
   void handleChange(event)
 })
-// Google handles events inside its widget. Capture our card controls first so
-// its handlers cannot swallow details, save, selection, or source-link clicks.
-root.addEventListener(
-  'click',
-  (event) => {
-    if (!(event.target as Element).closest('.google-job-card')) return
-    event.stopPropagation()
-    void handleClick(event)
-  },
-  true,
-)
-root.addEventListener(
-  'change',
-  (event) => {
-    if (!(event.target as Element).closest('.google-job-card')) return
-    event.stopPropagation()
-    void handleChange(event)
-  },
-  true,
-)
-root.addEventListener(
-  'keydown',
-  (event) => {
-    const target = event.target as HTMLElement
-    if (!target.closest('.google-job-card') || !['Enter', ' '].includes(event.key)) return
-    const id = target.dataset.jobCard || target.dataset.jobDetails
-    if (id) {
-      event.preventDefault()
-      event.stopPropagation()
-      showJobDetails(id)
-    } else if (target.hasAttribute('data-job-pick') && event.key === ' ') {
-      event.preventDefault()
-      event.stopPropagation()
-      const input = target as HTMLInputElement
-      if (!input.disabled) {
-        input.checked = !input.checked
-        void handleChange(event)
-      }
-    } else if (target.hasAttribute('data-track') || target.hasAttribute('data-confirm-application') || target.hasAttribute('data-mark-applied-job') || target.hasAttribute('data-mark-unavailable-job') || (target.tagName === 'A' && event.key === 'Enter')) {
-      event.preventDefault()
-      event.stopPropagation()
-      if (!(target instanceof HTMLButtonElement) || !target.disabled) void handleClick(event)
-    }
-  },
-  true,
-)
 async function handleSubmit(event: Event) {
   event.preventDefault()
   const form = event.currentTarget as HTMLFormElement,
@@ -1132,10 +1086,9 @@ function updateJobSelection() {
   all.indeterminate = selectedVisible > 0 && !all.checked
   all.disabled = busy || jobsLoading || scope.length === 0
   select('[data-job-selection-label]').textContent = all.checked ? 'Deselect this page' : 'Select this page'
-  const googleOnly = select<HTMLSelectElement>('#job-source').value === 'google'
   select('[data-job-selection-scope]').textContent = 'Current page only'
   select('[data-job-selected-count]').textContent = `${jobSelection.size} selected`
-  select('[data-job-entries-control]').classList.toggle('d-none', googleOnly)
+  select('[data-job-entries-control]').classList.remove('d-none')
   select<HTMLSelectElement>('[data-job-entries]').disabled = busy || jobsLoading
   select('[data-job-selection-actions]').classList.toggle('d-none', !hasSelection)
   for (const name of ['deselect', 'bulk-save', 'bulk-apply', 'bulk-unavailable', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
@@ -1225,104 +1178,34 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
     </div>
   </article>`
 }
-async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
+async function renderGoogleJobs(results: GoogleJobResult[], cached = false) {
   const generation = ++googleRenderGeneration
   googleRendering = true
-  select('[data-job-bulk-status]').classList.add('d-none')
-  googleResultsHost = null
-  const cachedPreview = select('[data-google-jobs-preview]')
-  if (div !== cachedPreview) {
-    cachedPreview.replaceChildren()
-    cachedPreview.classList.add('d-none')
-  }
-  visibleGoogleJobIds = []
-  updateJobSelection()
   const text = (value: string) => new DOMParser().parseFromString(value, 'text/html').body.textContent?.trim() || ''
   const filters = { keyword: select<HTMLInputElement>('#job-query').value, location: select<HTMLInputElement>('#job-location').value }
   results = results.filter(result => matchesGoogleJobSearch(filters, text(result.title), text(result.content || '')))
-  const listings = await Promise.all(
-    results.map(async (result) => {
-      const url = safeUrl(result.listingUrl || result.url)
-      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url))
-      const id =
-        'google:' +
-        Array.from(new Uint8Array(hash))
-          .map((value) => value.toString(16).padStart(2, '0'))
-          .join('')
-      return {
-        id,
-        title: text(result.title).slice(0, 500),
-        company: '',
-        location: '',
-        role: '',
-        url,
-        applyUrl: safeUrl(result.url),
-        source: 'Google · ' + new URL(url).hostname,
-        salary: '',
-        date: '',
-        direct: false,
-        logo: '',
-        workMode: 'Check listing',
-        employmentType: 'Not specified',
-        description: 'Google search summary:\n\n' + text(result.content || '') + '\n\nOpen the original listing for the full description, employer details, and posting date.',
-      } as Job
-    }),
-  )
-  if (generation !== googleRenderGeneration || !div.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
+  const listings = await Promise.all(results.map(async result => {
+    const url = safeUrl(result.listingUrl || result.url)
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(url))
+    return {
+      id: 'google:' + Array.from(new Uint8Array(hash)).map(value => value.toString(16).padStart(2, '0')).join(''),
+      title: text(result.title).slice(0, 500), company: '', location: '', role: '',
+      url, applyUrl: safeUrl(result.url), source: 'Google · ' + new URL(url).hostname,
+      salary: '', date: '', direct: false, logo: '', workMode: 'Check listing', employmentType: 'Not specified',
+      description: 'Google search summary:\n\n' + text(result.content || '') + '\n\nOpen the original listing for the full description, employer details, and posting date.',
+    } as Job
+  }))
+  if (generation !== googleRenderGeneration || !root.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
   jobFreshness?.observe(listings)
-  if (div !== cachedPreview) {
-    cachedPreview.replaceChildren()
-    cachedPreview.classList.add('d-none')
-    if (cacheOwner !== null) writePageData(googleCacheKey(), cacheOwner, results)
-  }
   googleJobs.clear()
   for (const job of listings) googleJobs.set(job.id, job)
-  googleResultsHost = div
-  // Retain the provider's containers and listeners while letting their cards
-  // join the feed grid, even when a new search clears the old card contents.
-  for (let group: HTMLElement | null = div; group && group !== select('[data-google-jobs]'); group = group.parentElement) group.dataset.jobGridGroup = ''
+  googleResultsLive = !cached
   googleRendering = false
-  renderGoogleJobCards()
-}
-function renderGoogleJobCards() {
-  const div = googleResultsHost
-  if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
-  if (!loaded) {
-    div.innerHTML = select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML
-    return
-  }
-  const candidates = Array.from(googleJobs.values())
-  const available = candidates.filter(selectableJob)
-  const page = googleJobSearch?.resultPage() || 1
-  const listings = available.slice((page - 1) * jobsPerPage, page * jobsPerPage)
-  visibleGoogleJobIds = listings.map((job) => job.id)
-  div.innerHTML =
-    '<div class="google-job-grid">' +
-    listings
-      .map((job) => {
-        const website = new URL(job.url)
-        const domain = website.hostname.replace(/^www\./, '')
-        const iconUrl = 'https://www.google.com/s2/favicons?' + new URLSearchParams({ domain: website.hostname, sz: '64' })
-        return renderJobCard(job, { domain, origin: website.origin, iconUrl })
-      })
-      .join('') +
-    '</div>'
-  div.querySelectorAll<HTMLImageElement>('[data-source-icon]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
-  googleJobSearch?.updateResultCount(listings.length, { available: available.length, hidden: available.length < candidates.length, live: div !== select('[data-google-jobs-preview]') })
-  updateJobResultsState()
-  updateJobSelection()
+  if (!cached && cacheOwner !== null) writePageData(googleCacheKey(), cacheOwner, results)
+  renderJobs(false)
 }
 function updateJobResultsState() {
-  if (view !== 'jobs' || !loaded) return
-  const googleOnly = select<HTMLSelectElement>('#job-source').value === 'google'
-  const googlePanel = select('[data-google-jobs]')
-  const googleActive = !googlePanel.classList.contains('d-none')
-  root.toggleAttribute('data-job-combined', !googleOnly && select<HTMLSelectElement>('#job-source').value === 'all' && googleActive)
-  const count = (googleOnly ? 0 : feedResultCount) + (googleActive ? visibleGoogleJobIds.length : 0)
-  const loading = (!googleOnly && jobsLoading) || (googleActive && (googleRendering || googlePanel.getAttribute('aria-busy') === 'true'))
-  const failed = (!googleOnly && feedSearchFailed) || (googleActive && googlePanel.dataset.searchFailed === 'true')
-  select('[data-job-count]').textContent = loading && !count ? '' : `${count} results${googleOnly ? ' on this page' : ''}`
-  select('[data-job-empty]').classList.toggle('d-none', loading || failed || count > 0)
+  if (view === 'jobs' && loaded && jobSearchInitialized) renderJobs(false)
 }
 function jobBulkStatus(message: string) {
   const status = select('[data-job-bulk-status]')
@@ -1401,7 +1284,7 @@ function exportSelectedJobs() {
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage) {
+function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage, more = false) {
   const pages = Math.ceil(count / perPage)
   nav.classList.toggle('d-none', count === 0)
   if (count === 0) {
@@ -1416,51 +1299,62 @@ function renderPagination(nav: HTMLElement, count: number, page: number, attribu
     if (index > 0 && page - window[index - 1]! > 1) links += '<li class="page-item disabled"><span class="page-link" aria-hidden="true">…</span></li>'
     links += button(page, String(page))
   })
-  links += button(page + 1, 'Next', page === pages)
-  nav.innerHTML = `<p class="text-secondary small mb-0 workspace-page-count" role="status">Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}</p>${pages > 1 ? `<ul class="pagination mb-0">${links}</ul>` : ''}`
+  links += button(page + 1, 'Next', page >= pages && !more)
+  const label = (page - 1) * perPage >= count ? 'Loading more results…' : `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}`
+  nav.innerHTML = `<p class="text-secondary small mb-0 workspace-page-count" role="status">${label}</p>${pages > 1 || more ? `<ul class="pagination mb-0">${links}</ul>` : ''}`
 }
-function renderJobPagination(count: number) {
-  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', root.hasAttribute('data-job-combined') ? 'feed results' : 'results', savingSelectedJobs, entriesPerPage('job', count))
+function renderJobPagination(count: number, more = false, busy = false) {
+  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', savingSelectedJobs || busy, entriesPerPage('job', count), more)
 }
 function renderJobs(resetPage = true) {
-  // Feed/search requests can finish before the account's tracker. Keep the
-  // loading cards until its statuses are available instead of flashing hidden jobs.
   if (!loaded) return
   if (resetPage) { jobPage = 1; select('[data-job-bulk-status]').classList.add('d-none') }
-  if (cacheOwner !== null) writePageData('job-filters', cacheOwner, { values: jobFilterValues(), page: jobPage })
-  if (select<HTMLSelectElement>('#job-source').value === 'google') {
-    visibleJobIds = []
-    select('[data-job-results]').innerHTML = ''
-    select('[data-job-pagination]').classList.add('d-none')
-    feedResultCount = 0
-    updateJobResultsState()
-    updateJobSelection()
-    return
-  }
+  const source = select<HTMLSelectElement>('#job-source').value
+  const googlePanel = select('[data-google-jobs]')
+  const googleActive = !googlePanel.classList.contains('d-none')
   const location = select<HTMLInputElement>('#job-location').value.trim().toLowerCase(),
     employment = select<HTMLSelectElement>('#job-employment').value,
     listingTime = select<HTMLSelectElement>('#job-listing-time').value,
     classification = select<HTMLSelectElement>('#job-classification').value
-  const now = Date.now(),
-    cutoff = now - Number(listingTime) * 86400000
-  const list = jobs.filter((j) => {
-    // Feed timestamps without an offset are interpreted in UTC on every device.
-    const date = (j.date || '').trim()
+  const now = Date.now(), cutoff = now - Number(listingTime) * 86400000
+  const seen = new Set<string>()
+  const unique = (job: Job) => {
+    const identity = jobListingIdentity(job.url) || job.source + ':' + job.id
+    if (seen.has(identity)) return false
+    seen.add(identity)
+    return true
+  }
+  const feeds = (source === 'google' ? [] : jobs).filter(job => {
+    const date = (job.date || '').trim()
     const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date + 'T00:00:00Z' : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date) ? date.replace(' ', 'T') + 'Z' : date)
-    return selectableJob(j) && (!classification || j.role === classification) && (!location || j.location.toLowerCase().includes(location)) && (!employment || (j.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
-  })
+    return selectableJob(job) && (!classification || job.role === classification) && (!location || job.location.toLowerCase().includes(location)) && (!employment || (job.employmentType || 'Not specified') === employment) && (!listingTime || (Number.isFinite(timestamp) && timestamp >= cutoff && timestamp <= now))
+  }).filter(unique)
+  const google = (googleActive ? Array.from(googleJobs.values()) : []).filter(selectableJob).filter(unique)
+  const list = [...feeds, ...google]
+  const allEntries = select<HTMLSelectElement>('[data-job-entries]').value === 'all'
   const perPage = entriesPerPage('job', list.length)
-  jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / perPage)))
+  const failed = (source !== 'google' && feedSearchFailed) || (googleActive && googlePanel.dataset.searchFailed === 'true')
+  let more = Boolean(googleActive && googleJobSearch?.hasMore())
+  if (!jobsLoading && (!more || failed || allEntries)) jobPage = Math.min(jobPage, Math.max(1, Math.ceil(list.length / perPage)))
+  if (googleActive) googleJobSearch?.updateResultCount(google.length, { needed: allEntries ? Infinity : Math.max(0, jobPage * perPage - feeds.length), live: googleResultsLive && !googleRendering })
+  more = Boolean(googleActive && googleJobSearch?.hasMore())
+  const loading = jobsLoading || googleRendering || (googleActive && googlePanel.getAttribute('aria-busy') === 'true')
   const pageJobs = list.slice((jobPage - 1) * perPage, jobPage * perPage)
-  visibleJobIds = pageJobs.map(job => job.id)
-  renderJobPagination(list.length)
-  feedResultCount = list.length
-  select('[data-job-results]').innerHTML =
-    pageJobs
-      .map((job) => `<div class="col-md-6 col-xl-4">${renderJobCard(job)}</div>`)
-      .join('')
-  updateJobResultsState()
-  root.querySelectorAll<HTMLImageElement>('[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
+  visibleJobIds = pageJobs.filter(job => !googleJobs.has(job.id)).map(job => job.id)
+  visibleGoogleJobIds = pageJobs.filter(job => googleJobs.has(job.id)).map(job => job.id)
+  select('[data-job-results]').innerHTML = pageJobs.map(job => {
+    let metadata
+    if (googleJobs.has(job.id)) {
+      const website = new URL(job.url)
+      metadata = { domain: website.hostname.replace(/^www\./, ''), origin: website.origin, iconUrl: 'https://www.google.com/s2/favicons?' + new URLSearchParams({ domain: website.hostname, sz: '64' }) }
+    }
+    return '<div class="col-md-6 col-xl-4">' + renderJobCard(job, metadata) + '</div>'
+  }).join('') || (loading ? '<div class="col-12">' + select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML + '</div>' : '')
+  select('[data-job-count]').textContent = loading && !list.length ? '' : list.length + ' results'
+  select('[data-job-empty]').classList.toggle('d-none', loading || failed || more || list.length > 0)
+  renderJobPagination(list.length, more && !allEntries, loading && !pageJobs.length)
+  root.querySelectorAll<HTMLImageElement>('[data-company-logo],[data-source-icon]').forEach(image => image.addEventListener('error', () => image.remove(), { once: true }))
+  if (cacheOwner !== null) writePageData('job-filters', cacheOwner, { values: jobFilterValues(), page: jobPage })
   updateJobSelection()
 }
 async function searchJobFeed(q: string, source: string, signal?: AbortSignal) {
@@ -1494,21 +1388,12 @@ function searchGoogleJobs() {
   googleRenderGeneration++
   googleRendering = false
   googleJobs.clear()
-  googleResultsHost = null
+  googleResultsLive = false
   visibleGoogleJobIds = []
-  const preview = select('[data-google-jobs-preview]')
-  preview.replaceChildren()
-  preview.classList.add('d-none')
   if (source === 'google' || (source === 'all' && filters.keyword.trim())) {
     void googleJobSearch?.search(filters)
     const cached = cacheOwner === null ? null : readPageData<GoogleJobResult[]>(googleCacheKey(), cacheOwner)
-    if (cached && !select('[data-google-jobs-host]').querySelector('.google-job-card')) {
-      preview.classList.remove('d-none')
-      void renderGoogleJobs(cached, preview)
-    } else if (!select('[data-google-jobs]').querySelector('.google-job-card') && select('[data-google-jobs]').getAttribute('aria-busy') === 'true') {
-      preview.innerHTML = select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML
-      preview.classList.remove('d-none')
-    }
+    if (cached) void renderGoogleJobs(cached, true)
   } else googleJobSearch?.hide()
   updateJobResultsState()
   updateJobSelection()
@@ -1523,6 +1408,7 @@ async function loadJobs(preservePage = false) {
   visibleJobIds = []
   updateJobSelection()
   clearError()
+  jobs = []
   searchGoogleJobs()
   select('[data-job-pagination]').classList.add('d-none')
   const q = select<HTMLInputElement>('#job-query').value,
@@ -1538,7 +1424,6 @@ async function loadJobs(preservePage = false) {
     updateJobSelection()
   } else if (source !== 'google') {
     jobs = []
-    feedResultCount = 0
     select('[data-job-results]').innerHTML = '<div class="col-12">' + select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML + '</div>'
     select('[data-feed-message]').textContent = 'Loading job listings…'
   }

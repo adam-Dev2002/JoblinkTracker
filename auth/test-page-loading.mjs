@@ -158,11 +158,11 @@ import WorkspacePage from '../components/workspace/WorkspacePage.astro'
   await visit('dashboard');
   googleGate = gate();
   await visit('jobs');
-  await page.locator('[data-google-jobs-preview] .google-job-card').waitFor({ timeout: 1500 });
+  await page.locator('[data-job-results] .google-job-card').waitFor({ timeout: 1500 });
   assert.equal(await page.locator('#job-source').inputValue(), 'google');
   googleGate.release(); googleGate = null;
-  await page.locator('[data-google-jobs-host] .google-job-card').waitFor();
-  assert.equal(await page.locator('[data-google-jobs-preview] .google-job-card').count(), 0);
+  await page.locator('[data-job-results] .google-job-card').waitFor();
+  assert.equal(await page.locator('[data-google-jobs-host] .job-card').count(), 0);
 
   newsGate = gate();
   await visit('news');

@@ -96,8 +96,8 @@ try {
     await target.locator('[data-job-search][aria-busy="false"]').waitFor();
   };
   const expectRemaining = async target => {
-    await target.waitForFunction(() => document.querySelectorAll('[data-job-results] .job-card').length === 2 && document.querySelectorAll('[data-google-jobs-host] .google-job-card').length === 2);
-    for (const selector of ['[data-job-results] .job-title-link', '[data-google-jobs-host] .job-title-link']) {
+    await target.waitForFunction(() => document.querySelectorAll('[data-job-results] .job-card').length === 2);
+    for (const selector of ['[data-job-results] .job-title-link']) {
       assert.deepEqual(await target.locator(selector).allTextContents(), [jobs[2].title, jobs[3].title], 'Applied/unavailable postings are excluded, while a new ID with the same title remains');
     }
   };
@@ -124,7 +124,7 @@ try {
   for (const source of ['google', 'jobicy', 'remotive', 'arbeitnow', 'all']) {
     await page.locator('#job-source').selectOption(source);
     await page.locator('[data-job-search][aria-busy="false"]').waitFor();
-    if (source === 'google') await page.waitForFunction(() => !document.querySelector('[data-job-results] .job-card') && document.querySelectorAll('.google-job-card').length === 2);
+    if (source === 'google') await page.waitForFunction(() => document.querySelectorAll('[data-job-results] .google-job-card').length === 2);
     else if (source === 'all') await expectRemaining(page);
     else {
       await page.locator('[data-google-jobs]').waitFor({ state: 'hidden' });
@@ -133,11 +133,11 @@ try {
   }
   await page.evaluate(() => window.redrawHiddenSearch());
   await expectRemaining(page);
-  await page.locator('.google-job-card').filter({ hasText: jobs[2].title }).locator('[data-mark-unavailable-job]').click();
+  await page.locator('[data-job-results] .job-card').filter({ hasText: jobs[2].title }).locator('[data-mark-unavailable-job]').click();
   await finishUnavailable();
-  await page.waitForFunction(() => document.querySelectorAll('[data-job-results] .job-card').length === 1 && document.querySelectorAll('.google-job-card').length === 1);
+  await page.waitForFunction(() => document.querySelectorAll('[data-job-results] .job-card').length === 1);
   await page.locator('[data-job-select-all]').check();
-  assert.equal(await page.locator('[data-job-pick]:checked').count(), 2, 'Selection includes only the remaining posting across sources');
+  assert.equal(await page.locator('[data-job-pick]:checked').count(), 1, 'Selection includes one copy of the remaining posting across sources');
   await page.locator('[data-job-bulk-apply]').click();
   await page.waitForFunction(() => !document.querySelector('.job-card'));
   assert.equal(items.filter(item => item.payload.url.includes('1748999')).length, 1, 'Bulk matching reuses the same posting across feeds and Google');
@@ -168,8 +168,8 @@ try {
   assert.equal(await other.locator('.job-card').count(), 6, 'Hidden status never affects another account');
   items.find(item => item.payload.jobId === jobs[1].id).payload.status = 'Saved';
   await fresh.reload();
-  await fresh.locator('[data-job-count]').filter({ hasText: /^2 results$/ }).waitFor();
-  await fresh.waitForFunction(() => document.querySelectorAll('[data-google-jobs-host] .google-job-card').length === 1);
+  await fresh.locator('[data-job-count]').filter({ hasText: /^1 results$/ }).waitFor();
+  await fresh.waitForFunction(() => document.querySelectorAll('[data-job-results] .job-card').length === 1);
   assert.deepEqual(await fresh.locator('[data-job-results] .job-title-link').allTextContents(), [jobs[1].title], 'Only an explicit status restoration brings a posting back');
   assert.deepEqual(errors, []);
   console.log('PASS: applied/unavailable hiding across changed URLs, searches, every filter/source, Google redraws, duplicates, bulk selection, reload, fresh sessions and account isolation; no card flash during slow account loads; Saved restoration and distinct new postings.');

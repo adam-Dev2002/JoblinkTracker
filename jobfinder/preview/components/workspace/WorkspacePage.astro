@@ -317,7 +317,6 @@ const desk = [
                 <template data-job-action-icon="unavailable"><span class="job-card-button-icon" aria-hidden="true"><Icon name="circle-minus" /></span></template>
                 <div class="d-none google-jobs-results" data-google-jobs aria-busy="false">
                   <p class="text-secondary small" data-google-jobs-status role="status" aria-live="polite" />
-                  <div class="d-none" data-google-jobs-preview />
                   <div data-google-jobs-host />
                 </div>
                 <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
@@ -737,68 +736,6 @@ const desk = [
   .google-jobs-results .gsc-orderby-container {
     padding-right: 0;
   }
-  .google-jobs-results .gsc-results.gsc-webResult .gsc-cursor-box {
-    width: 100%;
-    margin: 1.5rem 0 0;
-    text-align: center;
-  }
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor {
-    display: inline-flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.25rem;
-    font-family: var(--tblr-body-font-family);
-    line-height: var(--tblr-body-line-height);
-  }
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: var(--tblr-pagination-link-min-width);
-    margin: 0;
-    padding: var(--tblr-pagination-padding-y) var(--tblr-pagination-padding-x);
-    border: var(--tblr-pagination-border-width) solid var(--tblr-pagination-border-color);
-    border-radius: var(--tblr-pagination-border-radius);
-    background: var(--tblr-pagination-bg);
-    color: var(--tblr-pagination-color);
-    font-size: var(--tblr-pagination-font-size);
-    font-weight: var(--tblr-font-weight-normal);
-    text-decoration: none;
-  }
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    padding: var(--tblr-pagination-padding-y) var(--tblr-pagination-padding-x);
-    border: var(--tblr-pagination-border-width) solid var(--tblr-pagination-border-color);
-    border-radius: var(--tblr-pagination-border-radius);
-    background: var(--tblr-pagination-bg);
-    color: var(--tblr-pagination-color);
-    font-family: var(--tblr-body-font-family);
-    font-size: var(--tblr-pagination-font-size);
-    font-weight: var(--tblr-font-weight-normal);
-    line-height: var(--tblr-body-line-height);
-    cursor: pointer;
-    text-decoration: none;
-  }
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:hover,
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav:hover:not(:disabled),
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-page:focus-visible,
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-nav:focus-visible {
-    background: var(--tblr-pagination-hover-bg);
-    color: var(--tblr-pagination-hover-color);
-    border-color: var(--tblr-pagination-hover-border-color);
-  }
-  .google-jobs-results .gsc-results .gsc-cursor-box .gsc-cursor-current-page {
-    border-color: var(--tblr-pagination-active-border-color);
-    background: var(--tblr-pagination-active-bg);
-    color: var(--tblr-pagination-active-color);
-  }
   .google-jobs-results .gcsc-more-maybe-branding-root {
     width: 100%;
     padding: 1rem 0 0;
@@ -823,94 +760,34 @@ const desk = [
     width: 48px;
     height: 48px;
   }
-  .google-job-grid,
   .job-results-panel [data-job-results] {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: 1fr;
     gap: 1rem;
-  }
-  .google-job-grid > .job-card,
-  .job-results-panel [data-job-results] > div {
-    min-width: 0;
-    max-width: 100%;
-  }
-  .google-job-grid > .job-card {
-    height: 100%;
-  }
-  .google-job-grid {
-    width: 100%;
-  }
-  .job-results-panel [data-job-results] {
     margin: 0;
   }
   .job-results-panel [data-job-results] > div {
     width: auto;
     min-width: 0;
+    max-width: 100%;
     margin: 0;
     padding: 0;
+  }
+  .job-results-panel [data-job-results] > div > .job-card {
+    height: 100%;
   }
   .job-results-panel [data-job-results] > .col-12 {
     grid-column: 1 / -1;
   }
-  .google-job-grid > p {
-    grid-column: 1 / -1;
-  }
-  /* Both sources participate in the same grid while retaining Google's DOM
-     and native paging handlers. Footers follow the complete set of cards. */
-  [data-job-combined] .job-results-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
-  }
-  [data-job-combined] [data-job-results],
-  [data-job-combined] [data-google-jobs]:not(.d-none),
-  [data-job-combined] [data-google-jobs-preview]:not(.d-none),
-  [data-job-combined] [data-google-jobs-host],
-  [data-job-combined] [data-job-grid-group]:not(.d-none),
-  [data-job-combined] .google-job-grid {
-    display: contents !important;
-  }
-  [data-job-combined] [data-job-results] > div > .job-card {
-    height: 100%;
-  }
-  [data-job-combined] [data-job-bulk-status],
-  [data-job-combined] [data-job-empty],
-  [data-job-combined] [data-google-jobs-status],
-  [data-job-combined] .data-placeholder,
-  [data-job-combined] [data-google-jobs-host] .gsc-adBlock,
-  [data-job-combined] [data-google-jobs-host] a.d-block {
-    grid-column: 1 / -1;
-  }
-  [data-job-combined] [data-job-bulk-status],
-  [data-job-combined] [data-google-jobs-host] .gsc-adBlock,
-  [data-job-combined] [data-google-jobs-host] a.d-block {
-    order: -1;
-  }
-  [data-job-combined] [data-job-pagination],
-  [data-job-combined] [data-google-jobs-host] .gsc-cursor-box {
-    grid-column: 1 / -1;
-    order: 1;
-    margin-top: 0 !important;
-  }
-  [data-job-combined] [data-google-jobs-host] .gcsc-more-maybe-branding-root,
-  [data-job-combined] [data-google-jobs-host] .gcsc-branding {
-    grid-column: 1 / -1;
-    order: 2;
+  .google-jobs-results .gsc-cursor-box {
+    display: none !important;
   }
   @container job-results (min-width: 640px) {
-    .google-job-grid,
-    .job-results-panel [data-job-results],
-    [data-job-combined] .job-results-body {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    .job-results-panel [data-job-results] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @container job-results (min-width: 1000px) {
-    .google-job-grid,
-    .job-results-panel [data-job-results],
-    [data-job-combined] .job-results-body {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
+    .job-results-panel [data-job-results] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   @container job-results (max-width: 639px) {
     .job-selection-actions {

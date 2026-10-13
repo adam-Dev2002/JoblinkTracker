@@ -119,7 +119,7 @@ try {
   // Reproduce the screenshot: the previously opened card must be included with
   // all other Google results, regardless of its tracker ID or existing status.
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-job-count]').filter({ hasText: /^12 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^12 results$/ }).waitFor();
   assert.equal(await page.locator('.google-job-card [data-mark-applied-job]').count(), 12);
   assert.equal(await bulk.isEnabled(), true, 'Select all remains available when every Google card is already saved or opened');
   await bulk.check();
@@ -128,14 +128,14 @@ try {
   await bulk.uncheck();
   assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 0);
   await page.locator('.google-job-card [data-mark-applied-job]').first().press('Space');
-  await page.locator('[data-job-count]').filter({ hasText: /^11 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^11 results$/ }).waitFor();
   assert.equal(items.find(item => item.id === 900).payload.status, 'Applied');
   assert.equal(items.find(item => item.id === 900).payload.notes, 'Google note 0');
   assert.equal(items.filter(item => item.payload.url === google[0].url).length, 1);
   await bulk.check();
   assert.equal(await page.locator('.google-job-card [data-job-pick]:checked').count(), 11);
   await page.locator('[data-job-bulk-apply]').click();
-  await page.locator('[data-job-count]').filter({ hasText: /^0 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^0 results$/ }).waitFor();
   assert.equal(items.length, 230);
   assert.equal(items.find(item => item.id === 901).payload.status, 'Applied');
   assert.equal(items.find(item => item.id === 901).payload.notes, 'Google note 1');

@@ -82,12 +82,12 @@ try {
   assert.match(await card(added.id).locator('[data-job-new]').getAttribute('title'), /Newly discovered/);
   assert.equal(await card('old-arrival').locator('[data-job-new]').count(), 0);
   await page.locator('#job-source').selectOption('google');
-  await page.locator('[data-job-count]').filter({ hasText: /^3 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^3 results$/ }).waitFor();
   assert.equal(await page.locator('.google-job-card [data-job-new]').count(), 2, 'New applies immediately to the first results, including undated Google jobs');
   assert.equal(await page.locator('.google-job-card').filter({ hasText: expiredGoogle.title }).locator('[data-job-new]').count(), 0);
   googleResults = [...googleResults, addedGoogle];
   await page.evaluate(rows => window.drawNewBadgeGoogle(rows), googleResults.map(row => ({ title: row.title, url: row.url, content: row.description })));
-  await page.locator('[data-job-count]').filter({ hasText: /^4 results on this page$/ }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: /^4 results$/ }).waitFor();
   const googleCard = page.locator('.google-job-card').filter({ hasText: addedGoogle.title });
   await googleCard.locator('[data-job-new]').waitFor();
   assert.equal(await page.locator('.google-job-card [data-job-new]').count(), 3);
@@ -97,7 +97,7 @@ try {
     assert.equal(await page.locator('.google-job-card').filter({ hasText: expiredGoogle.title }).locator('[data-job-new]').count(), 0, 'Changing filters never renews expired jobs');
   };
   const changeFilter = async (id, value, input = false) => {
-    const row = job(`filter-${id}-${googleResults.length}`, '', `https://www.onlinejobs.ph/jobseekers/job/filter-${googleResults.length}-123`);
+    const row = job(`filter-${id}-${googleResults.length}`, '', `https://www.onlinejobs.ph/jobseekers/job/filter-${910000 + googleResults.length}`);
     googleResults.push(row);
     await page.evaluate(rows => { window.badgeGoogleRows = rows; }, googleResults.map(row => ({ title: row.title, url: row.url, content: row.description })));
     const before = await page.evaluate(() => window.badgeGoogleSearches);
@@ -147,17 +147,17 @@ try {
   await page.locator('#job-source').selectOption('all');
   jobs.push(...Array.from({ length: 13 }, (_, index) => job('paged-' + index)));
   await page.evaluate(() => { window.badgeTime += 6 * 60000; sessionStorage.setItem('new-badge-test-time', String(window.badgeTime)); document.querySelector('[data-job-search]').requestSubmit(); });
-  await page.locator('[data-job-count]').filter({ hasText: new RegExp(`^${19 + googleResults.length} results$`) }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: new RegExp(`^${18 + googleResults.length} results$`) }).waitFor();
   await page.locator('[data-job-pagination]').getByRole('button', { name: 'Page 2', exact: true }).click();
-  assert.equal(await page.locator('[data-job-results] .job-card').count(), 7);
-  assert.equal(await page.locator('[data-job-results] [data-job-new]').count(), 7, 'New badges apply on later result pages');
+  assert.equal(await page.locator('[data-job-results] .job-card:not(.google-job-card)').count(), 7);
+  assert.equal(await page.locator('[data-job-results] .job-card:not(.google-job-card) [data-job-new]').count(), 7, 'New badges apply on later result pages');
   await page.locator('#job-source').selectOption('google');
   await assertGoogleBadges();
   await page.evaluate(() => { window.badgeTime += 49 * 60 * 60 * 1000; });
   await page.locator('[data-job-select-all]').check();
   await page.locator('[data-job-select-all]').uncheck();
   await page.evaluate(rows => window.drawNewBadgeGoogle(rows), googleResults.map(row => ({ title: row.title, url: row.url, content: row.description })));
-  await page.locator('[data-job-count]').filter({ hasText: new RegExp(`^${googleResults.length} results on this page$`) }).waitFor();
+  await page.locator('[data-job-count]').filter({ hasText: new RegExp(`^${googleResults.length} results$`) }).waitFor();
   await page.waitForFunction(() => document.querySelectorAll('.google-job-card [data-job-new]').length === 0);
   assert.deepEqual(errors, []);
   console.log('PASS: immediate New badges across every source/filter, first Google/filtered results, legacy detection migration, later pages, reload/expiry, stable timestamps, zero redraw writes, dark theme and 320px layout.');

@@ -119,13 +119,13 @@ try {
   await page.evaluate(() => window.flushProviderPages());
   await ready(12);
   assert.deepEqual(await page.locator('.google-job-card .job-title-link').allTextContents(), google.slice(1, 13).map(job => job.title), 'Later jobs fill removed slots without duplicate posting IDs');
-  await page.locator('[data-google-packed-pages]').getByRole('button', { name: 'Next page', exact: true }).click();
+  await page.locator('[data-job-pagination]').getByRole('button', { name: 'Next page', exact: true }).click();
   await ready(12);
   assert.deepEqual(await page.locator('.google-job-card .job-title-link').allTextContents(), google.slice(13, 25).map(job => job.title), 'Next uses the remaining pool and retrieves enough later jobs');
   assert.deepEqual(await page.evaluate(() => window.providerRequests), [1, 2, 3]);
-  await page.locator('[data-google-packed-pages]').getByRole('button', { name: 'Previous page', exact: true }).click();
+  await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).click();
   await ready(12);
-  await page.locator('[data-google-packed-pages]').getByRole('button', { name: 'Next page', exact: true }).click();
+  await page.locator('[data-job-pagination]').getByRole('button', { name: 'Next page', exact: true }).click();
   await ready(12);
   assert.deepEqual(await page.evaluate(() => window.providerRequests), [1, 2, 3], 'Loaded pages are reused without additional searches');
   await markPage('Unavailable');
@@ -133,7 +133,7 @@ try {
   assert.deepEqual(await page.locator('.google-job-card .job-title-link').allTextContents(), google.slice(25).map(job => job.title), 'Page three moves forward after a bulk removal');
   await markPage('Applied');
   await ready(12);
-  assert.equal(await page.locator('[data-google-packed-pages] [aria-current="page"]').innerText(), '1', 'An emptied last Google page falls back to available jobs');
+  assert.match(await page.locator('[data-job-pagination]').innerText(), /Showing 1.*12 of 12 results/, 'An emptied last Google page falls back to available jobs');
   await markPage('Applied');
   await ready(0);
   await page.locator('[data-job-empty]').waitFor();
@@ -163,10 +163,12 @@ try {
 
   for (const item of items) if (item.payload.title.startsWith('Developer ')) item.payload.status = 'Saved';
   await page.reload();
-  await ready(12);
+  await ready(11);
   await page.evaluate(() => { window.holdProviderPages = true; });
   await card('Developer 0').locator('[data-mark-applied-job]').click();
+  await card('Developer 1').locator('[data-mark-applied-job]').click();
   await page.waitForFunction(() => window.pendingProviderPages.length === 1);
+  await page.evaluate(() => { window.holdProviderPages = false; });
   await page.locator('#job-query').fill('unavailable-unicorn-role');
   await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
   await page.locator('[data-job-empty]').waitFor();

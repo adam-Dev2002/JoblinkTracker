@@ -119,13 +119,13 @@ try {
 
   await page.locator('#job-source').selectOption('google');
   await expectEmpty();
-  assert.equal(await page.locator('[data-job-count]').innerText(), '0 results on this page');
+  assert.equal(await page.locator('[data-job-count]').innerText(), '0 results');
   await page.locator('#job-location').fill('');
   await page.locator('#job-employment').selectOption('');
   await page.locator('#job-listing-time').selectOption('');
   await search('AI developer');
   await page.locator('.google-job-card').waitFor();
-  assert.equal(await page.locator('[data-job-count]').innerText(), '1 results on this page');
+  assert.equal(await page.locator('[data-job-count]').innerText(), '1 results');
 
   // A slow earlier search cannot overwrite the latest empty results.
   await page.evaluate(() => { window.holdSearch = true; });
