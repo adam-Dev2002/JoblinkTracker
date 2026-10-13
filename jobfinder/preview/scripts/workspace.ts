@@ -9,6 +9,7 @@ import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './goog
 import { googleJobListingUrl } from './google-job-query'
 import { isClosedListing } from './job-availability.mjs'
 import { makeApplicationIndex } from './application-index'
+import { createJobFreshness } from './job-freshness'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
@@ -45,6 +46,7 @@ const safeUrl = (value: string | undefined) => {
 }
 let items: Entry[] = []
 let cacheOwner: number | null = null
+let jobFreshness: ReturnType<typeof createJobFreshness> | null = null
 let workspaceRevision = 0
 let cachedWorkspace: Entry[] | null = null
 let cachedWorkspaceOwner: number | null = null
@@ -1183,6 +1185,7 @@ function jobsInSelectionScope() {
 function renderJobCard(job: Job, google?: { domain: string; origin: string; iconUrl: string }) {
   const id = htmlEscape(job.id)
   const title = htmlEscape(job.title)
+  const newLabel = jobFreshness?.label(job)
   const logo = google
     ? `${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(google.iconUrl)}" alt="${htmlEscape(google.domain)} source icon" loading="lazy" referrerpolicy="no-referrer" />`
     : `<span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(job.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(job.logo))}" alt="${htmlEscape(job.company)} logo" loading="lazy" referrerpolicy="no-referrer" />` : ''}`
@@ -1203,7 +1206,10 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
       <h3 class="job-title"><button class="job-title-link" data-job-details="${id}">${title}</button></h3>
       <button class="job-details-link" data-job-details="${id}">Read job description &rarr;</button>
       <div class="job-card-metadata mb-3">${metadata}</div>
-      <p class="text-secondary small mb-3">${source}</p>
+      <div class="job-card-source mb-3">
+        ${newLabel ? `<span class="job-new-badge mb-2" data-job-new title="${newLabel}"><span class="job-new-dot" aria-hidden="true"></span>New</span>` : ''}
+        <p class="text-secondary small mb-0">${source}</p>
+      </div>
       <div class="job-card-footer">
         <div class="d-flex gap-2 job-card-actions">
           <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
@@ -1256,6 +1262,7 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
     }),
   )
   if (generation !== googleRenderGeneration || !div.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
+  jobFreshness?.observe(listings, googleCacheKey(), div !== cachedPreview)
   if (div !== cachedPreview) {
     cachedPreview.replaceChildren()
     cachedPreview.classList.add('d-none')
@@ -1480,6 +1487,7 @@ async function loadJobs(preservePage = false) {
     source = select<HTMLSelectElement>('#job-source').value
   const cached = cacheOwner === null ? null : readPageData<JobFeed>('jobs:' + new URLSearchParams({ q, source }).toString(), cacheOwner)
   if (cached && source !== 'google') {
+    jobFreshness?.observe(cached.jobs, 'feed:' + new URLSearchParams({ q, source }).toString(), false)
     jobs = cached.jobs
     select('[data-feed-message]').textContent = cached.message
     renderJobs(!preservePage)
@@ -1501,6 +1509,7 @@ async function loadJobs(preservePage = false) {
     }
     const data = await searchJobFeed(q, source, AbortSignal.any([jobSearchController.signal, AbortSignal.timeout(15000)]))
     if (request !== jobRequest) return
+    jobFreshness?.observe(data.jobs, 'feed:' + new URLSearchParams({ q, source }).toString())
     jobs = [...data.jobs]
     select('[data-feed-message]').textContent = data.message
     if (!cached || JSON.stringify(cached.jobs) !== JSON.stringify(data.jobs) || cached.message !== data.message) renderJobs(!preservePage)
@@ -1605,6 +1614,7 @@ async function init() {
       return
     }
     cacheOwner = session.user!.id
+    if (view === 'jobs') jobFreshness = createJobFreshness(cacheOwner)
     const entries = select<HTMLSelectElement>('[data-entries-control]')
     const savedEntries = readPageData<string>('entries:' + view, cacheOwner)
     if (entries && savedEntries && Array.from(entries.options).some(option => option.value === savedEntries)) entries.value = savedEntries

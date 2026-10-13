@@ -995,6 +995,30 @@ const desk = [
     flex-direction: column;
     gap: 0.5rem;
   }
+  .job-new-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: #e4f7e8;
+    color: #236534;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+  .job-new-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  [data-bs-theme='dark'] .job-new-badge {
+    background: #193e26;
+    color: #a6e8b8;
+  }
   .job-card-actions .btn-primary {
     min-width: 0;
   }
