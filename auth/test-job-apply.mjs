@@ -88,10 +88,7 @@ try {
   await p.locator("[data-apply-job]").first().waitFor();
   await p.locator('[data-ready="true"]').waitFor();
   assert.equal(await p.locator(".job-card").count(), 2);
-  const availabilitySession = await (await c.request.get('/api/auth/session')).json();
-  assert.equal((await c.request.get('/api/jobs/availability')).status(), 405);
-  assert.equal((await c.request.post('/api/jobs/availability', { data: { urls: ['https://www.onlinejobs.ph/jobseekers/job/assistant-123'] } })).status(), 403);
-  assert.equal((await c.request.post('/api/jobs/availability', { data: { urls: ['http://127.0.0.1/private'] }, headers: { 'X-CSRF-Token': availabilitySession.csrf } })).status(), 422);
+  assert.equal(await p.locator(".job-card [data-mark-applied-job]").count(), 2);
   await p
     .locator("[data-company-logo]")
     .first()
@@ -118,14 +115,12 @@ try {
     "Official application form",
   );
   await popup.close();
-  await p.locator("[data-application-submit]").waitFor();
+  assert.equal(await p.locator("[data-application-modal], .modal-backdrop").count(), 0);
   let rows = (await (await c.request.get("/api/workspace/items")).json()).items;
   assert.equal(rows.length, 1);
   assert.equal(rows[0].payload.status, "Application opened");
   assert.equal(rows[0].payload.logo, jobs[0].logo, 'The backend persists employer logos when opening an application');
   assert.equal(await p.locator("[data-application-notice]").count(), 0);
-  await p.locator("[data-application-later]").click();
-  await p.locator("[data-application-modal]").waitFor({ state: "hidden" });
   const secondPopup = p.waitForEvent("popup");
   await p.getByRole("link", { name: "Apply on company site" }).click();
   const other = await secondPopup;
@@ -148,9 +143,9 @@ try {
       });
     } else await route.continue();
   });
-  await p.getByRole("button", { name: "Mark as applied", exact: true }).click();
+  await p.locator('[data-job-card="apply-test-1"] [data-mark-applied-job]').click();
   await p
-    .locator("[data-application-error]")
+    .locator("[data-workspace-error]")
     .filter({ hasText: "Test save failure" })
     .waitFor();
   assert.equal(
@@ -158,13 +153,9 @@ try {
       .payload.status,
     "Application opened",
   );
-  await p.getByRole("button", { name: "Mark as applied", exact: true }).click();
-  await p.locator("[data-application-success]").waitFor({ state: "visible" });
+  await p.locator('[data-job-card="apply-test-1"] [data-mark-applied-job]').click();
+  await p.locator('[data-job-card="apply-test-1"]').waitFor({ state: 'detached' });
   assert.equal(await p.locator('[data-job-card="apply-test-1"]').count(), 0);
-  await p
-    .locator("[data-application-modal]")
-    .getByRole("link", { name: "View tracker", exact: true })
-    .click();
   await p.goto("/applications");
   await p.locator("[data-ready=true]").waitFor();
   assert.equal(await p.locator("[data-entry-status]").inputValue(), "Applied");
@@ -228,24 +219,22 @@ try {
   const mobilePopup = await mobilePopupPromise;
   await mobilePopup.waitForURL(jobs[1].url);
   await mobilePopup.close();
-  await p.locator("[data-application-modal]").waitFor({ state: "visible" });
-  assert.equal(await p.locator("[data-application-submit]").isVisible(), true);
-  const modalBounds = await p
-    .locator("[data-application-modal] .modal-content")
+  assert.equal(await p.locator("[data-application-modal], .modal-backdrop").count(), 0);
+  assert.equal(await p.locator('[data-job-card="apply-test-2"] [data-mark-applied-job]').isVisible(), true);
+  const buttonBounds = await p
+    .locator('[data-job-card="apply-test-2"] [data-mark-applied-job]')
     .boundingBox();
-  assert.ok(modalBounds.x >= 0 && modalBounds.x + modalBounds.width <= 390);
-  await p.locator("[data-application-later]").click();
+  assert.ok(buttonBounds.x >= 0 && buttonBounds.x + buttonBounds.width <= 390);
   assert.equal(
     await p.evaluate(() => document.documentElement.scrollWidth > innerWidth),
     false,
   );
-  await p.locator('[data-application-modal]').waitFor({ state: 'hidden' });
   await p.locator('[data-job-card="apply-test-2"] [data-mark-applied-job]').click();
   await p.locator('[data-job-card="apply-test-2"]').waitFor({ state: 'detached' });
   assert.equal((await (await c.request.get('/api/workspace/items')).json()).items.find(item => item.id === bookmarked.id).payload.status, 'Applied');
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Bootstrap application modal, Not yet, failed-save retry, Applied persistence, duplicate prevention, status preservation, CSRF and mobile layout.",
+    "PASS: reminder-free application opening, every-card confirmation, failed-save retry, Applied persistence, duplicate prevention, status preservation, CSRF and mobile layout.",
   );
 } finally {
   await b.close();

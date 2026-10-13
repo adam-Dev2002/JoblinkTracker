@@ -645,7 +645,6 @@ async function handleClick(event: Event) {
       }
       return
     }
-    if (target.hasAttribute('data-application-tracker')) sessionStorage.removeItem('jobify-opened-application')
     if (target.hasAttribute('data-sheet-select')) {
       togglePageSelection(sheetSelection, visibleSheetIds)
       render()
@@ -721,10 +720,8 @@ async function handleClick(event: Event) {
         else items.unshift(item)
         if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
         popup.location.href = safeUrl(job.applyUrl || job.url)
-        sessionStorage.setItem('jobify-opened-application', String(item.id))
         closeJobDetails()
         render()
-        showApplicationModal(item)
       } catch (e) {
         popup.close()
         throw e
@@ -743,18 +740,10 @@ async function handleClick(event: Event) {
     if (target.dataset.confirmApplication) {
       const item = items.find((i) => i.id === Number(target.dataset.confirmApplication))
       if (item) {
-        const inModal = target.hasAttribute('data-application-submit')
         const button = target as HTMLButtonElement
         button.disabled = true
         try {
           await save('application', { ...item.payload, status: 'Applied', date: today() }, item.id)
-          sessionStorage.removeItem('jobify-opened-application')
-          if (inModal) updateApplicationModal(items.find((i) => i.id === item.id)!)
-        } catch (e) {
-          if (!inModal) throw e
-          const box = select('[data-application-error]')
-          box.textContent = e instanceof Error ? e.message : 'Unable to update your application. Try again.'
-          box.classList.remove('d-none')
         } finally {
           button.disabled = false
         }
@@ -1046,29 +1035,6 @@ function exportCsv(kind: Kind, entries = owned(kind)) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-let applicationFocus: HTMLElement | null = null
-function updateApplicationModal(item: Entry) {
-  const opened = item.payload.status === 'Application opened'
-  select('#application-follow-up-title').textContent = opened ? 'Did you submit your application?' : 'Application tracked'
-  select('[data-application-title]').textContent = item.payload.title
-  select('[data-application-message]').textContent = opened ? 'Complete the application on the source website. If you have submitted it, mark it as Applied here. Otherwise, you can do this later from the job card or your tracker.' : `This application is tracked as ${item.payload.status}.`
-  select<HTMLAnchorElement>('[data-application-source]').href = safeUrl(item.payload.url)
-  const submit = select<HTMLButtonElement>('[data-application-submit]')
-  submit.dataset.confirmApplication = String(item.id)
-  submit.classList.toggle('d-none', !opened)
-  select('[data-application-later]').textContent = opened ? 'Not yet' : 'Done'
-  select('[data-application-error]').classList.add('d-none')
-  select('[data-application-success]').classList.toggle('d-none', item.payload.status !== 'Applied')
-}
-function showApplicationModal(item: Entry) {
-  applicationFocus = document.activeElement as HTMLElement
-  updateApplicationModal(item)
-  if (!select('[data-application-modal]').classList.contains('show')) select<HTMLButtonElement>('[data-application-modal-trigger]').click()
-}
-select('[data-application-modal]').addEventListener('hidden.bs.modal', () => {
-  sessionStorage.removeItem('jobify-opened-application')
-  if (applicationFocus?.isConnected) applicationFocus.focus()
-})
 function companyPlaceholder() {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-label="Company logo unavailable"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V4h6v3M8 11h1m6 0h1m-8 4h1m6 0h1"/></svg>'
 }
@@ -1569,8 +1535,6 @@ async function init() {
     await initialJobs
     updateJobSelection()
     await whenPageActive()
-    const opened = items.find((i) => i.id === Number(sessionStorage.getItem('jobify-opened-application')))
-    if (opened) showApplicationModal(opened)
     const pending = sessionStorage.getItem('jobify-pending-application')
     if (pending && signedIn) {
       try {

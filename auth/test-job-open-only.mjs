@@ -68,8 +68,7 @@ try {
   assert.equal(writes[0].action, 'open-application');
   assert.deepEqual(checks, [], 'Apply opens without a scan');
   await popup.close();
-  await page.locator('[data-application-modal] .btn-close').click();
-  await page.locator('[data-application-modal]').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('[data-application-modal], .modal-backdrop').count(), 0, 'Opening a listing does not interrupt the page');
   await page.locator('[data-job-select-all]').check();
   await page.locator('[data-job-bulk-save]').click();
   await page.locator('[data-job-bulk-status]').filter({ hasText: '3 jobs saved. 1 already in your tracker.' }).waitFor();
