@@ -879,11 +879,47 @@ const desk = [
   .job-card-identity {
     min-width: 0;
   }
+  .job-card-header {
+    min-height: 48px;
+  }
+  .job-card-identity > :first-child,
   .job-card-identity .small {
     display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .job-card-metadata {
-    min-height: 3.2em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: calc(2 * (12px * var(--tblr-body-line-height) + 8px) + 0.5rem);
+  }
+  .job-card-tags {
+    display: flex;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .job-card-tags .job-tag {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: var(--tblr-body-line-height);
+  }
+  .job-card-source {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    min-height: calc(22px + 0.5rem + 2 * 12px * var(--tblr-body-line-height));
+    margin-top: auto;
+  }
+  .job-card-source p {
+    font-size: 12px;
+    line-height: var(--tblr-body-line-height);
+    min-height: calc(2 * 12px * var(--tblr-body-line-height));
   }
   .google-job-source {
     display: inline-block;
@@ -990,7 +1026,6 @@ const desk = [
     height: 100%;
   }
   .job-card-footer {
-    margin-top: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -1021,6 +1056,10 @@ const desk = [
   }
   .job-card-actions .btn-primary {
     min-width: 0;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .job-card-actions button {
     flex-shrink: 0;

@@ -24,12 +24,17 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   const jobs = Array.from({ length: 13 }, (_, index) => ({
     id: `layout-${index}`, title: index % 2 ? 'Medical Billing, Coding & Arbitration Specialist (Remote | US Client)' : 'Cashier',
-    company: 'Example company', location: 'Philippines', employmentType: 'Full-time', role: 'Development & IT',
-    url: `https://example.com/jobs/${index}`, source: 'Layout fixture', salary: '', date: '', logo: '', workMode: 'Remote / WFH', description: 'Example description', direct: false,
+    company: index === 1 ? 'Example company with a very long international employer name' : 'Example company',
+    location: index === 1 ? 'Remote · Available from Manila, Cebu and Davao' : index === 0 ? 'Remote' : 'Philippines',
+    employmentType: index === 2 ? 'Part-time' : 'Full-time', role: index === 2 ? 'Finance & operations' : 'Development & IT',
+    url: `https://example.com/jobs/${index}`, source: 'Layout fixture',
+    salary: index === 1 ? '$80,000 – $120,000 per year plus performance bonus and benefits' : '',
+    date: index === 0 ? new Date().toISOString() : index === 1 ? '2020-01-01' : '',
+    logo: '', workMode: 'Remote / WFH', description: 'Example description', direct: index === 1,
   }));
   await context.route('**/api/auth/session', route => route.fulfill({ json: { user: { id: 1, name: 'Layout preview', email: 'preview@example.invalid', provider: 'email', avatarUrl: null }, csrf: 'fixture', googleEnabled: false } }));
   await context.route('**/api/workspace/items', route => route.fulfill({ json: { items: [] } }));
-  await context.route('**/api/jobs/search*', route => route.fulfill({ json: { jobs, message: 'Local layout fixture', configured: true } }));
+  await context.route('**/api/jobs/search*', route => route.fulfill({ json: { jobs: new URL(route.request().url()).searchParams.get('q') === 'cashier' ? jobs.slice(0, 1) : jobs, message: 'Local layout fixture', configured: true } }));
   await context.route('https://www.google.com/s2/favicons?*', route => route.abort());
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body: `
     let resultDiv, host;
@@ -97,6 +102,19 @@ try {
       }
     }
   }
+  async function checkSharedCardSections() {
+    const cards = await page.locator('.job-card:visible').evaluateAll(cards => cards.map(card => {
+      const rect = card.getBoundingClientRect();
+      const positions = Object.fromEntries(['.job-card-header', '.job-title', '.job-details-link', '.job-card-metadata', '.job-card-source p', '.job-card-footer'].map(selector => [selector, card.querySelector(selector).getBoundingClientRect().top - rect.top]));
+      const overflow = card.scrollWidth > card.clientWidth || card.querySelector('.card-body').scrollWidth > card.querySelector('.card-body').clientWidth;
+      return { height: rect.height, positions, overflow };
+    }));
+    for (const card of cards) {
+      assert.equal(card.overflow, false, 'Long company names, tags and action labels stay inside the card');
+      assert.ok(Math.abs(card.height - cards[0].height) < 1, 'Card heights match across sources and filtered result counts');
+      for (const [selector, top] of Object.entries(card.positions)) assert.ok(Math.abs(top - cards[0].positions[selector]) < 1, selector + ' stays aligned across titles, salaries and New badges');
+    }
+  }
   const metrics = node => {
     const style = getComputedStyle(node);
     return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','padding','borderRadius','backgroundColor','color','borderWidth','borderColor'].map(key => [key,style[key]]));
@@ -129,6 +147,61 @@ try {
     }));
   };
   assert.deepEqual(await page.locator('.google-job-card').first().evaluate(geometry), await page.locator('[data-job-results] .job-card').first().evaluate(geometry), 'Google uses the same card sections and positions as feed cards');
+  const unfilteredHeight = await page.locator('[data-job-results] .job-card').first().evaluate(card => card.getBoundingClientRect().height);
+  await page.locator('#job-location').fill('Remote');
+  await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
+  await checkLayout('[data-job-results]', 2);
+  await checkLayout('.google-job-grid', 12);
+  await page.evaluate(() => window.drawGoogleCards(3));
+  await checkLayout('.google-job-grid', 3);
+  await checkSharedCardSections();
+  assert.equal(await page.locator('[data-job-results] [data-job-new]').count(), 1, 'Mixed fresh and older cards have aligned source rows');
+  assert.equal(await page.locator('[data-job-results] .job-card').first().evaluate(card => card.getBoundingClientRect().height), unfilteredHeight, 'Filtering does not change the card height at the same width');
+  const longCard = page.locator('[data-job-card="layout-1"]');
+  assert.equal(await longCard.locator('.job-card-identity > :first-child').getAttribute('title'), jobs[1].company);
+  assert.equal(await longCard.locator('[data-job-location]').getAttribute('title'), jobs[1].location);
+  assert.equal(await longCard.locator('.job-card-tags').last().locator('.job-tag').getAttribute('title'), jobs[1].salary, 'Full salary remains available when its tag is shortened');
+  await longCard.locator('.job-title-link').click();
+  await page.locator('[data-job-details-modal]').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('[data-details-company]').innerText(), jobs[1].company);
+  assert.ok((await page.locator('[data-details-tags]').innerText()).includes(jobs[1].salary), 'Full salary is readable in job details on mobile as well as desktop');
+  assert.ok((await page.locator('[data-details-tags]').innerText()).includes(jobs[1].location), 'Full location is readable in job details');
+  await page.getByRole('button', { name: 'Close job details', exact: true }).click();
+  for (const width of [320, 390, 768, 1024, 1530]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await checkLayout('[data-job-results]', 2);
+    await checkLayout('.google-job-grid', 3);
+    await checkSharedCardSections();
+  }
+  if (process.env.JOBLINK_LAYOUT_SCREENSHOT) {
+    await page.locator('#job-results-title').click();
+    await page.locator('.job-results-panel').screenshot({ path: process.env.JOBLINK_LAYOUT_SCREENSHOT });
+  }
+  await page.locator('#job-location').fill('Davao');
+  await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
+  await checkLayout('[data-job-results]', 1);
+  await checkLayout('.google-job-grid', 12);
+  await checkSharedCardSections();
+  assert.equal(await page.locator('[data-job-results] .job-card').first().evaluate(card => card.getBoundingClientRect().height), unfilteredHeight, 'An isolated older listing retains the same height');
+  await page.locator('#job-location').fill('');
+  await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
+  await checkLayout('[data-job-results]', 12);
+  for (const [selector, value, count] of [['#job-employment', 'Part-time', 1], ['#job-classification', 'Finance & operations', 1], ['#job-listing-time', '7', 1]]) {
+    await page.locator(selector).selectOption(value);
+    await checkLayout('[data-job-results]', count);
+    await checkLayout('.google-job-grid', 12);
+    await checkSharedCardSections();
+    await page.locator(selector).selectOption('');
+    await checkLayout('[data-job-results]', 12);
+  }
+  await page.locator('#job-query').fill('cashier');
+  await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
+  await checkLayout('[data-job-results]', 1);
+  await checkLayout('.google-job-grid', 12);
+  await checkSharedCardSections();
+  await page.locator('#job-query').fill('developer');
+  await page.locator('[data-job-search]').evaluate(form => form.requestSubmit());
+  await checkLayout('[data-job-results]', 12);
   assert.equal(await page.locator('.google-job-card .google-job-preview').count(), 0);
   assert.equal(await page.locator('.gsc-cursor').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   await page.locator('#job-source').selectOption('google');
@@ -191,7 +264,7 @@ try {
   await checkLayout('[data-job-results]', 12);
   assert.equal(await page.locator('[data-job-pagination]').getByRole('button', { name: 'Previous page', exact: true }).count(), 0);
   assert.deepEqual(errors, [], 'No browser errors');
-  console.log('PASS: shared card typography, logos, controls and pagination; source switching; details; selection; native Google paging; responsive grids and incomplete rows.');
+  console.log('PASS: shared card typography and section alignment across all filters, long identities, salaries, mixed New badges and source switching; details; selection; native Google paging; responsive grids and incomplete rows.');
 } finally {
   await browser?.close();
   await unlink(preview);

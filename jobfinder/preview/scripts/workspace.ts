@@ -1190,15 +1190,16 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
     ? `${companyPlaceholder().replace('Company logo unavailable', 'Source icon unavailable')}<img data-source-icon src="${htmlEscape(google.iconUrl)}" alt="${htmlEscape(google.domain)} source icon" loading="lazy" referrerpolicy="no-referrer" />`
     : `<span data-company-placeholder>${companyPlaceholder()}</span>${safeUrl(job.logo) ? `<img data-company-logo src="${htmlEscape(safeUrl(job.logo))}" alt="${htmlEscape(job.company)} logo" loading="lazy" referrerpolicy="no-referrer" />` : ''}`
   const identity = google
-    ? `<a class="google-job-source fw-semibold" data-job-source-website href="${htmlEscape(google.origin)}" target="_blank" rel="noopener noreferrer" aria-label="Visit ${htmlEscape(google.domain)} website">${htmlEscape(google.domain)} &nearr;</a><span class="text-secondary small">Found on Google</span>`
-    : `<div class="fw-semibold">${htmlEscape(job.company)}</div><span class="text-secondary small" data-job-location>${htmlEscape(job.location)}</span>`
-  const metadata = `<div class="d-flex flex-wrap gap-2"><span class="job-tag">${htmlEscape(job.role || 'Job listing')}</span><span class="job-tag">${htmlEscape(job.workMode || 'Check listing')}</span><span class="job-tag">${htmlEscape(job.employmentType || 'Not specified')}</span>${job.salary ? `<span class="job-tag">${htmlEscape(job.salary)}</span>` : ''}</div>`
+    ? `<a class="google-job-source fw-semibold" data-job-source-website href="${htmlEscape(google.origin)}" target="_blank" rel="noopener noreferrer" aria-label="Visit ${htmlEscape(google.domain)} website" title="${htmlEscape(google.domain)}">${htmlEscape(google.domain)} &nearr;</a><span class="text-secondary small">Found on Google</span>`
+    : `<div class="fw-semibold" title="${htmlEscape(job.company)}">${htmlEscape(job.company)}</div><span class="text-secondary small" data-job-location title="${htmlEscape(job.location)}">${htmlEscape(job.location)}</span>`
+  const tag = (value: string) => `<span class="job-tag" title="${htmlEscape(value)}">${htmlEscape(value)}</span>`
+  const metadata = `<div class="job-card-tags">${tag(job.role || 'Job listing')}${tag(job.workMode || 'Check listing')}${tag(job.employmentType || 'Not specified')}</div>${job.salary ? `<div class="job-card-tags">${tag(job.salary)}</div>` : ''}`
   const source = google
     ? `Source: Google &middot; <a data-job-source-listing href="${htmlEscape(job.url)}" target="_blank" rel="noopener noreferrer">Original listing &nearr;</a>`
     : `Source: <a href="${htmlEscape(safeUrl(job.url))}" target="_blank" rel="noopener noreferrer">${htmlEscape(job.source)}</a>${job.date ? ' | ' + htmlEscape(job.date.slice(0, 10)) : ''}`
   return `<article class="card job-card${google ? ' google-job-card' : ''}" data-job-card="${id}" tabindex="0" aria-label="Read description for ${title}">
     <div class="card-body d-flex flex-column">
-      <div class="d-flex align-items-center gap-3 mb-3">
+      <div class="job-card-header d-flex align-items-center gap-3 mb-3">
         <span class="avatar bg-white border rounded-3 position-relative text-blue flex-shrink-0">${logo}</span>
         <div class="job-card-identity flex-grow-1">${identity}</div>
         <input type="checkbox" class="form-check-input job-pick ms-auto" data-job-pick="${id}" aria-label="Select ${title}${google ? '' : ' at ' + htmlEscape(job.company)}" />
@@ -1212,7 +1213,7 @@ function renderJobCard(job: Job, google?: { domain: string; origin: string; icon
       </div>
       <div class="job-card-footer">
         <div class="d-flex gap-2 job-card-actions">
-          <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
+          <a class="btn btn-primary flex-grow-1" href="${htmlEscape(safeUrl(job.applyUrl || job.url))}" target="_blank" rel="noopener noreferrer" data-apply-job="${id}" title="${job.direct ? 'Apply on company site' : 'Apply via source'}">${job.direct ? 'Apply on company site' : 'Apply via source'} &nearr;</a>
           <button class="btn" data-track="${id}" aria-label="Save ${title}">Save</button>
         </div>
         <button type="button" class="btn btn-outline-success" data-mark-applied-job="${id}" aria-label="Mark as applied: ${title}">Mark as applied</button>
