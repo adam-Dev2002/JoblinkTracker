@@ -16,6 +16,7 @@ try {
   const feeds = Array.from({ length: 13 }, (_, i) => ({ ...legal, id: 'software-' + i, title: i % 2 ? 'Senior Software Developer for a long international company name' : 'Software Developer', company: 'Example company ' + i, url: 'https://example.com/jobs/' + i, location: i % 2 ? 'Philippines' : 'Remote', employmentType: i % 3 ? 'Full-time' : 'Part-time', role: i === 2 ? 'Finance & operations' : 'Development & IT', salary: i % 2 ? '' : '$80,000 – $120,000 yearly', date: i === 1 ? '2020-01-01' : legal.date }));
   const legalGoogle = Array.from({ length: 6 }, (_, i) => ({ title: i % 2 ? 'Commercial Legal Counsel at an international technology company' : 'Corporate Paralegal & Legal Operations', url: 'https://www.onlinejobs.ph/jobseekers/job/legal-' + (10000 + i), content: 'Remote commercial legal counsel, full-time role.' }));
   const softwareGoogle = Array.from({ length: 16 }, (_, i) => ({ title: i % 2 ? 'Senior Software Developer for a long international company name' : 'Software Developer', url: 'https://www.linkedin.com/jobs/view/software-' + (20000 + i), content: 'Remote software developer, full-time or part-time finance and technology work.' }));
+  const shortBatches = Array.from({ length: 8 }, (_, batch) => Array.from({ length: 10 }, (_, i) => ({ title: 'Batch Developer ' + (batch * 10 + i), url: 'https://www.linkedin.com/jobs/view/batch-' + (30000 + batch * 10 + i), content: 'Remote batch developer.' })));
   await context.route('**/api/auth/session', route => route.fulfill({ json: { user: { id: 1, name: 'Layout fixture', email: 'layout@example.invalid', provider: 'email', avatarUrl: null }, csrf: 'fixture', googleEnabled: false } }));
   await context.route('**/api/workspace/items', route => route.fulfill({ json: { items: [] } }));
   await context.route('**/api/jobs/search*', route => route.fulfill({ json: { jobs: new URL(route.request().url()).searchParams.get('q')?.toLowerCase().includes('commercial') ? [legal] : feeds, message: 'Layout fixture' } }));
@@ -23,10 +24,11 @@ try {
   await context.route('https://cse.google.com/cse.js?cx=*', route => route.fulfill({ contentType: 'application/javascript', body:
     "let host, organic, query, resultPages;\n" +
     "const legal = " + JSON.stringify(legalGoogle) + "; const software = " + JSON.stringify(softwareGoogle) + ";\n" +
+    "const shortBatches = " + JSON.stringify(shortBatches) + ";\n" +
     "const duplicate = " + JSON.stringify({ title: 'Commercial Legal Counsel indexed duplicate', url: legal.url + '?utm_source=google', content: 'Remote commercial legal counsel, full-time role.' }) + ";\n" +
     "window.providerRequests=[];\n" +
     "const draw=number=>{window.providerRequests.push(number);window.__gcse.searchCallbacks.web.starting('joblink-google-jobs',query);window.__gcse.searchCallbacks.web.ready('joblink-google-jobs',query,[],resultPages[number-1],organic);window.__gcse.searchCallbacks.web.rendered();host.querySelector('.gsc-cursor-box')?.remove();const cursor=document.createElement('div');cursor.className='gsc-cursor-box';cursor.innerHTML='<div class=\"gsc-cursor\">'+resultPages.map((_,i)=>'<div class=\"gsc-cursor-page '+(i+1===number?'gsc-cursor-current-page':'')+'\">'+(i+1)+'</div>').join('')+'</div>';host.querySelector('.gsc-results').append(cursor);cursor.querySelectorAll('.gsc-cursor-page').forEach((control,i)=>control.onclick=()=>draw(i+1));};\n" +
-    "const element={execute(value){query=value;resultPages=value.toLowerCase().includes('commercial legal counsel')?[[duplicate,...legal]]:[software.slice(0,12),software.slice(12)];draw(1);},clearAllResults(){}};\n" +
+    "const element={execute(value){query=value;resultPages=value.toLowerCase().includes('batch developer')?shortBatches:value.toLowerCase().includes('commercial legal counsel')?[[duplicate,...legal]]:[software.slice(0,12),software.slice(12)];draw(1);},clearAllResults(){}};\n" +
     "window.google={search:{cse:{element:{render(config){host=config.div;host.innerHTML='<div class=\"gsc-control-cse\"><div class=\"gsc-control-wrapper-cse\"><div class=\"gsc-results-wrapper-visible\"><div class=\"gsc-wrapper\"><div class=\"gsc-resultsbox-visible\"><div class=\"gsc-results gsc-webResult\"><div class=\"gsc-expansionArea\"><div class=\"gsc-webResult gsc-result\"><table><tbody><tr><td><div data-organic></div></td></tr></tbody></table></div></div><div class=\"gcsc-more-maybe-branding-root\">Enhanced by Google (fixture)</div><div class=\"gs-result\"><div class=\"gs-spelling\">Showing results for internal site: query</div></div></div></div></div></div></div></div>';organic=host.querySelector('[data-organic]');const style=document.createElement('style');style.textContent='.gsc-control-cse{font-family:Arial;font-size:13px;padding:1em;background:white}.gsc-control-cse .gsc-results{width:528px}.gsc-cursor-box{margin:10px}.gsc-cursor-page{display:inline-block;margin:8px}';document.head.append(style);},getElement(){return element;}}}}};window.__gcse.initializationCallback();"
   }));
   const search = async value => {
@@ -100,9 +102,25 @@ try {
   await page.locator('[data-google-jobs][aria-busy="false"]').waitFor({ state: 'attached' });
   await checkGrid(5);
   assert.equal(await page.locator('[data-job-count]').innerText(), '29 results');
+  const requestsBeforeGoogle = await page.evaluate(() => window.providerRequests.length);
   await page.locator('#job-source').selectOption('google');
   await page.locator('[data-google-jobs][aria-busy="false"]').waitFor({ state: 'attached' });
   await checkGrid(12);
+  const pager = page.locator('[data-job-pagination]');
+  await pager.getByRole('button', { name: 'Page 2', exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.providerRequests.length), requestsBeforeGoogle + 1, 'Numbered Google pages appear before later pages are fetched');
+  assert.equal(await pager.locator('.workspace-page-count').innerText(), 'Showing 1–12 results', 'An unread provider page is not counted as a finalized result total');
+  await pager.getByRole('button', { name: 'Page 2', exact: true }).click();
+  await page.locator('[data-google-jobs][aria-busy="false"]').waitFor({ state: 'attached' });
+  await checkGrid(4);
+  assert.equal(await pager.locator('[aria-current="page"]').innerText(), '2');
+  assert.equal(await pager.locator('.workspace-page-count').innerText(), 'Showing 13–16 of 16 results');
+  assert.equal(await pager.getByRole('button', { name: 'Next page', exact: true }).isDisabled(), true);
+  for (const entries of ['24', '48']) {
+    await page.locator('[data-job-entries]').selectOption(entries);
+    await checkGrid(16);
+    assert.equal(await pager.getByRole('button', { name: /^Page / }).count(), 0, 'Page numbers adjust to the selected entry count');
+  }
   await page.locator('[data-job-entries]').selectOption('all');
   await page.locator('[data-google-jobs][aria-busy="false"]').waitFor({ state: 'attached' });
   await checkGrid(16);
@@ -110,6 +128,24 @@ try {
   assert.equal(await page.locator('[data-job-pick]:checked').count(), 16);
   await page.locator('[data-job-select-all]').uncheck();
   await page.locator('[data-job-entries]').selectOption('12');
+  const requestsBeforeBatches = await page.evaluate(() => window.providerRequests.length);
+  await search('Batch Developer');
+  await checkGrid(12);
+  await pager.getByRole('button', { name: 'Page 7', exact: true }).waitFor();
+  assert.equal(await pager.getByRole('button', { name: 'Page 8', exact: true }).count(), 0, 'Ten-item provider batches are repartitioned into seven twelve-item application pages');
+  assert.equal(await page.evaluate(() => window.providerRequests.length), requestsBeforeBatches + 2, 'Initial rendering retrieves only enough short batches to fill the page');
+  await page.locator('[data-job-entries]').selectOption('24');
+  await page.locator('[data-google-jobs][aria-busy="false"]').waitFor({ state: 'attached' });
+  await checkGrid(24);
+  await pager.getByRole('button', { name: 'Page 4', exact: true }).waitFor();
+  assert.equal(await pager.getByRole('button', { name: 'Page 7', exact: true }).count(), 0, 'Unread capacity scales with twenty-four entries');
+  assert.equal(await page.evaluate(() => window.providerRequests.length), requestsBeforeBatches + 3);
+  await page.locator('[data-job-entries]').selectOption('12');
+  await pager.getByRole('button', { name: 'Page 7', exact: true }).click();
+  await page.locator('[data-google-jobs][aria-busy="false"]').waitFor({ state: 'attached' });
+  await checkGrid(8);
+  assert.equal(await pager.locator('.workspace-page-count').innerText(), 'Showing 73–80 of 80 results');
+  assert.equal(await pager.getByRole('button', { name: 'Next page', exact: true }).isDisabled(), true);
   await page.locator('#job-source').selectOption('all');
   await search('Commercial Legal Counsel');
   await checkGrid(7);

@@ -102,6 +102,23 @@ try {
 
   await page.locator('#job-source').selectOption('google');
   await ready(12);
+  const pager = page.locator('[data-job-pagination]');
+  await pager.getByRole('button', { name: 'Page 3', exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.providerRequests), [1], 'Google exposes numbered pages without eagerly fetching their results');
+  await pager.getByRole('button', { name: 'Page 3', exact: true }).click();
+  await ready(11);
+  assert.deepEqual(await page.evaluate(() => window.providerRequests), [1, 2, 3], 'A numbered jump loads only the pages needed to fill its range');
+  assert.deepEqual(await page.locator('.google-job-card .job-title-link').allTextContents(), google.slice(24).map(job => job.title));
+  assert.equal(await pager.locator('[aria-current="page"]').innerText(), '3');
+  assert.equal(await pager.getByRole('button', { name: 'Next page', exact: true }).isDisabled(), true);
+  await pager.getByRole('button', { name: 'Page 1', exact: true }).click();
+  await ready(12);
+  assert.deepEqual(await page.evaluate(() => window.providerRequests), [1, 2, 3], 'Numbered navigation reuses retrieved results');
+  await page.locator('#job-source').selectOption('all');
+  await page.locator('[data-job-empty]').waitFor();
+  await page.evaluate(() => { window.providerRequests = []; });
+  await page.locator('#job-source').selectOption('google');
+  await ready(12);
   failTitle = 'Developer 0';
   await card('Developer 0').locator('[data-mark-applied-job]').click();
   await page.locator('[data-workspace-error]:not(.d-none)').waitFor();

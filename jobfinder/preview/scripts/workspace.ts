@@ -1284,8 +1284,8 @@ function exportSelectedJobs() {
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage, more = false) {
-  const pages = Math.ceil(count / perPage)
+function renderPagination(nav: HTMLElement, count: number, page: number, attribute: string, noun: string, busy = false, perPage = workspaceRowsPerPage, more = false, remainingCount = 0) {
+  const pages = Math.max(Math.ceil((count + remainingCount) / perPage), more ? page : 1)
   nav.classList.toggle('d-none', count === 0)
   if (count === 0) {
     nav.innerHTML = ''
@@ -1300,11 +1300,11 @@ function renderPagination(nav: HTMLElement, count: number, page: number, attribu
     links += button(page, String(page))
   })
   links += button(page + 1, 'Next', page >= pages && !more)
-  const label = (page - 1) * perPage >= count ? 'Loading more results…' : `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)} of ${count} ${noun}`
+  const label = (page - 1) * perPage >= count ? 'Loading more results…' : `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, count)}${more ? '' : ' of ' + count} ${noun}`
   nav.innerHTML = `<p class="text-secondary small mb-0 workspace-page-count" role="status">${label}</p>${pages > 1 || more ? `<ul class="pagination mb-0">${links}</ul>` : ''}`
 }
 function renderJobPagination(count: number, more = false, busy = false) {
-  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', savingSelectedJobs || busy, entriesPerPage('job', count), more)
+  renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', savingSelectedJobs || busy, entriesPerPage('job', count), more, more ? googleJobSearch?.remainingResultCapacity() || 0 : 0)
 }
 function renderJobs(resetPage = true) {
   if (!loaded) return

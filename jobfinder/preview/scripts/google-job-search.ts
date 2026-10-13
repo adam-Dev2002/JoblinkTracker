@@ -25,6 +25,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   let resultReady = false
   let availableCount = 0
   let neededCount = jobsPerPage
+  let providerPageSize = 0
   let generation = 0
   let scheduled = false
   let publishedState = ''
@@ -33,9 +34,13 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     .map(element => ({ element, page: Number(element.textContent?.trim()) }))
     .filter(value => Number.isInteger(value.page) && value.page > 0)
   const unreadPage = () => nativePages().find(value => !pageResults.has(value.page))
+  // Unread provider pages are capacity, not an exact count of filtered matches.
+  const remainingResultCapacity = () => active && pageResults.size
+    ? nativePages().filter(value => !pageResults.has(value.page)).length * (providerPageSize || jobsPerPage)
+    : 0
   const hasMore = () => active && (pagePending || (!resultReady && panel.dataset.searchFailed !== 'true') || Boolean(unreadPage()))
   const publish = () => {
-    const state = [active, pagePending, resultReady, hasMore(), panel.getAttribute('aria-busy'), panel.dataset.searchFailed].join(':')
+    const state = [active, pagePending, resultReady, hasMore(), remainingResultCapacity(), panel.getAttribute('aria-busy'), panel.dataset.searchFailed].join(':')
     if (state === publishedState) return
     publishedState = state
     onStatusChange()
@@ -102,6 +107,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
         div.append(link)
       } catch { /* Ignore malformed promotional URLs. */ }
     }
+    providerPageSize = Math.max(providerPageSize, results?.length || 0)
     pageResults.set(requestedPage, (results || []).map(result => ({ ...result, listingUrl: googleJobListingUrl(result.url) })).filter(result => result.listingUrl))
     pagePending = false
     resultReady = false
@@ -160,6 +166,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   }
   return {
     hasMore,
+    remainingResultCapacity,
     updateResultCount(count: number, options: { needed?: number; live?: boolean } = {}) {
       availableCount = count
       neededCount = options.needed ?? jobsPerPage
@@ -183,6 +190,7 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       scheduled = false
       clearTimeout(resultTimer)
       pageResults.clear()
+      providerPageSize = 0
       requestedPage = 1
       pagePending = false
       resultReady = false
