@@ -678,6 +678,7 @@ async function handleClick(event: Event) {
     }
     if (target.hasAttribute('data-job-bulk-save')) await saveSelectedJobs()
     if (target.hasAttribute('data-job-bulk-apply')) await saveSelectedJobs('Applied')
+    if (target.hasAttribute('data-job-bulk-unavailable')) await saveSelectedJobs('Unavailable')
     if (target.hasAttribute('data-job-bulk-export')) exportSelectedJobs()
     if (target.hasAttribute('data-job-deselect') && !savingSelectedJobs) {
       jobSelection.clear()
@@ -1114,7 +1115,7 @@ function companyPlaceholder() {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-label="Company logo unavailable"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V4h6v3M8 11h1m6 0h1m-8 4h1m6 0h1"/></svg>'
 }
 function updateJobSelection() {
-  const busy = savingSelectedJobs || !loaded
+  const busy = savingSelectedJobs || pendingJobSaves.size > 0 || !loaded
   const all = select<HTMLInputElement>('[data-job-select-all]')
   const scope = jobsInSelectionScope()
   const visibleIds = scope.map(job => job.id)
@@ -1131,7 +1132,7 @@ function updateJobSelection() {
   select('[data-job-entries-control]').classList.toggle('d-none', googleOnly)
   select<HTMLSelectElement>('[data-job-entries]').disabled = busy || jobsLoading
   select('[data-job-selection-actions]').classList.toggle('d-none', !hasSelection)
-  for (const name of ['deselect', 'bulk-save', 'bulk-apply', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
+  for (const name of ['deselect', 'bulk-save', 'bulk-apply', 'bulk-unavailable', 'bulk-export']) select<HTMLButtonElement>(`[data-job-${name}]`).disabled = busy || !hasSelection
   select('[data-job-selection-toolbar]').setAttribute('aria-busy', String(savingSelectedJobs))
   select('[data-job-selection-toolbar]').classList.toggle('d-none', scope.length === 0)
   root.querySelectorAll<HTMLInputElement>('[data-job-pick]').forEach((input) => {
@@ -1143,7 +1144,7 @@ function updateJobSelection() {
     button.disabled = busy || pendingJobSaves.has((button.dataset.track || button.dataset.markAppliedJob || button.dataset.markUnavailableJob)!)
   })
   root.querySelectorAll<HTMLAnchorElement>('[data-apply-job]').forEach(link => {
-    if (pendingJobSaves.has(link.dataset.applyJob!)) {
+    if (savingSelectedJobs || pendingJobSaves.has(link.dataset.applyJob!)) {
       link.setAttribute('aria-disabled', 'true')
       link.dataset.jobSaveBusy = ''
     } else if (link.hasAttribute('data-job-save-busy')) {
@@ -1300,12 +1301,12 @@ async function markJobApplied(job: Job, renderAfter = true) {
   if (existing && isApplied(existing)) { if (renderAfter) render(); return existing }
   return save('application', existing ? { ...existing.payload, status: 'Applied', date: today() } : jobApplicationPayload(job, 'Applied'), existing?.id || 0, renderAfter)
 }
-async function markJobUnavailable(job: Job) {
+async function markJobUnavailable(job: Job, renderAfter = true) {
   const existing = trackedApplication(job)
-  return save('application', existing ? { ...existing.payload, status: 'Unavailable' } : jobApplicationPayload(job, 'Unavailable'), existing?.id || 0)
+  return save('application', existing ? { ...existing.payload, status: 'Unavailable' } : jobApplicationPayload(job, 'Unavailable'), existing?.id || 0, renderAfter)
 }
-async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
-  if (savingSelectedJobs || !loaded || !jobSelection.size) return
+async function saveSelectedJobs(status: 'Saved' | 'Applied' | 'Unavailable' = 'Saved') {
+  if (savingSelectedJobs || pendingJobSaves.size || !loaded || !jobSelection.size) return
   if (!signedIn) {
     location.assign(loginUrl())
     return
@@ -1313,21 +1314,28 @@ async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
   savingSelectedJobs = true
   updateJobSelection()
   const selectedJobs = Array.from(jobSelection.values())
+  const action = {
+    Saved: { progress: 'Saving selected jobs', completed: 'saved', already: 'in your tracker', retry: 'Save selected' },
+    Applied: { progress: 'Marking selected jobs as applied', completed: 'marked as applied', already: 'applied', retry: 'Mark selected as applied' },
+    Unavailable: { progress: 'Marking selected jobs unavailable', completed: 'marked unavailable', already: 'unavailable or applied', retry: 'Mark selected unavailable' },
+  }[status]
+  if (status === 'Unavailable') confirmationFocus = select('[data-job-bulk-unavailable]')
   let saved = 0,
     skipped = 0,
     failed = 0
   let failureMessage = ''
   try {
     for (const job of selectedJobs) {
-      jobBulkStatus(`${status === 'Applied' ? 'Marking selected jobs as applied' : 'Saving selected jobs'}… ${saved + skipped + failed} of ${selectedJobs.length}`)
+      jobBulkStatus(`${action.progress}… ${saved + skipped + failed} of ${selectedJobs.length}`)
       const existing = trackedApplication(job)
-      if (existing && (status === 'Saved' || isApplied(existing))) {
+      if (existing && (status === 'Saved' || isApplied(existing) || (status === 'Unavailable' && existing.payload.status === 'Unavailable'))) {
         skipped++
         jobSelection.delete(job.id)
         continue
       }
       try {
         if (status === 'Applied') await markJobApplied(job, false)
+        else if (status === 'Unavailable') await markJobUnavailable(job, false)
         else await save('application', jobApplicationPayload(job, 'Saved'), 0, false)
         saved++
         jobSelection.delete(job.id)
@@ -1336,13 +1344,14 @@ async function saveSelectedJobs(status: 'Saved' | 'Applied' = 'Saved') {
         failureMessage = e instanceof Error ? e.message : 'Unable to save.'
       }
     }
-    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} ${status === 'Applied' ? 'marked as applied' : 'saved'}.${skipped ? ` ${skipped} already ${status === 'Applied' ? 'applied' : 'in your tracker'}.` : ''}${failed ? ` ${failed} could not be ${status === 'Applied' ? 'marked as applied' : 'saved'} and remain selected. Try ${status === 'Applied' ? 'Mark selected as applied' : 'Save selected'} again.` : ''}`)
+    jobBulkStatus(`${saved} ${saved === 1 ? 'job' : 'jobs'} ${action.completed}.${skipped ? ` ${skipped} already ${action.already}.` : ''}${failed ? ` ${failed} could not be ${action.completed} and remain selected. Try ${action.retry} again.` : ''}`)
     if (failed) error(failureMessage)
   } finally {
     savingSelectedJobs = false
     render()
     updateJobSelection()
   }
+  if (status === 'Unavailable' && saved && !failed) showRemovalSuccess(`${saved} ${saved === 1 ? 'job was' : 'jobs were'} marked unavailable and removed from your listings. Change ${saved === 1 ? 'its' : 'their'} tracker status to Saved to restore ${saved === 1 ? 'it' : 'them'}.`)
 }
 function exportSelectedJobs() {
   if (savingSelectedJobs || !jobSelection.size) return
