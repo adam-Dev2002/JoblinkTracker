@@ -377,7 +377,7 @@ const desk = [
                 <div class="d-flex flex-wrap gap-2 ms-auto">
                   <button type="button" class="btn btn-sm" data-application-select><Icon name="checkbox" class="workspace-action-icon" /><span data-application-select-label>Select this page</span></button>
                   <button type="button" class="btn btn-sm" data-application-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
-                  <button type="button" class="btn btn-sm text-danger" data-application-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-application-bulk-label>Delete selected (0)</span></button>
+                  <button type="button" class="btn btn-sm text-danger" data-application-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-application-bulk-label>Remove selected (0)</span></button>
                 </div>
               </div>
             </div>
@@ -517,7 +517,7 @@ const desk = [
                 <div class="d-flex flex-wrap gap-2 ms-auto">
                   <button type="button" class="btn btn-sm" data-sheet-select><Icon name="checkbox" class="workspace-action-icon" /><span data-sheet-select-label>Select this page</span></button>
                   <button type="button" class="btn btn-sm" data-sheet-export-selected><Icon name="download" class="workspace-action-icon" />Export selected</button>
-                  <button type="button" class="btn btn-sm text-danger" data-sheet-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-sheet-bulk-label>Delete selected (0)</span></button>
+                  <button type="button" class="btn btn-sm text-danger" data-sheet-bulk disabled><Icon name="trash" class="workspace-action-icon" /><span data-sheet-bulk-label>Remove selected (0)</span></button>
                 </div>
               </div>
             </div>
@@ -543,11 +543,29 @@ const desk = [
         </div>
       </section>
     </div>
-    <button type="button" class="d-none" data-confirm-trigger data-bs-toggle="modal" data-bs-target="#workspace-confirm"></button><div class="modal modal-blur fade" id="workspace-confirm" tabindex="-1" role="dialog" aria-labelledby="workspace-confirm-title" data-confirm-modal>
+    <button type="button" class="d-none" data-confirm-trigger data-bs-toggle="modal" data-bs-target="#workspace-confirm"></button><div class="modal modal-blur fade" id="workspace-confirm" tabindex="-1" role="dialog" aria-labelledby="workspace-confirm-title" aria-describedby="workspace-confirm-message" data-confirm-modal>
       <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
-          <div class="modal-header"><h3 class="modal-title" id="workspace-confirm-title">Delete entries?</h3><button class="btn-close" aria-label="Close confirmation" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0" data-confirm-message></p></div><div class="modal-footer">
-            <button class="btn" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" data-confirm-accept data-bs-dismiss="modal">Delete</button>
+          <div class="modal-header"><h3 class="modal-title" id="workspace-confirm-title">Remove entries?</h3><button class="btn-close" aria-label="Close confirmation" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-0" id="workspace-confirm-message" data-confirm-message></p></div><div class="modal-footer">
+            <button class="btn" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" data-confirm-accept data-bs-dismiss="modal">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="d-none" data-removal-success-trigger data-bs-toggle="modal" data-bs-target="#workspace-removal-success"></button>
+    <div class="modal modal-blur fade" id="workspace-removal-success" tabindex="-1" role="dialog" aria-labelledby="workspace-removal-success-title" aria-describedby="workspace-removal-success-message" data-removal-success-modal>
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 class="modal-title" id="workspace-removal-success-title" data-removal-success-title>Removed successfully</h3>
+            <button type="button" class="btn-close" aria-label="Close removal success" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <span class="avatar avatar-md bg-success-lt rounded-circle mb-3" aria-hidden="true"><Icon name="check" /></span>
+            <p class="mb-0" id="workspace-removal-success-message" role="status" data-removal-success-message></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-success" data-removal-success-close data-bs-dismiss="modal">Done</button>
           </div>
         </div>
       </div>

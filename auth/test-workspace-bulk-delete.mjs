@@ -96,12 +96,19 @@ try {
     await page.locator(`[data-${prefix}-all]`).check()
     return prefix
   }
-  async function deleteSelection(prefix) {
+  async function deleteSelection(prefix, count) {
     await page.locator(`[data-${prefix}-bulk]`).click()
+    assert.equal(await page.locator('[data-confirm-accept]').innerText(), 'Remove')
     await page.locator('[data-confirm-accept]').click()
     await page.locator(prefix === 'application' ? '[data-application-filter-count]' : '[data-sheet-count]').filter({ hasText: /^0 of 0 (jobs|rows)$/ }).waitFor()
     assert.equal(await page.locator(`[data-${prefix}-selection-toolbar]`).isVisible(), false)
     assert.equal(await page.locator('[data-workspace-error]').isVisible(), false)
+    await page.locator('[data-removal-success-modal]').waitFor({ state: 'visible' })
+    assert.equal(await page.locator('[data-removal-success-title]').innerText(), 'Removed successfully')
+    const noun = prefix === 'application' ? 'application' : 'row'
+    assert.ok((await page.locator('[data-removal-success-message]').innerText()).startsWith(`${count} ${noun}${count === 1 ? ' was' : 's were'} removed.`))
+    await page.locator('[data-removal-success-close]').click()
+    await page.locator('[data-removal-success-modal]').waitFor({ state: 'hidden' })
   }
 
   await open('applications', 53)
@@ -110,7 +117,8 @@ try {
   await page.locator('[data-confirm-modal]').waitFor({ state: 'hidden' })
   assert.equal((await read(context)).filter(row => row.kind === 'application').length, 53, 'Cancel must preserve all 53 applications')
   assert.equal(batches.length, 0)
-  await deleteSelection('application')
+  assert.equal(await page.locator('[data-removal-success-modal]').isVisible(), false)
+  await deleteSelection('application', 53)
   assert.equal(batches.length, 1)
   assert.equal(batches[0].kind, 'application')
   assert.equal(batches[0].ids.length, 53)
@@ -123,7 +131,7 @@ try {
 
   await seed(owner, 'application', 205, 'Large batch')
   await open('applications', 205)
-  await deleteSelection('application')
+  await deleteSelection('application', 205)
   assert.deepEqual(batches.slice(1).map(input => [input.kind, input.ids.length]), [['application', 200], ['application', 5]])
   assert.equal((await read(context)).filter(row => row.kind === 'application').length, 0)
 
@@ -137,7 +145,7 @@ try {
   assert.equal((await read(context)).some(row => row.id === individual.id), false)
 
   await open('sheet', 1)
-  await deleteSelection('sheet')
+  await deleteSelection('sheet', 1)
   assert.equal(batches.at(-1).kind, 'sheet')
   assert.equal((await context.request.get(`/api/workspace/attachments?id=${attachment.id}`)).status(), 404)
   assert.equal((await query(db().from('workspace_attachments').select('id').eq('user_id', owner.id))).length, 0)

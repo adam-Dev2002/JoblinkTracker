@@ -33,7 +33,7 @@ export function attachTableActions(root: HTMLElement, entry: (id: number) => Tab
     menu.querySelector<HTMLButtonElement>('[data-table-edit]')!.dataset.edit = String(item.id)
     const remove = menu.querySelector<HTMLButtonElement>('[data-table-delete]')!
     remove.dataset.delete = String(item.id)
-    remove.setAttribute('aria-label', `Delete ${item.payload.title}`)
+    remove.setAttribute('aria-label', `Remove ${item.payload.title}`)
     menu.showPopover()
     button.setAttribute('aria-expanded', 'true')
     position()

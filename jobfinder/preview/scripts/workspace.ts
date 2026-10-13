@@ -8,6 +8,7 @@ import { wasPrerendered, whenPageActive } from '@shared/lib/page-activation'
 import { createGoogleJobSearch, jobsPerPage, type GoogleJobResult } from './google-job-search'
 import { googleJobListingUrl } from './google-job-query'
 import { isClosedListing } from './job-availability.mjs'
+import { makeApplicationIndex } from './application-index'
 type Kind = 'application' | 'task' | 'task_status' | 'event' | 'link' | 'sheet'
 type Attachment = { id: number; name: string; mime: string; size: number }
 const sheetSelection = new Set<number>()
@@ -31,7 +32,8 @@ const select = <T extends HTMLElement = HTMLElement>(selector: string) => root.q
 const tableActionArrow = select<HTMLTemplateElement>('[data-table-action-arrow]')?.innerHTML || ''
 const loginUrl = () => `/sign-in?returnTo=${encodeURIComponent(location.pathname + location.search)}`
 const htmlEscape = (value: string | number | null | undefined) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
-const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' })
+const today = () => dateFormatter.format(new Date())
 const safeUrl = (value: string | undefined) => {
   if (value?.startsWith('/static/company-logos/') && !value.includes('..')) return value
   try {
@@ -44,6 +46,12 @@ const safeUrl = (value: string | undefined) => {
 let items: Entry[] = []
 let cacheOwner: number | null = null
 let workspaceRevision = 0
+let cachedWorkspace: Entry[] | null = null
+let cachedWorkspaceOwner: number | null = null
+let cachedWorkspaceRevision = -1
+let indexedWorkspace: Entry[] | null = null
+let indexedWorkspaceRevision = -1
+let applicationIndex: ReturnType<typeof makeApplicationIndex<Entry>> | null = null
 let jobs: Job[] = []
 const jobSelection = new Map<string, Job>()
 const googleJobs = new Map<string, Job>()
@@ -109,8 +117,41 @@ function togglePageSelection(selection: Set<number>, ids: number[]) {
   const deselect = ids.length > 0 && ids.every(id => selection.has(id))
   for (const id of ids) if (deselect) selection.delete(id); else selection.add(id)
 }
+function cacheWorkspace() {
+  if (cacheOwner === null || (cachedWorkspace === items && cachedWorkspaceOwner === cacheOwner && cachedWorkspaceRevision === workspaceRevision)) return
+  writePageData('workspace', cacheOwner, items)
+  cachedWorkspace = items
+  cachedWorkspaceOwner = cacheOwner
+  cachedWorkspaceRevision = workspaceRevision
+}
+function updateTableSelection(kind: 'application' | 'sheet') {
+  const selection = kind === 'application' ? applicationSelection : sheetSelection
+  const ids = kind === 'application' ? visibleApplicationIds : visibleSheetIds
+  const busy = kind === 'application' ? deletingApplicationRows : deletingSheetRows
+  const visible = new Set(ids)
+  for (const id of selection) if (!visible.has(id)) selection.delete(id)
+  const all = select<HTMLInputElement>(`[data-${kind}-all]`)
+  all.checked = ids.length > 0 && ids.every(id => selection.has(id))
+  all.indeterminate = selection.size > 0 && !all.checked
+  all.disabled = !ids.length || busy
+  select(`[data-${kind}-selection-toolbar]`).classList.toggle('d-none', !selection.size)
+  select(`[data-${kind}-selected-count]`).textContent = kind === 'sheet' && !selection.size ? '' : `${selection.size} selected`
+  select(`[data-${kind}-select-label]`).textContent = all.checked ? 'Deselect this page' : 'Select this page'
+  select(`[data-${kind}-bulk-label]`).textContent = busy ? 'Removing...' : `Remove selected (${selection.size})`
+  select<HTMLButtonElement>(`[data-${kind}-bulk]`).disabled = !selection.size || busy
+  select<HTMLButtonElement>(`[data-${kind}-select]`).disabled = busy
+  select<HTMLButtonElement>(`[data-${kind}-export-selected]`).disabled = busy
+  select<HTMLSelectElement>(`[data-${kind}-entries]`).disabled = busy
+  select(`[data-${kind}-rows]`).setAttribute('aria-busy', String(busy))
+  root.querySelectorAll<HTMLInputElement>(`[data-${kind}-pick]`).forEach(input => {
+    input.checked = selection.has(Number(input.getAttribute(`data-${kind}-pick`)))
+    input.disabled = busy
+    input.closest('tr')?.classList.toggle('table-active', input.checked)
+  })
+  root.querySelectorAll<HTMLButtonElement>(`[data-${kind}-actions]`).forEach(button => { button.disabled = busy })
+}
 function actionButtons(item: Entry) {
-  return `<div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary" data-edit="${item.id}">Edit</button><button class="btn btn-sm btn-outline-danger" data-delete="${item.id}" aria-label="Delete ${htmlEscape(item.payload.title)}">Delete</button></div>`
+  return `<div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary" data-edit="${item.id}">Edit</button><button class="btn btn-sm btn-outline-danger" data-delete="${item.id}" aria-label="Remove ${htmlEscape(item.payload.title)}">Remove</button></div>`
 }
 function statusSelect(item: Entry, statuses: string[]) {
   return `<select class="form-select form-select-sm" data-entry-status="${item.id}" aria-label="Status for ${htmlEscape(item.payload.title)}">${statuses.map((status) => `<option ${status === item.payload.status ? 'selected' : ''}>${htmlEscape(status)}</option>`).join('')}</select>`
@@ -157,17 +198,18 @@ async function restoreDashboardLogos() {
 function render() {
   // Never confuse a pending or failed request with a genuinely empty workspace.
   if (!loaded) return
-  if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
+  cacheWorkspace()
   if (view === 'jobs' && jobSearchInitialized) {
     for (const [id, job] of jobSelection) if (hasApplied(job) || isClosedListing(job)) jobSelection.delete(id)
     renderGoogleJobCards()
     if (jobs.length || !jobsLoading) renderJobs(false)
   }
   taskStatuses = ['To do', 'In progress', 'Done', ...owned('task_status').map((item) => item.payload.title)]
+  const currentDate = today()
   const apps = owned('application'),
     tasks = owned('task'),
     events = owned('event')
-      .filter((item) => item.payload.date >= today())
+      .filter((item) => item.payload.date >= currentDate)
       .sort((a, b) => (a.payload.date + a.payload.time).localeCompare(b.payload.date + b.payload.time))
   if (view === 'dashboard') {
     const stats: Record<string, number> = { applications: apps.filter((i) => !['Saved', 'Application opened'].includes(i.payload.status)).length, interviews: apps.filter((i) => i.payload.status === 'Interview').length, tasks: tasks.filter((i) => i.payload.status !== 'Done').length, events: events.length }
@@ -213,19 +255,6 @@ function render() {
     applicationPage = Math.min(applicationPage, Math.max(1, Math.ceil(filtered.length / perPage)))
     const pageRows = filtered.slice((applicationPage - 1) * perPage, applicationPage * perPage)
     visibleApplicationIds = pageRows.map(item => item.id)
-    for (const id of applicationSelection) if (!visibleApplicationIds.includes(id)) applicationSelection.delete(id)
-    const visibleSelection = pageRows.filter(item => applicationSelection.has(item.id)).length
-    const all = select<HTMLInputElement>('[data-application-all]')
-    all.disabled = pageRows.length === 0 || deletingApplicationRows
-    all.checked = pageRows.length > 0 && visibleSelection === pageRows.length
-    all.indeterminate = visibleSelection > 0 && !all.checked
-    select('[data-application-selection-toolbar]').classList.toggle('d-none', applicationSelection.size === 0)
-    select('[data-application-selected-count]').textContent = `${applicationSelection.size} selected`
-    select<HTMLButtonElement>('[data-application-select]').disabled = deletingApplicationRows
-    select('[data-application-select-label]').textContent = all.checked ? 'Deselect this page' : 'Select this page'
-    select<HTMLSelectElement>('[data-application-entries]').disabled = deletingApplicationRows
-    select<HTMLButtonElement>('[data-application-bulk]').disabled = applicationSelection.size === 0 || deletingApplicationRows
-    select('[data-application-bulk-label]').textContent = 'Delete selected (' + applicationSelection.size + ')'
     select('[data-application-filter-count]').textContent = `${filtered.length} of ${apps.length} jobs`
     const activeFilters = Number(Boolean(select<HTMLSelectElement>('[data-status-filter]').value)) + Number(Boolean(companyFilter.value))
     const filterBadge = select('[data-application-filter-badge]')
@@ -240,6 +269,7 @@ function render() {
       })
       .join('')
     root.querySelectorAll<HTMLImageElement>('[data-application-rows] img[data-company-logo]').forEach((image) => image.addEventListener('error', () => image.remove(), { once: true }))
+    updateTableSelection('application')
     select('[data-application-empty]').innerHTML = filtered.length ? '' : empty(apps.length ? 'No tracked jobs match your search. Clear the search or choose another status.' : 'No applications yet. Add one or save a job from Find work.')
   }
   if (view === 'taskboard') {
@@ -257,7 +287,7 @@ function render() {
           const group = tasks.filter((item) => item.payload.status === status),
             custom = owned('task_status').find((item) => item.payload.title === status),
             palette = palettes[index % palettes.length]!
-          return `<section class="task-lane" data-lane="${htmlEscape(status)}" aria-label="${htmlEscape(status)} tasks" style="--lane-accent:${palette[0]};--lane-tint:${palette[1]}"><div class="task-lane-header"><div class="d-flex align-items-center gap-2" style="min-width:0"><span class="task-lane-dot"></span><h3 class="mb-0 text-break">${htmlEscape(status)}</h3><span class="task-lane-count">${group.length}</span></div><div class="d-flex">${custom ? `<button class="btn btn-icon btn-sm text-danger" data-delete-status="${custom.id}" aria-label="Delete status ${htmlEscape(status)}">&times;</button>` : ''}</div></div><div class="task-lane-body" data-task-column="${htmlEscape(status)}">${group.map((item) => `<div class="task-card" draggable="true" data-task-card="${item.id}"><h3 class="mb-2">${htmlEscape(item.payload.title)}</h3><div class="task-notes text-secondary small" tabindex="0" aria-label="Notes for ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.notes)}</div>${item.payload.date ? `<div class="text-secondary small my-3">Due ${htmlEscape(item.payload.date)}</div>` : ''}${statusSelect(item, taskStatuses)}<div class="mt-3">${actionButtons(item)}</div></div>`).join('') || empty('No cards yet.')}</div><button class="trello-add-card" data-add="task" data-task-status="${htmlEscape(status)}" aria-label="Add a card to ${htmlEscape(status)}">+ Add a card</button></section>`
+          return `<section class="task-lane" data-lane="${htmlEscape(status)}" aria-label="${htmlEscape(status)} tasks" style="--lane-accent:${palette[0]};--lane-tint:${palette[1]}"><div class="task-lane-header"><div class="d-flex align-items-center gap-2" style="min-width:0"><span class="task-lane-dot"></span><h3 class="mb-0 text-break">${htmlEscape(status)}</h3><span class="task-lane-count">${group.length}</span></div><div class="d-flex">${custom ? `<button class="btn btn-icon btn-sm text-danger" data-delete-status="${custom.id}" aria-label="Remove list ${htmlEscape(status)}">&times;</button>` : ''}</div></div><div class="task-lane-body" data-task-column="${htmlEscape(status)}">${group.map((item) => `<div class="task-card" draggable="true" data-task-card="${item.id}"><h3 class="mb-2">${htmlEscape(item.payload.title)}</h3><div class="task-notes text-secondary small" tabindex="0" aria-label="Notes for ${htmlEscape(item.payload.title)}">${htmlEscape(item.payload.notes)}</div>${item.payload.date ? `<div class="text-secondary small my-3">Due ${htmlEscape(item.payload.date)}</div>` : ''}${statusSelect(item, taskStatuses)}<div class="mt-3">${actionButtons(item)}</div></div>`).join('') || empty('No cards yet.')}</div><button class="trello-add-card" data-add="task" data-task-status="${htmlEscape(status)}" aria-label="Add a card to ${htmlEscape(status)}">+ Add a card</button></section>`
         })
         .join('') + '<button class="trello-add-list" data-add="task_status">+ Add another list</button>'
   }
@@ -271,7 +301,7 @@ function render() {
       const date = new Date(start)
       date.setDate(start.getDate() + n)
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-      html += `<div data-calendar-cell="${key}" class="calendar-day ${key === today() ? 'today' : ''} ${date.getMonth() !== month.getMonth() ? 'text-secondary bg-light' : ''}"><button class="btn btn-sm p-1 border-0" data-calendar-add="${key}" ${key === today() ? 'aria-current="date"' : ''} aria-label="Add event on ${key}">${date.getDate()}</button>${owned(
+      html += `<div data-calendar-cell="${key}" class="calendar-day ${key === currentDate ? 'today' : ''} ${date.getMonth() !== month.getMonth() ? 'text-secondary bg-light' : ''}"><button class="btn btn-sm p-1 border-0" data-calendar-add="${key}" ${key === currentDate ? 'aria-current="date"' : ''} aria-label="Add event on ${key}">${date.getDate()}</button>${owned(
         'event',
       )
         .filter((i) => i.payload.date === key)
@@ -339,22 +369,10 @@ function render() {
     const pageRows = rows.slice(pageStart, pageStart + perPage)
     visibleSheetIds = pageRows.map((row) => row.id)
     renderPagination(select('[data-sheet-pagination]'), rows.length, sheetPage, 'data-sheet-page', 'rows', deletingSheetRows, perPage)
-    for (const id of sheetSelection) if (!visibleSheetIds.includes(id)) sheetSelection.delete(id)
-    select<HTMLButtonElement>('[data-sheet-bulk]').disabled = sheetSelection.size === 0 || deletingSheetRows
-    select('[data-sheet-selection-toolbar]').classList.toggle('d-none', sheetSelection.size === 0)
-    select<HTMLButtonElement>('[data-sheet-select]').disabled = deletingSheetRows
-    select('[data-sheet-select-label]').textContent = pageRows.length > 0 && pageRows.every(row => sheetSelection.has(row.id)) ? 'Deselect this page' : 'Select this page'
-    select<HTMLSelectElement>('[data-sheet-entries]').disabled = deletingSheetRows
     const filterBadge = select('[data-sheet-filter-badge]')
     const activeFilters = Number(filter !== 'all') + Number(Boolean(activeCompany))
     filterBadge.textContent = String(activeFilters)
     filterBadge.classList.toggle('d-none', activeFilters === 0)
-    select('[data-sheet-selected-count]').textContent = sheetSelection.size ? `${sheetSelection.size} selected` : ''
-    select('[data-sheet-bulk-label]').textContent = 'Delete selected (' + sheetSelection.size + ')'
-    const all = select<HTMLInputElement>('[data-sheet-all]')
-    all.disabled = pageRows.length === 0 || deletingSheetRows
-    all.checked = pageRows.length > 0 && pageRows.every((row) => sheetSelection.has(row.id))
-    all.indeterminate = pageRows.some((row) => sheetSelection.has(row.id)) && !all.checked
     select('[data-sheet-count]').textContent = rows.length + ' of ' + owned('sheet').length + ' rows'
     select('[data-sheet-rows]').innerHTML = pageRows
       .map(
@@ -363,6 +381,7 @@ function render() {
       )
       .join('')
     root.querySelectorAll<HTMLElement>('[data-sheet-column]').forEach((cell) => cell.classList.toggle('d-none', hiddenSheetColumns.has(cell.dataset.sheetColumn!)))
+    updateTableSelection('sheet')
     select('[data-sheet-empty]').innerHTML = rows.length ? '' : empty(owned('sheet').length ? 'No rows match your filters. Clear filters to see all rows.' : 'Your sheet is empty. Add your first row to start organizing information.')
   }
 }
@@ -416,7 +435,7 @@ async function save(kind: Kind, payload: Record<string, string>, id = 0, renderA
     data.item.attachments = items[index]?.attachments || []
     items[index] = data.item
   } else items.unshift(data.item)
-  if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
+  cacheWorkspace()
   if (renderAfter) {
     if (!id && kind === 'application') applicationPage = 1
     if (!id && kind === 'sheet') sheetPage = 1
@@ -494,10 +513,11 @@ document.addEventListener('keydown', (event) => {
 let confirmationResolve: ((value: boolean) => void) | null = null
 let confirmationAccepted = false
 let confirmationFocus: HTMLElement | null = null
-function confirmDelete(message: string): Promise<boolean> {
+function confirmRemoval(message: string, title = 'Remove entry?'): Promise<boolean> {
   if (confirmationResolve) return Promise.resolve(false)
   confirmationFocus = document.activeElement as HTMLElement
   confirmationAccepted = false
+  select('#workspace-confirm-title').textContent = title
   select('[data-confirm-message]').textContent = message
   return new Promise((resolve) => {
     confirmationResolve = resolve
@@ -512,6 +532,37 @@ select('[data-confirm-modal]').addEventListener('hidden.bs.modal', () => {
   confirmationResolve = null
   confirmationFocus?.focus()
 })
+let removalInProgress = false
+const removalNouns: Record<Kind, string> = { application: 'application', sheet: 'row', task: 'task', event: 'event', link: 'link', task_status: 'list' }
+function showRemovalSuccess(message: string) {
+  select('[data-removal-success-message]').textContent = message
+  select<HTMLButtonElement>('[data-removal-success-trigger]').click()
+}
+select('[data-removal-success-modal]').addEventListener('shown.bs.modal', () => {
+  select('[data-removal-success-close]').focus()
+})
+select('[data-removal-success-modal]').addEventListener('hidden.bs.modal', () => {
+  const fallback = root.querySelector<HTMLElement>('[data-application-all]:not(:disabled),[data-sheet-all]:not(:disabled),[data-add]:not(:disabled),[data-month-prev]')
+  const focus = confirmationFocus?.isConnected && !confirmationFocus.hasAttribute('disabled') ? confirmationFocus : fallback
+  focus?.focus({ preventScroll: true })
+})
+async function removeSelectedEntries(kind: 'application' | 'sheet', selection: Set<number>) {
+  const ids = Array.from(selection)
+  let removed = 0
+  try {
+    for (let offset = 0; offset < ids.length; offset += 200) {
+      const data = await api('workspace/items', { action: 'bulk-delete', kind, ids: ids.slice(offset, offset + 200) })
+      const removedIds = new Set<number>(data.deleted)
+      items = items.filter(item => !removedIds.has(item.id))
+      removedIds.forEach(id => selection.delete(id))
+      removed += removedIds.size
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Unable to remove the selected entries. Please try again.'
+    throw new Error(removed ? `${removed} ${removalNouns[kind]}${removed === 1 ? '' : 's'} removed. ${message}` : message)
+  }
+  return `${removed} ${removalNouns[kind]}${removed === 1 ? ' was' : 's were'} removed. Any attached files were removed too.`
+}
 root.addEventListener('keydown', (event) => {
   const target = event.target as HTMLElement
   if (target.dataset.jobCard && (event.key === 'Enter' || event.key === ' ')) {
@@ -585,24 +636,23 @@ async function handleClick(event: Event) {
     }
     if (target.hasAttribute('data-application-select')) {
       togglePageSelection(applicationSelection, visibleApplicationIds)
-      render()
+      updateTableSelection('application')
       select('[data-application-all]').focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-export-selected')) exportCsv('application', owned('application').filter(item => applicationSelection.has(item.id)))
-    if (target.hasAttribute('data-application-bulk') && !deletingApplicationRows && applicationSelection.size && (await confirmDelete('Delete ' + applicationSelection.size + ' selected applications and their attachments? This cannot be undone.'))) {
+    if (target.hasAttribute('data-application-bulk') && !removalInProgress && !deletingApplicationRows && applicationSelection.size && (await confirmRemoval('Remove ' + applicationSelection.size + ' selected applications and their attachments? This cannot be undone.', 'Remove selected applications?'))) {
+      removalInProgress = true
       deletingApplicationRows = true
-      const selectedIds = Array.from(applicationSelection)
-      render()
+      updateTableSelection('application')
+      let message = ''
       try {
-        for (let offset = 0; offset < selectedIds.length; offset += 200) {
-          const data = await api('workspace/items', { action: 'bulk-delete', kind: 'application', ids: selectedIds.slice(offset, offset + 200) })
-          items = items.filter((row) => !data.deleted.includes(row.id))
-          data.deleted.forEach((id: number) => applicationSelection.delete(id))
-        }
+        message = await removeSelectedEntries('application', applicationSelection)
       } finally {
+        removalInProgress = false
         deletingApplicationRows = false
         render()
       }
+      showRemovalSuccess(message)
     }
     if (target.dataset.applicationPage && !deletingApplicationRows) {
       applicationPage = Number(target.dataset.applicationPage)
@@ -647,7 +697,7 @@ async function handleClick(event: Event) {
     }
     if (target.hasAttribute('data-sheet-select')) {
       togglePageSelection(sheetSelection, visibleSheetIds)
-      render()
+      updateTableSelection('sheet')
     }
     if (target.hasAttribute('data-sheet-export-selected')) {
       await sheetWriteQueue
@@ -660,31 +710,36 @@ async function handleClick(event: Event) {
       select<HTMLSelectElement>('[data-sheet-company]').value = ''
       render()
     }
-    if (target.hasAttribute('data-sheet-bulk') && !deletingSheetRows && sheetSelection.size && (await confirmDelete('Delete ' + sheetSelection.size + ' selected rows and their attachments? This cannot be undone.'))) {
+    if (target.hasAttribute('data-sheet-bulk') && !removalInProgress && !deletingSheetRows && sheetSelection.size && (await confirmRemoval('Remove ' + sheetSelection.size + ' selected rows and their attachments? This cannot be undone.', 'Remove selected rows?'))) {
+      removalInProgress = true
       deletingSheetRows = true
-      const selectedIds = Array.from(sheetSelection)
-      render()
+      updateTableSelection('sheet')
+      let message = ''
       try {
         await sheetWriteQueue
-        for (let offset = 0; offset < selectedIds.length; offset += 200) {
-          const data = await api('workspace/items', { action: 'bulk-delete', kind: 'sheet', ids: selectedIds.slice(offset, offset + 200) })
-          items = items.filter((row) => !data.deleted.includes(row.id))
-          data.deleted.forEach((id: number) => sheetSelection.delete(id))
-        }
+        message = await removeSelectedEntries('sheet', sheetSelection)
       } finally {
+        removalInProgress = false
         deletingSheetRows = false
         render()
       }
+      showRemovalSuccess(message)
     }
     if (target.dataset.jobCard) showJobDetails(target.dataset.jobCard)
-    if (target.dataset.deleteStatus && (await confirmDelete('Delete this status? Its tasks will move to To do.'))) {
-      const data = await api('workspace/items', { action: 'delete-status', id: Number(target.dataset.deleteStatus) })
-      items = items.filter((item) => item.id !== data.deleted)
-      for (const item of data.updated) {
-        const index = items.findIndex((current) => current.id === item.id)
-        if (index >= 0) items[index] = item
+    if (target.dataset.deleteStatus && !removalInProgress && (await confirmRemoval('Remove this list? Its tasks will move to To do.', 'Remove list?'))) {
+      removalInProgress = true
+      try {
+        const data = await api('workspace/items', { action: 'delete-status', id: Number(target.dataset.deleteStatus) })
+        items = items.filter((item) => item.id !== data.deleted)
+        for (const item of data.updated) {
+          const index = items.findIndex((current) => current.id === item.id)
+          if (index >= 0) items[index] = item
+        }
+        render()
+        showRemovalSuccess('The list was removed. Its tasks were moved to To do.')
+      } finally {
+        removalInProgress = false
       }
-      render()
     }
     if (target.dataset.jobDetails) showJobDetails(target.dataset.jobDetails)
     if (target.hasAttribute('data-job-close')) closeJobDetails()
@@ -718,7 +773,7 @@ async function handleClick(event: Event) {
         const index = items.findIndex((i) => i.id === item.id)
         if (index >= 0) items[index] = item
         else items.unshift(item)
-        if (cacheOwner !== null) writePageData('workspace', cacheOwner, items)
+        cacheWorkspace()
         popup.location.href = safeUrl(job.applyUrl || job.url)
         closeJobDetails()
         render()
@@ -756,13 +811,20 @@ async function handleClick(event: Event) {
       const item = items.find((i) => i.id === Number(target.dataset.edit))
       if (item) openModal(item.kind, item)
     }
-    if (target.dataset.delete) {
+    if (target.dataset.delete && !removalInProgress) {
       if (view === 'sheet') await sheetWriteQueue
       const id = Number(target.dataset.delete)
-      if (await confirmDelete('Delete this entry and any attached files? This cannot be undone.')) {
-        await api('workspace/items', { id, action: 'delete' })
-        items = items.filter((i) => i.id !== id)
-        render()
+      const item = items.find(item => item.id === id)
+      if (item && (await confirmRemoval(`Remove this ${removalNouns[item.kind]} and any attached files? This cannot be undone.`, `Remove ${removalNouns[item.kind]}?`))) {
+        removalInProgress = true
+        try {
+          await api('workspace/items', { id, action: 'delete' })
+          items = items.filter((i) => i.id !== id)
+          render()
+          showRemovalSuccess(`The ${removalNouns[item.kind]} was removed.${item.attachments?.length ? ' Any attached files were removed too.' : ''}`)
+        } finally {
+          removalInProgress = false
+        }
       }
     }
     if (target.dataset.track) {
@@ -809,7 +871,7 @@ async function handleChange(event: Event) {
       const id = Number(target.dataset.applicationPick)
       if (target.checked) applicationSelection.add(id)
       else applicationSelection.delete(id)
-      render()
+      updateTableSelection('application')
       select<HTMLInputElement>(`[data-application-pick="${id}"]`)?.focus({ preventScroll: true })
     }
     if (target.hasAttribute('data-application-all')) {
@@ -817,7 +879,7 @@ async function handleChange(event: Event) {
         if (target.checked) applicationSelection.add(id)
         else applicationSelection.delete(id)
       }
-      render()
+      updateTableSelection('application')
       select('[data-application-all]').focus({ preventScroll: true })
     }
     if (target.dataset.jobPick && !savingSelectedJobs) {
@@ -838,19 +900,19 @@ async function handleChange(event: Event) {
     if (target.hasAttribute('data-sheet-column-toggle')) {
       if (target.checked) hiddenSheetColumns.delete(target.value)
       else hiddenSheetColumns.add(target.value)
-      render()
+      root.querySelectorAll<HTMLElement>('[data-sheet-column]').forEach(cell => cell.classList.toggle('d-none', hiddenSheetColumns.has(cell.dataset.sheetColumn!)))
     }
     if (target.dataset.sheetPick) {
       const id = Number(target.dataset.sheetPick)
       if (target.checked) sheetSelection.add(id)
       else sheetSelection.delete(id)
-      render()
+      updateTableSelection('sheet')
     }
     if (target.hasAttribute('data-sheet-all')) {
       for (const id of visibleSheetIds)
         if (target.checked) sheetSelection.add(id)
         else sheetSelection.delete(id)
-      render()
+      updateTableSelection('sheet')
     }
     if (target.dataset.entryStatus) {
       const i = items.find((i) => i.id === Number(target.dataset.entryStatus))
@@ -953,6 +1015,8 @@ async function handleSubmit(event: Event) {
         throw new Error((result.error || 'Upload failed.') + ' Your row and earlier uploads were saved. Select only the remaining files to retry.')
       }
       item.attachments = [...(item.attachments || []), ...result.attachments]
+      workspaceRevision++
+      window.dispatchEvent(new Event('joblink-workspace-changed'))
       render()
     }
     closeModal()
@@ -1069,9 +1133,12 @@ function updateJobSelection() {
   })
 }
 function trackedApplication(job: Job) {
-  const identity = (url: string) => googleJobListingUrl(url) || safeUrl(url)
-  const matches = owned('application').filter((item) => (job.url && identity(item.payload.url) === identity(job.url)) || (item.payload.jobId === job.id && item.payload.source === job.source))
-  return matches.find(isApplied) || matches[0]
+  if (!applicationIndex || indexedWorkspace !== items || indexedWorkspaceRevision !== workspaceRevision) {
+    applicationIndex = makeApplicationIndex(owned('application'))
+    indexedWorkspace = items
+    indexedWorkspaceRevision = workspaceRevision
+  }
+  return applicationIndex.lookup(job)
 }
 function isApplied(item: Entry) {
   return ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].includes(item.payload.status)
@@ -1520,7 +1587,7 @@ async function init() {
       items = fresh
       markReady()
       if (changed) render()
-      else writePageData('workspace', cacheOwner, items)
+      else cacheWorkspace()
     }
     if (view === 'dashboard') void restoreDashboardLogos()
   } catch (e) {

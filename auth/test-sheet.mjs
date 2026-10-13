@@ -171,6 +171,7 @@ try {
   await page.locator('[data-sheet-entries]').selectOption('all');
   await page.getByLabel('Select sheet rows on this page').check();
   await page.locator("[data-sheet-bulk]").click();
+  assert.equal(await page.locator('[data-confirm-accept]').innerText(), 'Remove');
   await page
     .locator("[data-confirm-modal]")
     .getByRole("button", { name: "Cancel", exact: true })
@@ -181,12 +182,17 @@ try {
     ).items.filter((row) => row.kind === "sheet").length,
     204,
   );
+  assert.equal(await page.locator('[data-removal-success-modal]').isVisible(), false);
   await page.locator("[data-sheet-bulk]").click();
   await page.locator("[data-confirm-accept]").click();
   await page
     .locator("[data-sheet-count]")
     .filter({ hasText: "0 of 0 rows" })
     .waitFor();
+  await page.locator('[data-removal-success-modal]').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('[data-removal-success-title]').innerText(), 'Removed successfully');
+  assert.match(await page.locator('[data-removal-success-message]').innerText(), /^204 rows were removed\./);
+  await page.locator('[data-removal-success-close]').click();
   const remaining = (
     await (await context.request.get("/api/workspace/items")).json()
   ).items;
@@ -225,7 +231,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: bulk delete handles over 200 rows, persists after reload, rejects other users/non-sheet rows; mobile sidebar works without page overflow.",
+    "PASS: bulk removal handles over 200 rows with a success modal, persists after reload, rejects other users/non-sheet rows; mobile sidebar works without page overflow.",
   );
 } finally {
   await browser.close();

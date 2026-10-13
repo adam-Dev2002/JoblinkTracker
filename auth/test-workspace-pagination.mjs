@@ -78,10 +78,14 @@ async function deleteRow(button) {
   await page.locator("[data-confirm-accept]").click();
   await page.locator(`[data-delete="${id}"]`).waitFor({ state: "hidden" });
   await page.waitForFunction(id => !document.querySelector(`[data-application-actions="${id}"], [data-sheet-id="${id}"]`), id);
+  await page.locator('[data-removal-success-modal]').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('[data-removal-success-title]').innerText(), 'Removed successfully');
+  await page.locator('[data-removal-success-close]').click();
+  await page.locator('[data-removal-success-modal]').waitFor({ state: 'hidden' });
 }
 async function deleteApplication(title) {
   await page.getByRole('button', { name: `Actions for ${title}`, exact: true }).click();
-  await deleteRow(page.getByRole('menuitem', { name: `Delete ${title}`, exact: true }));
+  await deleteRow(page.getByRole('menuitem', { name: `Remove ${title}`, exact: true }));
 }
 async function filterApplicationStatus(value) {
   await page.locator('[data-application-filter-toggle]').click();
@@ -284,10 +288,10 @@ try {
     await page.locator("[data-sheet-selected-count]").innerText(),
     /2 selected/,
   );
-  const bulkDelete = page.locator('[data-sheet-bulk]');
-  await bulkDelete.hover();
+  const bulkRemove = page.locator('[data-sheet-bulk]');
+  await bulkRemove.hover();
   await page.waitForTimeout(250);
-  const bulkColors = await bulkDelete.evaluate(node => {
+  const bulkColors = await bulkRemove.evaluate(node => {
     const sample = document.createElement('span');
     sample.style.backgroundColor = 'var(--tblr-danger)';
     node.append(sample);
@@ -295,7 +299,7 @@ try {
     sample.remove();
     return { actual: getComputedStyle(node).backgroundColor, expected };
   });
-  assert.equal(bulkColors.actual, bulkColors.expected, 'Bulk Delete highlights red');
+  assert.equal(bulkColors.actual, bulkColors.expected, 'Bulk Remove highlights red');
   const selectedDownloadReady = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export selected', exact: true }).click();
   const selectedDownload = await selectedDownloadReady;

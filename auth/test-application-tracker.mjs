@@ -190,7 +190,7 @@ try {
   await actions.click();
   assert.equal(await page.getByRole('menuitem', { name: 'Mark as applied' }).count(), 0, 'Applied jobs omit the redundant action');
   await page.keyboard.press('ArrowDown');
-  assert.equal(await page.getByRole('menuitem', { name: 'Delete Software Engineer', exact: true }).evaluate(button => button === document.activeElement), true);
+  assert.equal(await page.getByRole('menuitem', { name: 'Remove Software Engineer', exact: true }).evaluate(button => button === document.activeElement), true);
   await page.keyboard.press('Escape');
   assert.equal(await actions.getAttribute('aria-expanded'), 'false');
   assert.equal(await actions.evaluate(button => button === document.activeElement), true, 'Escape returns focus to the row');
@@ -205,16 +205,22 @@ try {
   await page.locator('[data-application-actions="26"]').click();
   const menuBox = await menu.boundingBox();
   assert.ok(menuBox.y >= 0 && menuBox.y + menuBox.height <= 1000, 'Last-row menu stays in the viewport');
-  await page.getByRole('menuitem', { name: 'Delete <img src=x onerror=window.injected=true>', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Remove <img src=x onerror=window.injected=true>', exact: true }).click();
   await page.locator('[data-confirm-modal]').waitFor({ state: 'visible' });
   await page.locator('[data-confirm-modal]').getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.locator('[data-confirm-modal]').waitFor({ state: 'hidden' });
   assert.equal(items.length, 26, 'Cancel preserves the application');
+  assert.equal(await page.locator('[data-removal-success-modal]').isVisible(), false, 'Cancel does not show removal success');
   await page.locator('[data-application-actions="26"]').click();
-  await page.getByRole('menuitem', { name: 'Delete <img src=x onerror=window.injected=true>', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Remove <img src=x onerror=window.injected=true>', exact: true }).click();
   await page.locator('[data-confirm-accept]').click();
   await page.locator('[data-application-actions="26"]').waitFor({ state: 'detached' });
   assert.equal(items.length, 25);
+  await page.locator('[data-removal-success-modal]').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('[data-removal-success-title]').innerText(), 'Removed successfully');
+  assert.equal(await page.locator('[data-removal-success-message]').innerText(), 'The application was removed.');
+  await page.locator('[data-removal-success-close]').click();
+  await page.locator('[data-removal-success-modal]').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Page 1', exact: true }).click();
   await page.locator('[data-application-table]').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'auth/runtime/tracker-table-desktop.png' });
@@ -261,7 +267,7 @@ try {
   }
   assert.equal(writes.filter(write => write.action === 'delete').length, 1);
   assert.deepEqual(errors, []);
-  console.log('PASS: Bootstrap filters/sort, current-page selection and explicit All entries, selected CSV, tracker suggestions, keyboard controls, actions, retry, edit/delete, pagination and mobile layout.');
+  console.log('PASS: Bootstrap filters/sort, current-page selection and explicit All entries, selected CSV, tracker suggestions, keyboard controls, actions, retry, edit/remove confirmation and success, pagination and mobile layout.');
 } finally {
   await browser?.close();
   await unlink(preview);

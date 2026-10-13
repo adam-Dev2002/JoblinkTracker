@@ -9,7 +9,7 @@ const application = kind === 'application'
   {application && <button type="button" class="dropdown-item" role="menuitem" data-table-mark><Icon name="check" class="workspace-action-icon" />Mark as applied</button>}
   <button type="button" class="dropdown-item" role="menuitem" data-table-edit><Icon name="edit" class="workspace-action-icon" />{application ? 'Edit application' : 'Edit row / attachments'}</button>
   <div class="dropdown-divider" role="separator"></div>
-  <button type="button" class="dropdown-item text-danger" role="menuitem" data-table-delete><Icon name="trash" class="workspace-action-icon" />{application ? 'Delete application' : 'Delete row'}</button>
+  <button type="button" class="dropdown-item text-danger" role="menuitem" data-table-delete><Icon name="trash" class="workspace-action-icon" />{application ? 'Remove application' : 'Remove row'}</button>
 </div>
 <style is:global>
   .workspace-row-menu .workspace-action-icon,
