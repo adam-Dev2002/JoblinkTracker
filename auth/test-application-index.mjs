@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { makeApplicationIndex } from '../jobfinder/preview/scripts/application-index.ts';
-import { googleJobListingUrl } from '../jobfinder/preview/scripts/google-job-query.ts';
+import { jobListingIdentity, jobSourceIdentity } from '../jobfinder/preview/scripts/job-identity.ts';
 
 const listing = 'https://www.onlinejobs.ph/jobseekers/job/developer-123';
 const job = { id: '123', source: 'OnlineJobs.ph', url: listing };
@@ -22,29 +22,35 @@ assert.equal(makeApplicationIndex([saved, unavailable]).isUnavailable(job), true
 assert.equal(makeApplicationIndex([unavailable]).isUnavailable({ ...job, url: 'https://example.com/new-url' }), true, 'Source and ID still match after a URL change');
 assert.equal(makeApplicationIndex([unavailable]).isUnavailable({ ...job, source: 'Other source', url: '' }), false, 'Unavailable state stays scoped to the listing identity');
 assert.equal(makeApplicationIndex([unavailable]).isUnavailable({ ...job, url: 'https://www.google.com/url?q=' + encodeURIComponent(listing) }), true);
+const returningJob = { ...job, id: 'new-search-id', source: 'Google · onlinejobs.ph', url: 'https://onlinejobs.ph/jobseekers/job/new-title-123/?utm_source=google&ref=search#apply' };
+assert.equal(makeApplicationIndex([urlMatch]).lookup(returningJob), urlMatch, 'Applied jobs match the same posting ID after search URLs, title slugs, tracking and source IDs change');
+assert.equal(makeApplicationIndex([unavailable]).isUnavailable(returningJob), true, 'Unavailable jobs stay hidden when search returns another link to the same posting');
+assert.equal(makeApplicationIndex([saved, unavailable]).isHidden(returningJob), true, 'A saved duplicate cannot override an unavailable posting');
 assert.equal(makeApplicationIndex([{ ...unavailable, payload: { ...unavailable.payload, status: 'Saved' } }]).isUnavailable(job), false, 'Changing back to Saved restores availability');
 for (const status of ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted']) {
   const application = record(9, { url: listing, status });
   assert.equal(makeApplicationIndex([saved, application]).lookup(job), application, `${status} remains applied`);
+  assert.equal(makeApplicationIndex([saved, application]).isHidden(returningJob), true, `${status} stays hidden under changed search links`);
 }
+for (const status of ['Saved', 'Application opened']) assert.equal(makeApplicationIndex([record(90, { url: listing, status })]).isHidden(returningJob), false, `${status} remains eligible for discovery`);
+assert.equal(makeApplicationIndex([record(91, { url: '', source: '', jobId: '', status: 'Unavailable' })]).isHidden({ id: '', source: '', url: 'javascript:alert(1)' }), false, 'Missing identities cannot hide unrelated jobs');
+assert.equal(makeApplicationIndex([unavailable]).isHidden({ ...returningJob, url: returningJob.url.replace('-123/', '-124/') }), false, 'A new posting ID is not hidden by the same title or employer');
 
-// Compare the index with the previous scan, including duplicate URLs, duplicate
-// source IDs, unsafe inputs, arbitrary feed URLs, and conflicting identities.
-const safeUrl = value => {
-  if (value?.startsWith('/static/company-logos/') && !value.includes('..')) return value;
-  try { const url = new URL(value || ''); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; }
-  catch { return ''; }
-};
-const identity = value => googleJobListingUrl(value || '') || safeUrl(value);
-const statuses = ['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'];
+// Compare the index with a scan using canonical identities, including duplicate
+// URLs and source IDs, unsafe inputs, and conflicting application records.
+const identity = jobListingIdentity;
+const statuses = ['Saved', 'Application opened', 'Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted', 'Unavailable'];
 const urls = [listing, 'http://www.onlinejobs.ph/jobseekers/job/developer-123#apply', 'https://www.google.com/url?q=' + encodeURIComponent(listing), 'https://example.com/job/1', 'https://example.com/job/2', '', 'javascript:alert(1)', '/static/company-logos/example.svg'];
 const applications = Array.from({ length: 1400 }, (_, id) => record(id, { url: urls[id % urls.length], source: ['Feed A', 'Feed B', 'Feed C'][id % 3], jobId: String(id % 17), status: statuses[id % statuses.length] }));
 const index = makeApplicationIndex(applications);
 for (const url of urls) for (const source of ['Feed A', 'Feed B', 'Feed C', 'Other']) for (const id of ['0', '1', '16', 'missing']) {
   const candidate = { url, source, id };
-  const matches = applications.filter(item => (url && identity(item.payload.url) === identity(url)) || (item.payload.jobId === id && item.payload.source === source));
-  const expected = matches.find(item => statuses.slice(2).includes(item.payload.status)) || matches[0];
+  const urlIdentity = identity(url);
+  const sourceIdentity = jobSourceIdentity(source, id);
+  const matches = applications.filter(item => (urlIdentity && identity(item.payload.url) === urlIdentity) || (sourceIdentity && jobSourceIdentity(item.payload.source, item.payload.jobId) === sourceIdentity));
+  const expected = matches.find(item => ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].includes(item.payload.status)) || matches[0];
   assert.equal(index.lookup(candidate), expected, `Scan parity for ${JSON.stringify(candidate)}`);
+  assert.equal(index.isHidden(candidate), matches.some(item => statuses.slice(2).includes(item.payload.status)), `Hidden status scan parity for ${JSON.stringify(candidate)}`);
 }
 
 // Only the job URL is normalized on lookup; recorded URLs are processed once.
@@ -52,6 +58,6 @@ let payloadReads = 0;
 const counted = applications.map(item => ({ id: item.id, get payload() { payloadReads++; return item.payload; } }));
 const countedIndex = makeApplicationIndex(counted);
 payloadReads = 0;
-for (let attempt = 0; attempt < 1000; attempt++) { countedIndex.lookup(job); countedIndex.isUnavailable(job); }
+for (let attempt = 0; attempt < 1000; attempt++) { countedIndex.lookup(job); countedIndex.isUnavailable(job); countedIndex.isHidden(job); }
 assert.equal(payloadReads, 0, 'Repeated card lookups never rescan application payloads');
-console.log('PASS: indexed application lookup preserves URL/source identity, first applied priority, scan parity, and constant-time repeated record access.');
+console.log('PASS: stable posting identity across searches, applied/unavailable exclusion, duplicate status priority, restoration, scan parity, invalid identities and constant-time record access.');

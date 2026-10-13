@@ -25,7 +25,7 @@ try {
     return (await (await context.request.get('/api/auth/session')).json()).csrf;
   }
   const context = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
-  const csrf = await register(context, emails[0]);
+  let csrf = await register(context, emails[0]);
   const seededResponse = await context.request.post('/api/workspace/items', { headers: { 'X-CSRF-Token': csrf }, data: { kind: 'application', payload: payload(jobs[1], 'Saved') } });
   assert.equal(seededResponse.status(), 200, await seededResponse.text());
   const seeded = (await seededResponse.json()).item;
@@ -137,6 +137,18 @@ try {
   await page.locator('[data-ready=true]').waitFor();
   assert.equal(await page.locator('[data-stat="applications"]').innerText(), '0', 'Unavailable jobs are never counted as submitted applications');
 
+  assert.equal((await context.request.post('/api/auth/logout', { headers: { 'X-CSRF-Token': csrf }, data: {} })).status(), 200);
+  const signedOut = await (await context.request.get('/api/auth/session')).json();
+  assert.equal(signedOut.user, null);
+  const login = await context.request.post('/api/auth/login', { headers: { 'X-CSRF-Token': signedOut.csrf }, data: { email: emails[0], password: 'Unavailable-test-password-2026' } });
+  assert.equal(login.status(), 200, await login.text());
+  csrf = (await (await context.request.get('/api/auth/session')).json()).csrf;
+  await page.evaluate(() => { sessionStorage.clear(); localStorage.clear(); });
+  await page.goto('/job-listing');
+  await card(1).waitFor();
+  assert.equal(await card(0).count(), 0, 'Unavailable survives logout/login without browser cache');
+  assert.equal(await card(2).count(), 0, 'All unavailable account records survive a fresh sign-in');
+
   const other = await browser.newContext({ baseURL });
   const otherCsrf = await register(other, emails[1]);
   assert.equal((await other.request.post('/api/workspace/items', { headers: { 'X-CSRF-Token': otherCsrf }, data: { id: hidden[0].id, kind: 'application', payload: payload(jobs[0], 'Saved') } })).status(), 404);
@@ -144,7 +156,7 @@ try {
   assert.equal((await context.request.post('/api/workspace/items', { data: { id: hidden[0].id, kind: 'application', payload: payload(jobs[0]) } })).status(), 403);
   assert.equal((await context.request.post('/api/workspace/items', { headers: { 'X-CSRF-Token': csrf }, data: { id: hidden[0].id, kind: 'application', payload: payload(jobs[0], 'Invalid status') } })).status(), 422);
   assert.deepEqual(errors, []);
-  console.log('PASS: unavailable button on every card, failed-save retry, duplicate prevention, feed/Google hiding and counts, reload persistence, tracker restoration, metadata, keyboard/mobile, CSRF and account isolation.');
+  console.log('PASS: unavailable button on every card, failed-save retry, duplicate prevention, feed/Google hiding and counts, reload and logout/login persistence, tracker restoration, metadata, keyboard/mobile, CSRF and account isolation.');
 } finally {
   releaseSave?.();
   await browser.close();

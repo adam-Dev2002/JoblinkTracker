@@ -1169,13 +1169,9 @@ function trackedApplication(job: Job) {
 function isApplied(item: Entry) {
   return ['Applied', 'Interview', 'Offer', 'Rejected', 'Ghosted'].includes(item.payload.status)
 }
-function hasApplied(job: Job) {
-  const item = trackedApplication(job)
-  return Boolean(item && isApplied(item))
-}
 function selectableJob(job: Job) {
   // Saving or opening a listing never makes its card ineligible for selection.
-  return !isClosedListing(job) && !getApplicationIndex().isUnavailable(job) && !hasApplied(job)
+  return !isClosedListing(job) && !getApplicationIndex().isHidden(job)
 }
 function jobsInSelectionScope() {
   return [...new Set([...visibleJobIds, ...visibleGoogleJobIds])]
@@ -1277,6 +1273,10 @@ async function renderGoogleJobs(results: GoogleJobResult[], div: HTMLElement) {
 function renderGoogleJobCards() {
   const div = googleResultsHost
   if (!div?.isConnected || select('[data-google-jobs]').classList.contains('d-none')) return
+  if (!loaded) {
+    div.innerHTML = select<HTMLTemplateElement>('[data-job-placeholder]').innerHTML
+    return
+  }
   const listings = Array.from(googleJobs.values()).filter(selectableJob)
   visibleGoogleJobIds = listings.map((job) => job.id)
   div.innerHTML =
@@ -1395,6 +1395,9 @@ function renderJobPagination(count: number) {
   renderPagination(select('[data-job-pagination]'), count, jobPage, 'data-job-page', 'results', savingSelectedJobs, entriesPerPage('job', count))
 }
 function renderJobs(resetPage = true) {
+  // Feed/search requests can finish before the account's tracker. Keep the
+  // loading cards until its statuses are available instead of flashing hidden jobs.
+  if (!loaded) return
   if (resetPage) { jobPage = 1; select('[data-job-bulk-status]').classList.add('d-none') }
   if (cacheOwner !== null) writePageData('job-filters', cacheOwner, { values: jobFilterValues(), page: jobPage })
   if (select<HTMLSelectElement>('#job-source').value === 'google') {

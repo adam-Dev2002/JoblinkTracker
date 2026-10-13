@@ -13,4 +13,6 @@ The Google button uses the role and location inputs. With the ID configured it l
 
 The search element requires JavaScript and may be blocked by browser privacy extensions. Google's indexing and each site's public content determine coverage. This is separate from the Custom Search JSON API, which is closed to new customers.
 
+Jobs marked Applied or Unavailable in an account's tracker stay hidden from its job listings and Google results, including repeated searches, filter changes and a fresh sign-in. Matching uses the provider's posting ID when available, so tracking parameters, provider hostname aliases and edited title slugs cannot bring back the same posting. A different posting ID remains eligible. Changing a tracked status back to Saved restores that posting unless another matching record still has an applied or unavailable status.
+
 References: https://support.google.com/programmable-search/answer/12495704 and https://support.google.com/programmable-search/answer/12465937
