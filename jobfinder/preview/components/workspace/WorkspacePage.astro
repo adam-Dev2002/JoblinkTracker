@@ -318,6 +318,10 @@ const desk = [
                 <template data-job-action-icon="unavailable"><span class="job-card-button-icon" aria-hidden="true"><Icon name="circle-minus" /></span></template>
                 <div class="d-none google-jobs-results" data-google-jobs aria-busy="false">
                   <p class="text-secondary small" data-google-jobs-status role="status" aria-live="polite" />
+                  <div class="d-none d-flex flex-wrap gap-2 mb-3" data-google-jobs-recovery>
+                    <button type="button" class="btn btn-sm" data-google-jobs-retry>Try again</button>
+                    <a class="btn btn-sm" data-google-jobs-fallback target="_blank" rel="noopener noreferrer">Search on Google <span aria-hidden="true">&nearr;</span></a>
+                  </div>
                   <div data-google-jobs-host />
                 </div>
                 <nav class="mt-4 d-none workspace-pagination" aria-label="Job results pages" data-job-pagination />
@@ -806,6 +810,11 @@ const desk = [
   .google-jobs-results .gs-spelling,
   .google-jobs-results .gs-result:has(> .gs-spelling),
   .google-jobs-results .gs-no-results-result {
+    display: none !important;
+  }
+  /* Provider failures use the accessible recovery message and controls above. */
+  .google-jobs-results .gs-error-result,
+  .google-jobs-results .gs-stylized-error-result {
     display: none !important;
   }
   .google-jobs-results .gsc-orderby-container {

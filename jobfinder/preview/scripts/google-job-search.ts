@@ -13,6 +13,9 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
   const panel = root.querySelector<HTMLElement>('[data-google-jobs]')!
   const status = root.querySelector<HTMLElement>('[data-google-jobs-status]')!
   const host = root.querySelector<HTMLElement>('[data-google-jobs-host]')!
+  const recovery = root.querySelector<HTMLElement>('[data-google-jobs-recovery]')!
+  const retryButton = root.querySelector<HTMLButtonElement>('[data-google-jobs-retry]')!
+  const fallback = root.querySelector<HTMLAnchorElement>('[data-google-jobs-fallback]')!
   const engineId = root.dataset.googleEngineId || ''
   const googleWindow = window as GoogleWindow
   const name = 'joblink-google-jobs'
@@ -54,9 +57,21 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     pagePending = false
     panel.setAttribute('aria-busy', 'false')
     panel.dataset.searchFailed = String(failed)
+    recovery.classList.toggle('d-none', !failed)
     setStatus(message, !failed)
     publish()
   }
+  const unavailable = 'Google search is temporarily unavailable. Try again or search on Google.'
+  const providerErrorSelector = '.gs-stylized-error-result, .gs-error-result'
+  // The Search Element can render an API error without calling results-ready.
+  // Observe only its error nodes; keep attribution, promotions and pagination.
+  const providerFailed = () => {
+    if (!active || panel.dataset.searchFailed === 'true') return false
+    if (!host.querySelector(providerErrorSelector)?.textContent?.trim()) return false
+    finish(unavailable, true)
+    return true
+  }
+  const providerObserver = new MutationObserver(providerFailed)
   const allResults = () => {
     const unique = new Map<string, GoogleJobResult>()
     for (const [, results] of [...pageResults].sort(([a], [b]) => a - b)) {
@@ -77,8 +92,8 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     setStatus('Loading more matching jobs…', true)
     publish()
     clearTimeout(resultTimer)
-    resultTimer = setTimeout(() => finish('More job results could not load. Try searching again.', true), 15000)
-    next.element.click()
+    resultTimer = setTimeout(() => finish('More job results could not load. Try again or search on Google.', true), 15000)
+    try { next.element.click() } catch { finish(unavailable, true) }
   }
   const scheduleFill = () => {
     if (scheduled) return
@@ -135,7 +150,9 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
           if (settled) return
           const api = googleWindow.google?.search?.cse?.element
           if (!api) { failed('Google search could not initialize. Try again.'); return }
-          api.render({ div: host, tag: 'searchresults-only', gname: name, attributes: { autoSearchOnLoad: false, enableHistory: false, enableImageSearch: false, webSearchResultSetSize: jobsPerPage, linkTarget: '_blank' } })
+          try {
+            api.render({ div: host, tag: 'searchresults-only', gname: name, attributes: { autoSearchOnLoad: false, enableHistory: false, enableImageSearch: false, webSearchResultSetSize: jobsPerPage, linkTarget: '_blank' } })
+          } catch { failed(unavailable); return }
           settled = true
           clearTimeout(timer)
           resolve()
@@ -147,13 +164,13 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
                 panel.setAttribute('aria-busy', 'true')
                 setStatus('Searching job listings…', true)
                 clearTimeout(resultTimer)
-                resultTimer = setTimeout(() => finish('Google results could not load. Try searching again.', true), 15000)
+                resultTimer = setTimeout(() => finish(unavailable, true), 15000)
                 publish()
               }
               return query
             },
             ready,
-            rendered: scheduleFill,
+            rendered: () => { if (!providerFailed()) scheduleFill() },
           },
         },
       }
@@ -164,6 +181,9 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
     })
     return initialization
   }
+  // Reload the official embed to renew Google's token after an authorization error.
+  // The workspace restores the current filters from its account-scoped preview.
+  retryButton.addEventListener('click', () => window.location.reload())
   return {
     hasMore,
     remainingResultCapacity,
@@ -181,12 +201,16 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       generation++
       scheduled = false
       clearTimeout(resultTimer)
+      providerObserver.disconnect()
       panel.classList.add('d-none')
       panel.setAttribute('aria-busy', 'false')
       publish()
     },
     async search(filters: GoogleJobFilters) {
-      generation++
+      const current = ++generation
+      providerObserver.disconnect()
+      host.querySelectorAll(providerErrorSelector).forEach(element => element.remove())
+      providerObserver.observe(host, { childList: true, subtree: true, characterData: true })
       scheduled = false
       clearTimeout(resultTimer)
       pageResults.clear()
@@ -198,20 +222,25 @@ export function createGoogleJobSearch(root: HTMLElement, renderResults: (results
       panel.classList.remove('d-none')
       panel.setAttribute('aria-busy', 'true')
       panel.dataset.searchFailed = 'false'
+      recovery.classList.add('d-none')
       setStatus('Searching job listings…', true)
       const query = googleJobQuery(filters)
       latestQuery = query
-      googleWindow.google?.search?.cse?.element?.getElement(name)?.clearAllResults()
+      const googleUrl = new URL('https://www.google.com/search')
+      googleUrl.searchParams.set('q', query)
+      fallback.href = googleUrl.href
       publish()
       if (!engineId) { finish('Google job search is not connected yet. Choose another job feed for now.', true); return }
       try {
+        googleWindow.google?.search?.cse?.element?.getElement(name)?.clearAllResults()
         await initialize()
-        if (!active || query !== latestQuery) return
+        if (!active || current !== generation) return
         const element = googleWindow.google?.search?.cse?.element?.getElement(name)
         if (!element) throw new Error('Google search is not ready yet. Try searching again.')
+        resultTimer = setTimeout(() => finish(unavailable, true), 15000)
         element.execute(query)
-      } catch (error) {
-        if (active && query === latestQuery) finish(error instanceof Error ? error.message : 'Google search is unavailable. Try again.', true)
+      } catch {
+        if (active && current === generation) finish(unavailable, true)
       }
     },
   }
